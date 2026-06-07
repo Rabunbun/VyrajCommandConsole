@@ -21,6 +21,12 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Local migration exports / reports
+migration-data/
+migration-reports/
+migration-exports/
+Vyraj Migration Export - */
+
 # OS / editor junk
 .DS_Store
 Thumbs.db

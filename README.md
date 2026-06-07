@@ -1,6 +1,6 @@
 # Vyraj Alliance Command Console v2
 
-Next.js App Router migration of the Vyraj Alliance Command Console. Apps Script v1 remains the live fallback tool during v2 rollout.
+Next.js App Router rebuild of the Vyraj Alliance Command Console. Apps Script v1 export tooling remains available for reference, but v2 production starts from a clean Postgres baseline.
 
 Current v2 scope includes public Alliance Hub and Corp Portals, officer auth with HTTP-only cookies, Super Admin tools, audit logging, Attendance, Doctrine, SRP, Recruitment, Loot Splits, Corp Dashboard, and Alliance Hub summaries.
 
@@ -22,6 +22,8 @@ AUTH_SESSION_SECRET="replace-with-a-long-random-32-character-minimum-secret"
 AUTH_COOKIE_NAME="vyraj_officer_session"
 SESSION_DURATION_HOURS="6"
 DEV_SUPER_ADMIN_PASSWORD="VyrajDev!ChangeMe123"
+# Optional one-time production baseline password override:
+# SEED_SUPER_ADMIN_PASSWORD="temporary-production-setup-password"
 ```
 
 4. Generate Prisma Client:
@@ -63,6 +65,7 @@ Required:
 - `AUTH_COOKIE_NAME`: cookie name, usually `vyraj_officer_session`.
 - `SESSION_DURATION_HOURS`: officer session duration, usually `6`.
 - `DEV_SUPER_ADMIN_PASSWORD`: seed password for local/dev Super Admin accounts, or an intentional initial setup value only.
+- `SEED_SUPER_ADMIN_PASSWORD`: optional clearer name for a one-time production baseline seed password. If set, it takes precedence during seeding.
 
 Never commit real `.env` files. Production values belong in Vercel Environment Variables.
 
@@ -100,7 +103,7 @@ Set these for Production, Preview, and Development as appropriate:
 - `AUTH_COOKIE_NAME`
 - `SESSION_DURATION_HOURS`
 
-Set `DEV_SUPER_ADMIN_PASSWORD` only if you intentionally run the seed script for initial admin setup. Rotate seeded passwords afterward.
+Set `SEED_SUPER_ADMIN_PASSWORD` or `DEV_SUPER_ADMIN_PASSWORD` only if you intentionally run the seed script for initial admin setup. Rotate seeded passwords afterward.
 
 ## Production Migration
 
@@ -116,20 +119,55 @@ Equivalent:
 npx prisma migrate deploy
 ```
 
-## Seeding
+## Production Baseline Seed
 
-Local seed:
+The v2 production baseline is intentionally fresh. It does not import v1 operations,
+attendance, doctrine readiness submissions, SRP requests, recruitment applicants,
+loot splits, loot split participants, old audit logs, or prototype test data.
+
+Production baseline seed:
+
+```powershell
+$env:SEED_SUPER_ADMIN_PASSWORD="temporary-production-setup-password"; npm.cmd run prisma:seed:prod
+```
+
+The production baseline creates or updates only:
+
+- Corp Registry records for `totality-squad`, `abyssal-construction-and-extraction`, `pochven-police-department`, and `striking-distance`.
+- Super Admin officers `Jason Roderick` and `EmperorVeles`.
+- Starter Alliance Hub content.
+- The preserved starter EVE Type Lookup hull list.
+
+It does not seed extra officers. Create future officers through Officer Management.
+The setup password is temporary; rotate/reset Super Admin passwords immediately
+after first login.
+
+Local/dev seed uses the same baseline data and allows the local fallback password:
 
 ```bash
 npm.cmd run prisma:seed
 ```
 
-The seed script may create or update the starter Super Admin users:
+Equivalent:
 
-- `Jason Roderick`
-- `EmperorVeles`
+```bash
+npm.cmd run prisma:seed:dev
+```
 
-Use `DEV_SUPER_ADMIN_PASSWORD` intentionally. Do not leave production users on the placeholder password.
+## Operational Data Reset
+
+To clear local or test operational module data while preserving registry/admin
+setup, use:
+
+```powershell
+$env:CONFIRM_RESET_OPERATIONAL_DATA="YES"; npm.cmd run prisma:reset:operational-data
+```
+
+This deletes only operations, attendance, doctrine fits/readiness/pilots, SRP
+requests, recruitment applicants, loot splits, and loot split participants. It
+preserves corps, officers, officer permissions, officer corp assignments,
+Alliance Hub content, EVE Type Lookup, and audit logs. The command refuses to run
+unless `CONFIRM_RESET_OPERATIONAL_DATA` is exactly `YES`.
 
 ## Deployment Checklist
 
@@ -168,6 +206,6 @@ After deployment:
 
 ## Rollout Note
 
-Keep Apps Script v1 live during the initial Vercel rollout. Treat v2 as the staged replacement until production smoke tests, officer workflows, and rollback expectations are verified.
+Apps Script v1 export and validator tooling remains in the repo as optional future reference, but v1 operational data is not part of the v2 production baseline. Treat v2 as a fresh operational start after production smoke tests and officer workflow checks pass.
 
 See [DATABASE.md](./DATABASE.md) for database setup, migration, seed, rotation, and health-check notes.

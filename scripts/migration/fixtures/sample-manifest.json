@@ -1,0 +1,76 @@
+{
+  "exportVersion": "1.0.0",
+  "sourceSystem": "google_apps_script",
+  "spreadsheetId": "sample-spreadsheet-id",
+  "spreadsheetName": "Vyraj Sample Export",
+  "exportedAt": "2026-06-07T18:00:00.000Z",
+  "sheetCount": 11,
+  "sheets": [
+    {
+      "sheetName": "Corp Registry",
+      "sheetId": 101,
+      "headerCount": 5,
+      "rowCount": 2
+    },
+    {
+      "sheetName": "Officers",
+      "sheetId": 102,
+      "headerCount": 3,
+      "rowCount": 2
+    },
+    {
+      "sheetName": "Officer Permissions",
+      "sheetId": 103,
+      "headerCount": 3,
+      "rowCount": 1
+    },
+    {
+      "sheetName": "Operations",
+      "sheetId": 104,
+      "headerCount": 5,
+      "rowCount": 1
+    },
+    {
+      "sheetName": "Operation Attendance",
+      "sheetId": 105,
+      "headerCount": 4,
+      "rowCount": 1
+    },
+    {
+      "sheetName": "Doctrine Fits",
+      "sheetId": 106,
+      "headerCount": 6,
+      "rowCount": 1
+    },
+    {
+      "sheetName": "Doctrine Readiness",
+      "sheetId": 107,
+      "headerCount": 4,
+      "rowCount": 1
+    },
+    {
+      "sheetName": "SRP Requests",
+      "sheetId": 108,
+      "headerCount": 5,
+      "rowCount": 1
+    },
+    {
+      "sheetName": "Loot Splits",
+      "sheetId": 109,
+      "headerCount": 6,
+      "rowCount": 1
+    },
+    {
+      "sheetName": "Loot Split Participants",
+      "sheetId": 110,
+      "headerCount": 5,
+      "rowCount": 1
+    },
+    {
+      "sheetName": "EVE Type Lookup",
+      "sheetId": 111,
+      "headerCount": 3,
+      "rowCount": 1
+    }
+  ]
+}

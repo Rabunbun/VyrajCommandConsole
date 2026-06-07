@@ -1,0 +1,255 @@
+{
+  "exportVersion": "1.0.0",
+  "sourceSystem": "google_apps_script",
+  "spreadsheetId": "sample-spreadsheet-id",
+  "spreadsheetName": "Vyraj Sample Export",
+  "exportedAt": "2026-06-07T18:00:00.000Z",
+  "warnings": [],
+  "sheets": [
+    {
+      "sheetName": "Corp Registry",
+      "sheetId": 101,
+      "headers": ["Corp Name", "Ticker", "Status", "Enabled Modules", "Announcements"],
+      "objectKeys": ["Corp Name", "Ticker", "Status", "Enabled Modules", "Announcements"],
+      "rowCount": 2,
+      "warnings": [],
+      "rows": [
+        {
+          "rowNumber": 2,
+          "values": ["Totality Squad", "TOTL", "Active", "attendance, doctrine, srp, recruitment, loot, dashboard", "Welcome pilots"],
+          "object": {
+            "Corp Name": "Totality Squad",
+            "Ticker": "TOTL",
+            "Status": "Active",
+            "Enabled Modules": "attendance, doctrine, srp, recruitment, loot, dashboard",
+            "Announcements": "Welcome pilots"
+          }
+        },
+        {
+          "rowNumber": 3,
+          "values": ["Vanguard Wing", "VGRD", "Trial", "attendance, doctrine, srp", "Staging review"],
+          "object": {
+            "Corp Name": "Vanguard Wing",
+            "Ticker": "VGRD",
+            "Status": "Trial",
+            "Enabled Modules": "attendance, doctrine, srp",
+            "Announcements": "Staging review"
+          }
+        }
+      ]
+    },
+    {
+      "sheetName": "Officers",
+      "sheetId": 102,
+      "headers": ["Officer Name", "Role", "Status"],
+      "objectKeys": ["Officer Name", "Role", "Status"],
+      "rowCount": 2,
+      "warnings": [],
+      "rows": [
+        {
+          "rowNumber": 2,
+          "values": ["Jason Roderick", "Super Admin", "Active"],
+          "object": {
+            "Officer Name": "Jason Roderick",
+            "Role": "Super Admin",
+            "Status": "Active"
+          }
+        },
+        {
+          "rowNumber": 3,
+          "values": ["Line Officer", "Alliance Officer", "Active"],
+          "object": {
+            "Officer Name": "Line Officer",
+            "Role": "Alliance Officer",
+            "Status": "Active"
+          }
+        }
+      ]
+    },
+    {
+      "sheetName": "Officer Permissions",
+      "sheetId": 103,
+      "headers": ["Officer Name", "Permission Key", "Corp"],
+      "objectKeys": ["Officer Name", "Permission Key", "Corp"],
+      "rowCount": 1,
+      "warnings": [],
+      "rows": [
+        {
+          "rowNumber": 2,
+          "values": ["Line Officer", "operationsManage", "Totality Squad"],
+          "object": {
+            "Officer Name": "Line Officer",
+            "Permission Key": "operationsManage",
+            "Corp": "Totality Squad"
+          }
+        }
+      ]
+    },
+    {
+      "sheetName": "Operations",
+      "sheetId": 104,
+      "headers": ["Corp", "Operation Code", "Operation Name", "Operation Date", "Status"],
+      "objectKeys": ["Corp", "Operation Code", "Operation Name", "Operation Date", "Status"],
+      "rowCount": 1,
+      "warnings": [],
+      "rows": [
+        {
+          "rowNumber": 2,
+          "values": ["Totality Squad", "OP-001", "Sample Fleet", "2026-06-01 20:00", "Planned"],
+          "object": {
+            "Corp": "Totality Squad",
+            "Operation Code": "OP-001",
+            "Operation Name": "Sample Fleet",
+            "Operation Date": "2026-06-01 20:00",
+            "Status": "Planned"
+          }
+        }
+      ]
+    },
+    {
+      "sheetName": "Operation Attendance",
+      "sheetId": 105,
+      "headers": ["Corp", "Operation Code", "Character Name", "Ship Flown"],
+      "objectKeys": ["Corp", "Operation Code", "Character Name", "Ship Flown"],
+      "rowCount": 1,
+      "warnings": [],
+      "rows": [
+        {
+          "rowNumber": 2,
+          "values": ["Totality Squad", "OP-001", "Sample Pilot", "Caracal"],
+          "object": {
+            "Corp": "Totality Squad",
+            "Operation Code": "OP-001",
+            "Character Name": "Sample Pilot",
+            "Ship Flown": "Caracal"
+          }
+        }
+      ]
+    },
+    {
+      "sheetName": "Doctrine Fits",
+      "sheetId": 106,
+      "headers": ["Corp", "Doctrine Code", "Doctrine Name", "Ship Hull", "Ship Type ID", "Status"],
+      "objectKeys": ["Corp", "Doctrine Code", "Doctrine Name", "Ship Hull", "Ship Type ID", "Status"],
+      "rowCount": 1,
+      "warnings": [],
+      "rows": [
+        {
+          "rowNumber": 2,
+          "values": ["Totality Squad", "CARACAL-001", "Caracal Mainline", "Caracal", "621", "Active"],
+          "object": {
+            "Corp": "Totality Squad",
+            "Doctrine Code": "CARACAL-001",
+            "Doctrine Name": "Caracal Mainline",
+            "Ship Hull": "Caracal",
+            "Ship Type ID": "621",
+            "Status": "Active"
+          }
+        }
+      ]
+    },
+    {
+      "sheetName": "Doctrine Readiness",
+      "sheetId": 107,
+      "headers": ["Corp", "Doctrine Code", "Character Name", "Readiness"],
+      "objectKeys": ["Corp", "Doctrine Code", "Character Name", "Readiness"],
+      "rowCount": 1,
+      "warnings": [],
+      "rows": [
+        {
+          "rowNumber": 2,
+          "values": ["Totality Squad", "CARACAL-001", "Sample Pilot", "Ready"],
+          "object": {
+            "Corp": "Totality Squad",
+            "Doctrine Code": "CARACAL-001",
+            "Character Name": "Sample Pilot",
+            "Readiness": "Ready"
+          }
+        }
+      ]
+    },
+    {
+      "sheetName": "SRP Requests",
+      "sheetId": 108,
+      "headers": ["Corp", "Character Name", "Ship Lost", "Requested ISK", "Status"],
+      "objectKeys": ["Corp", "Character Name", "Ship Lost", "Requested ISK", "Status"],
+      "rowCount": 1,
+      "warnings": [],
+      "rows": [
+        {
+          "rowNumber": 2,
+          "values": ["Totality Squad", "Sample Pilot", "Caracal", "12,500,000 ISK", "Submitted"],
+          "object": {
+            "Corp": "Totality Squad",
+            "Character Name": "Sample Pilot",
+            "Ship Lost": "Caracal",
+            "Requested ISK": "12,500,000 ISK",
+            "Status": "Submitted"
+          }
+        }
+      ]
+    },
+    {
+      "sheetName": "Loot Splits",
+      "sheetId": 109,
+      "headers": ["Corp", "Operation Name", "Total ISK", "Payout Pool", "Total Shares", "Status"],
+      "objectKeys": ["Corp", "Operation Name", "Total ISK", "Payout Pool", "Total Shares", "Status"],
+      "rowCount": 1,
+      "warnings": [],
+      "rows": [
+        {
+          "rowNumber": 2,
+          "values": ["Totality Squad", "Sample Fleet", "100,000,000", "90,000,000", "3", "Ready"],
+          "object": {
+            "Corp": "Totality Squad",
+            "Operation Name": "Sample Fleet",
+            "Total ISK": "100,000,000",
+            "Payout Pool": "90,000,000",
+            "Total Shares": "3",
+            "Status": "Ready"
+          }
+        }
+      ]
+    },
+    {
+      "sheetName": "Loot Split Participants",
+      "sheetId": 110,
+      "headers": ["Corp", "Loot Split", "Pilot Name", "Shares", "Payout Amount"],
+      "objectKeys": ["Corp", "Loot Split", "Pilot Name", "Shares", "Payout Amount"],
+      "rowCount": 1,
+      "warnings": [],
+      "rows": [
+        {
+          "rowNumber": 2,
+          "values": ["Totality Squad", "Sample Fleet", "Sample Pilot", "1", "30,000,000"],
+          "object": {
+            "Corp": "Totality Squad",
+            "Loot Split": "Sample Fleet",
+            "Pilot Name": "Sample Pilot",
+            "Shares": "1",
+            "Payout Amount": "30,000,000"
+          }
+        }
+      ]
+    },
+    {
+      "sheetName": "EVE Type Lookup",
+      "sheetId": 111,
+      "headers": ["Type Name", "Type ID", "Category"],
+      "objectKeys": ["Type Name", "Type ID", "Category"],
+      "rowCount": 1,
+      "warnings": [],
+      "rows": [
+        {
+          "rowNumber": 2,
+          "values": ["Caracal", "621", "Cruiser"],
+          "object": {
+            "Type Name": "Caracal",
+            "Type ID": "621",
+            "Category": "Cruiser"
+          }
+        }
+      ]
+    }
+  ]
+}

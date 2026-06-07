@@ -1,0 +1,15 @@
+{
+  "sheetAliases": {
+    "Doctrine Fit Readiness": "DoctrineFitReadiness"
+  },
+  "corpAliases": {
+    "TOTL": "totality-squad",
+    "Totality": "totality-squad",
+    "VGRD": "vanguard-wing",
+    "Vanguard": "vanguard-wing"
+  },
+  "officerAliases": {},
+  "operationAliases": {},
+  "doctrineFitAliases": {},
+  "lootSplitAliases": {}
+}

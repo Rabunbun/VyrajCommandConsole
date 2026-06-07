@@ -1,6 +1,8 @@
 # Database and Deployment Notes
 
-Vyraj Alliance Command Console v2 uses Postgres through Prisma. Google Sheets remains the live v1 system during migration, but it is not the long-term primary database for v2.
+Vyraj Alliance Command Console v2 uses Postgres through Prisma. Google Sheets v1
+export tooling remains available for reference, but production v2 starts from a
+clean baseline instead of importing old operational test data.
 
 ## Required Environment
 
@@ -12,6 +14,8 @@ AUTH_SESSION_SECRET="replace-with-a-long-random-32-character-minimum-secret"
 AUTH_COOKIE_NAME="vyraj_officer_session"
 SESSION_DURATION_HOURS="6"
 DEV_SUPER_ADMIN_PASSWORD="VyrajDev!ChangeMe123"
+# Optional one-time production baseline password override:
+# SEED_SUPER_ADMIN_PASSWORD="temporary-production-setup-password"
 ```
 
 Do not commit `.env` files or production secrets.
@@ -66,13 +70,51 @@ npx prisma migrate deploy
 
 Run this against the production `DATABASE_URL` before expecting the deployed app to use new tables or columns.
 
-## Seed Sample Data
+## Fresh Production Baseline Seed
+
+The v2 production baseline is intentionally clean. It does not import v1
+operations, attendance, doctrine readiness submissions, SRP requests,
+recruitment applicants, loot splits, loot split participants, old audit logs, or
+prototype/test rows.
+
+Run the production baseline against the intended production `DATABASE_URL`:
+
+```powershell
+$env:SEED_SUPER_ADMIN_PASSWORD="temporary-production-setup-password"; npm.cmd run prisma:seed:prod
+```
+
+The production baseline creates or updates only:
+
+- Corp Registry records:
+  - `totality-squad`
+  - `abyssal-construction-and-extraction`
+  - `pochven-police-department`
+  - `striking-distance`
+- Starter Super Admin officers:
+  - `Jason Roderick`
+  - `EmperorVeles`
+- Starter Alliance Hub content.
+- The preserved starter EVE Type Lookup hull list.
+
+It does not create extra officers. Create future officers through Officer
+Management after logging in as a Super Admin.
+
+The production seed refuses to use the default dev password. The setup password
+is temporary; rotate/reset Super Admin passwords immediately after first login.
+
+## Local Dev Seed
 
 ```bash
 npm.cmd run prisma:seed
 ```
 
-The seed script creates sample corps, starter Alliance Hub content, a small EVE type lookup set, and the starter Super Admin officers:
+Equivalent:
+
+```bash
+npm.cmd run prisma:seed:dev
+```
+
+The local/dev seed uses the same baseline records and may create or update the starter Super Admin officers:
 
 - `Jason Roderick`
 - `EmperorVeles`
@@ -85,18 +127,44 @@ VyrajDev!ChangeMe123
 
 Override this before seeding:
 
-```bash
-DEV_SUPER_ADMIN_PASSWORD="your-local-only-password" npm.cmd run prisma:seed
+```powershell
+$env:DEV_SUPER_ADMIN_PASSWORD="your-local-only-password"; npm.cmd run prisma:seed
 ```
 
-Warning: the seed script may create or update the starter Super Admin password hashes depending on environment values. Run seeds in production only when intentionally setting up initial admins, then rotate those passwords.
+Warning: the seed script may create or update starter Super Admin password hashes depending on environment values. Run seeds in production only when intentionally setting up initial admins, then rotate those passwords.
+
+## Reset Operational Test Data
+
+Use this only when you intentionally want to clear module/test operations data
+without removing registry or admin setup:
+
+```powershell
+$env:CONFIRM_RESET_OPERATIONAL_DATA="YES"; npm.cmd run prisma:reset:operational-data
+```
+
+The reset command first prints row counts, then deletes only:
+
+- `OperationAttendance`
+- `Operation`
+- `DoctrineFitReadiness`
+- `DoctrinePilot`
+- `DoctrineFit`
+- `SrpRequest`
+- `RecruitmentApplicant`
+- `LootSplitParticipant`
+- `LootSplit`
+
+It preserves corps, officers, officer permissions, officer corp assignments,
+Alliance Hub content, EVE Type Lookup, and audit logs. It refuses to run unless
+`CONFIRM_RESET_OPERATIONAL_DATA` is exactly `YES`, and it never runs from
+postinstall, build, deploy, or seed scripts.
 
 ## Reset Dev Super Admin Password Safely
 
 1. Set a temporary local seed password:
 
-```bash
-DEV_SUPER_ADMIN_PASSWORD="new-temporary-local-password" npm.cmd run prisma:seed
+```powershell
+$env:DEV_SUPER_ADMIN_PASSWORD="new-temporary-local-password"; npm.cmd run prisma:seed
 ```
 
 2. Login with the temporary password.

@@ -7,11 +7,15 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "migration:validate": "tsx scripts/validate-v1-export.ts",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
-    "prisma:seed": "prisma db seed",
+    "prisma:seed": "tsx prisma/seed.ts --mode=dev",
+    "prisma:seed:dev": "tsx prisma/seed.ts --mode=dev",
+    "prisma:seed:prod": "tsx prisma/seed.ts --mode=prod",
+    "prisma:reset:operational-data": "tsx scripts/reset-operational-data.ts",
     "db:studio": "prisma studio"
   },
   "dependencies": {
@@ -35,6 +39,6 @@
     "typescript": "^5.0.0"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts --mode=dev"
   }
 }
