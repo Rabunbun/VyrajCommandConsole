@@ -73,10 +73,14 @@ export default async function AllianceHubPage() {
           )}
         </section>
 
-        <section className="section-stack" aria-labelledby="corps-title">
+        <section
+          className="section-stack"
+          id="corp-directory"
+          aria-labelledby="corps-title"
+        >
           <div className="section-heading">
             <h2 className="section-title" id="corps-title">
-              Corp Status
+              Corp Directory
             </h2>
             <span className="badge">Public Registry</span>
           </div>

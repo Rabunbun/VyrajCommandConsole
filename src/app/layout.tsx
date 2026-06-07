@@ -3,6 +3,7 @@ import Link from "next/link";
 import "./globals.css";
 import { logoutAction } from "@/app/auth-actions";
 import { consoleRoutes, routeGroups, type ConsoleRoute } from "@/lib/navigation";
+import { hasPermission } from "@/lib/permissions";
 import { getCurrentOfficerSession, isSuperAdminSession } from "@/lib/session";
 
 export const metadata: Metadata = {
@@ -75,12 +76,19 @@ function getVisibleConsoleRoutes(
   const isSuperAdmin = isSuperAdminSession(session);
 
   return consoleRoutes.filter((route) => {
-    if (route.group === "Officer") {
-      return false;
-    }
-
     if (route.group === "Admin") {
-      return isSuperAdmin;
+      if (route.superAdminOnly) {
+        return isSuperAdmin;
+      }
+
+      return (
+        isSuperAdmin ||
+        Boolean(
+          route.permissions?.some((permission) =>
+            hasPermission(session, permission)
+          )
+        )
+      );
     }
 
     if (route.href === "/login" && session) {
