@@ -35,6 +35,13 @@ const adminCards = [
     href: "/admin/audit-log",
     status: "Active",
     summary: "Review officer/admin actions with safe redacted details."
+  },
+  {
+    code: "SYS",
+    title: "System Health",
+    href: "/admin/system-health",
+    status: "Active",
+    summary: "Review deployment configuration, database health, counts, and recent audit heartbeat."
   }
 ];
 

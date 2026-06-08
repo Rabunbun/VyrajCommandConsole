@@ -13,6 +13,7 @@ export const consoleRoutes: ConsoleRoute[] = [
   { label: "Super Admin", href: "/admin/super", group: "Admin", superAdminOnly: true },
   { label: "Officers", href: "/admin/officers", group: "Admin", superAdminOnly: true },
   { label: "Corps", href: "/admin/corps", group: "Admin", superAdminOnly: true },
+  { label: "System Health", href: "/admin/system-health", group: "Admin", superAdminOnly: true },
   {
     label: "Hub Editor",
     href: "/admin/alliance-hub",

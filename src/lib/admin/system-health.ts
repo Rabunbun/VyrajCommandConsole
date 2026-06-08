@@ -1,0 +1,305 @@
+import "server-only";
+import { CorpStatus, OfficerRole, OfficerStatus } from "@prisma/client";
+import { checkDatabaseConnection, getDb, isDatabaseConfigured } from "@/lib/db";
+
+export type HealthStatus = "OK" | "Warning" | "Error" | "Not configured";
+
+export type HealthCheck = {
+  label: string;
+  status: HealthStatus;
+  detail: string;
+};
+
+export type HealthWarning = {
+  label: string;
+  detail: string;
+};
+
+export type SystemHealthCounts = {
+  corps: number;
+  activeTrialCorps: number;
+  officers: number;
+  activeOfficers: number;
+  superAdmins: number;
+  activeSuperAdmins: number;
+  allianceHubContent: number;
+  operations: number;
+  srpRequests: number;
+  doctrineFits: number;
+  recruitmentApplicants: number;
+  lootSplits: number;
+  auditLogEntries: number;
+  eveTypeLookupRows: number;
+};
+
+export type RecentAuditHeartbeat = {
+  id: string;
+  createdAt: string;
+  officerName: string;
+  module: string;
+  action: string;
+  summary: string;
+};
+
+export type SystemHealthData = {
+  generatedAt: string;
+  environmentName: string;
+  checks: HealthCheck[];
+  counts: SystemHealthCounts | null;
+  recentAudit: RecentAuditHeartbeat[];
+  warnings: HealthWarning[];
+};
+
+export async function getSystemHealthData(): Promise<SystemHealthData> {
+  const generatedAt = new Date().toISOString();
+  const environmentName = getEnvironmentName();
+  const database = await checkDatabaseConnection();
+  const authSecretLength = process.env.AUTH_SESSION_SECRET?.trim().length || 0;
+  const cookieNameConfigured = Boolean(process.env.AUTH_COOKIE_NAME?.trim());
+  const sessionDurationRaw = process.env.SESSION_DURATION_HOURS?.trim();
+  const sessionDuration = Number(sessionDurationRaw || 6);
+  const sessionDurationConfigured = Boolean(sessionDurationRaw);
+  const sessionDurationValid = Number.isFinite(sessionDuration) && sessionDuration > 0;
+  const databaseUrlConfigured = isDatabaseConfigured();
+
+  const checks: HealthCheck[] = [
+    {
+      label: "App runtime loaded",
+      status: "OK",
+      detail: "Server component runtime responded."
+    },
+    {
+      label: "Current environment",
+      status: environmentName === "Unknown" ? "Warning" : "OK",
+      detail: environmentName
+    },
+    {
+      label: "Server time",
+      status: "OK",
+      detail: generatedAt
+    },
+    {
+      label: "DATABASE_URL configured",
+      status: databaseUrlConfigured ? "OK" : "Not configured",
+      detail: databaseUrlConfigured ? "Configured" : "Missing"
+    },
+    {
+      label: "Database connection",
+      status: database.status === "connected" ? "OK" : database.status === "not_configured" ? "Not configured" : "Error",
+      detail: database.status === "connected" ? "Database connection succeeded." : "Database check did not complete successfully."
+    },
+    {
+      label: "Prisma query check",
+      status: database.status === "connected" ? "OK" : database.status === "not_configured" ? "Not configured" : "Error",
+      detail: database.status === "connected" ? "SELECT 1 completed." : "Prisma query unavailable."
+    },
+    {
+      label: "Auth configured",
+      status: authSecretLength >= 32 ? "OK" : "Error",
+      detail: authSecretLength >= 32 ? "Session secret length is valid." : "Session secret is missing or too short."
+    },
+    {
+      label: "AUTH_SESSION_SECRET",
+      status: authSecretLength >= 32 ? "OK" : authSecretLength > 0 ? "Error" : "Not configured",
+      detail: authSecretLength >= 32 ? "Present with valid length." : "Missing or shorter than 32 characters."
+    },
+    {
+      label: "AUTH_COOKIE_NAME",
+      status: cookieNameConfigured ? "OK" : "Warning",
+      detail: cookieNameConfigured ? "Configured." : "Using application default."
+    },
+    {
+      label: "SESSION_DURATION_HOURS",
+      status: sessionDurationValid ? sessionDurationConfigured ? "OK" : "Warning" : "Error",
+      detail: sessionDurationValid
+        ? sessionDurationConfigured
+          ? "Configured with a positive value."
+          : "Using application default."
+        : "Invalid session duration."
+    }
+  ];
+
+  const { counts, recentAudit, databaseReadFailed } = database.status === "connected"
+    ? await readDatabaseSummary()
+    : { counts: null, recentAudit: [], databaseReadFailed: false };
+
+  if (databaseReadFailed) {
+    checks.push({
+      label: "Database summary query",
+      status: "Error",
+      detail: "One or more database summary queries failed."
+    });
+  }
+
+  const warnings = buildWarnings({
+    checks,
+    counts,
+    databaseUrlConfigured,
+    authSecretLength,
+    sessionDurationValid
+  });
+
+  return {
+    generatedAt,
+    environmentName,
+    checks,
+    counts,
+    recentAudit,
+    warnings
+  };
+}
+
+async function readDatabaseSummary() {
+  try {
+    const [
+      corps,
+      activeTrialCorps,
+      officers,
+      activeOfficers,
+      superAdmins,
+      activeSuperAdmins,
+      allianceHubContent,
+      operations,
+      srpRequests,
+      doctrineFits,
+      recruitmentApplicants,
+      lootSplits,
+      auditLogEntries,
+      eveTypeLookupRows,
+      recentAuditRows
+    ] = await Promise.all([
+      getDb().corp.count(),
+      getDb().corp.count({
+        where: { status: { in: [CorpStatus.ACTIVE, CorpStatus.TRIAL] } }
+      }),
+      getDb().officer.count(),
+      getDb().officer.count({ where: { status: OfficerStatus.ACTIVE } }),
+      getDb().officer.count({ where: { role: OfficerRole.SUPER_ADMIN } }),
+      getDb().officer.count({
+        where: {
+          role: OfficerRole.SUPER_ADMIN,
+          status: OfficerStatus.ACTIVE
+        }
+      }),
+      getDb().allianceHubContent.count(),
+      getDb().operation.count(),
+      getDb().srpRequest.count(),
+      getDb().doctrineFit.count(),
+      getDb().recruitmentApplicant.count(),
+      getDb().lootSplit.count(),
+      getDb().officerAuditLog.count(),
+      getDb().eveTypeLookup.count(),
+      getDb().officerAuditLog.findMany({
+        orderBy: [{ createdAt: "desc" }],
+        take: 5,
+        select: {
+          id: true,
+          createdAt: true,
+          officerName: true,
+          module: true,
+          action: true,
+          summary: true
+        }
+      })
+    ]);
+
+    return {
+      counts: {
+        corps,
+        activeTrialCorps,
+        officers,
+        activeOfficers,
+        superAdmins,
+        activeSuperAdmins,
+        allianceHubContent,
+        operations,
+        srpRequests,
+        doctrineFits,
+        recruitmentApplicants,
+        lootSplits,
+        auditLogEntries,
+        eveTypeLookupRows
+      },
+      recentAudit: recentAuditRows.map((entry) => ({
+        ...entry,
+        createdAt: entry.createdAt.toISOString()
+      })),
+      databaseReadFailed: false
+    };
+  } catch {
+    return {
+      counts: null,
+      recentAudit: [],
+      databaseReadFailed: true
+    };
+  }
+}
+
+function buildWarnings(input: {
+  checks: HealthCheck[];
+  counts: SystemHealthCounts | null;
+  databaseUrlConfigured: boolean;
+  authSecretLength: number;
+  sessionDurationValid: boolean;
+}) {
+  const warnings: HealthWarning[] = [];
+
+  if (!input.databaseUrlConfigured) {
+    warnings.push({
+      label: "DATABASE_URL missing",
+      detail: "Database-backed pages and auth cannot operate without DATABASE_URL."
+    });
+  }
+
+  if (input.authSecretLength < 32) {
+    warnings.push({
+      label: "AUTH_SESSION_SECRET invalid",
+      detail: "Set AUTH_SESSION_SECRET to a random value of at least 32 characters."
+    });
+  }
+
+  if (!input.sessionDurationValid) {
+    warnings.push({
+      label: "SESSION_DURATION_HOURS invalid",
+      detail: "Use a positive numeric value."
+    });
+  }
+
+  if (input.counts) {
+    if (input.counts.activeSuperAdmins === 0) {
+      warnings.push({
+        label: "No active Super Admins",
+        detail: "At least one active Super Admin is required for administration."
+      });
+    }
+
+    if (input.counts.corps === 0) {
+      warnings.push({
+        label: "No corps",
+        detail: "Corp Portal and module data require Corp Registry records."
+      });
+    }
+
+    if (input.counts.eveTypeLookupRows === 0) {
+      warnings.push({
+        label: "No EVE type lookup rows",
+        detail: "Doctrine image/type helpers may be limited until lookup rows are seeded."
+      });
+    }
+  }
+
+  for (const check of input.checks) {
+    if (check.status === "Error") {
+      warnings.push({
+        label: `${check.label} failed`,
+        detail: check.detail
+      });
+    }
+  }
+
+  return warnings;
+}
+
+function getEnvironmentName() {
+  return process.env.VERCEL_ENV?.trim() || process.env.NODE_ENV?.trim() || "Unknown";
+}
