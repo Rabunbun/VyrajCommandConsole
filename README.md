@@ -67,7 +67,7 @@ Required:
 - `DEV_SUPER_ADMIN_PASSWORD`: seed password for local/dev Super Admin accounts, or an intentional initial setup value only.
 - `SEED_SUPER_ADMIN_PASSWORD`: optional clearer name for a one-time production baseline seed password. If set, it takes precedence during seeding.
 
-Optional Phase 1A EVE SSO placeholders:
+Optional Phase 1A/1B EVE SSO placeholders:
 
 - `EVE_SSO_CLIENT_ID`
 - `EVE_SSO_CLIENT_SECRET`
@@ -79,7 +79,8 @@ Optional Phase 1A EVE SSO placeholders:
 
 These EVE variables are not required for the app to boot. OAuth login is not
 active yet, no ESI calls are made, and manual officer login remains the only
-active login method.
+active login method. See [EVE_SSO_SETUP.md](./EVE_SSO_SETUP.md) for the future
+EVE developer app and Vercel environment checklist.
 
 Never commit real `.env` files. Production values belong in Vercel Environment Variables.
 
@@ -183,12 +184,12 @@ preserves corps, officers, officer permissions, officer corp assignments,
 Alliance Hub content, EVE Type Lookup, and audit logs. The command refuses to run
 unless `CONFIRM_RESET_OPERATIONAL_DATA` is exactly `YES`.
 
-## EVE SSO Phase 1A
+## EVE SSO Phase 1A/1B
 
-Phase 1A adds database and configuration foundations for future EVE SSO identity
-linking only. It adds an `EveIdentity` schema model, safe environment-status
-helpers, a disabled/coming-soon EVE SSO section on `/login`, and EVE SSO config
-status on `/admin/system-health`.
+Phase 1A/1B adds database, configuration, and admin-readiness foundations for
+future EVE SSO identity linking only. It adds an `EveIdentity` schema model,
+safe environment-status helpers, a disabled EVE SSO section on `/login`, and an
+EVE SSO setup checklist on `/admin/system-health`.
 
 OAuth start/callback routes are not implemented yet. The app does not exchange
 authorization codes, validate EVE JWTs, call ESI, store EVE access tokens, or

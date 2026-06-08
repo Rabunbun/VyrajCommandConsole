@@ -142,31 +142,37 @@ export default async function SystemHealthPage() {
 }
 
 function EveSsoSection({ config }: { config: SystemHealthData["eveSso"] }) {
-  const requiredStatus = config.configured ? "OK" : "Not configured";
-  const missingVariables = config.missingVariables.length
-    ? config.missingVariables.join(", ")
-    : "None";
   const scopes = config.scopes.length
     ? config.scopes.join(", ")
-    : "No scopes configured";
+    : "No scopes configured. Scopes are optional until OAuth routes are implemented.";
 
   const checks: HealthCheck[] = [
+    ...config.variables.map((variable) => ({
+      label: variable.name,
+      status: variable.present
+        ? "OK" as const
+        : variable.required
+          ? "Not configured" as const
+          : "Warning" as const,
+      detail: variable.present
+        ? "Present. Value is hidden."
+        : variable.required
+          ? "Missing. Required before EVE OAuth can be enabled."
+          : "Missing. Optional for Phase 1B readiness."
+    })),
     {
-      label: "EVE SSO configured",
-      status: requiredStatus,
+      label: "EVE SSO config readiness",
+      status: config.configured ? "OK" : "Not configured",
       detail: config.configured
-        ? "Required EVE SSO environment variables are present."
-        : "EVE SSO is optional in Phase 1A and is not active yet."
-    },
-    {
-      label: "Missing required env vars",
-      status: config.missingVariables.length ? "Not configured" : "OK",
-      detail: missingVariables
+        ? "Required EVE SSO environment variables are present, but login is still disabled in Phase 1B."
+        : "Required EVE SSO environment variables are missing. Login remains disabled."
     },
     {
       label: "Callback URL",
       status: config.callbackConfigured ? "OK" : "Not configured",
-      detail: config.callbackConfigured ? "Configured." : "Missing EVE_SSO_CALLBACK_URL."
+      detail: config.callbackConfigured
+        ? "Configured. The EVE developer app callback must match the hidden EVE_SSO_CALLBACK_URL value exactly."
+        : "Missing EVE_SSO_CALLBACK_URL. The EVE developer app callback must match this future value exactly."
     },
     {
       label: "Scopes",
@@ -191,21 +197,51 @@ function EveSsoSection({ config }: { config: SystemHealthData["eveSso"] }) {
     {
       label: "Token storage",
       status: "Not configured",
-      detail: "Not enabled. No EVE access or refresh tokens are stored in Phase 1A."
+      detail: "Not enabled. No EVE access or refresh tokens are stored in Phase 1A/1B."
     },
     {
       label: "OAuth routes",
       status: "Not configured",
-      detail: "Not implemented. No EVE OAuth start or callback route exists in Phase 1A."
+      detail: "Not implemented. No EVE OAuth start or callback route exists in Phase 1B."
+    },
+    {
+      label: "EVE login enabled",
+      status: "Not configured",
+      detail: "No. The Login with EVE button remains disabled until OAuth routes are implemented."
     }
   ];
 
   return (
-    <HealthSection
-      description="Future EVE SSO readiness without exposing client secrets, callback values, tokens, or auth codes."
-      title="EVE SSO Status"
-      checks={checks}
-    />
+    <section className="section-stack" aria-labelledby="eve-sso-status-title">
+      <div className="section-heading">
+        <div>
+          <h2 className="section-title" id="eve-sso-status-title">
+            EVE SSO Status
+          </h2>
+          <p className="card-copy">
+            Future EVE SSO readiness without exposing client secrets, callback
+            values, tokens, or auth codes.
+          </p>
+        </div>
+      </div>
+      <div className="data-grid">
+        {checks.map((check) => (
+          <div className="data-card" key={check.label}>
+            <div className="card-heading">
+              <h3 className="card-title">{check.label}</h3>
+              <StatusBadge status={check.status} />
+            </div>
+            <p className="card-copy">{check.detail}</p>
+          </div>
+        ))}
+      </div>
+      <div className="empty-state">
+        The callback URL configured in the EVE developer app must match
+        EVE_SSO_CALLBACK_URL exactly. In production, use the Vercel domain. In
+        local development, use localhost only if the EVE app allows it, or use a
+        separate development EVE app.
+      </div>
+    </section>
   );
 }
 

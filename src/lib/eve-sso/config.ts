@@ -9,8 +9,22 @@ const requiredEveSsoVariables = [
   "EVE_SSO_CALLBACK_URL"
 ] as const;
 
+const optionalEveSsoVariables = [
+  "EVE_SSO_SCOPES",
+  "EVE_SSO_BASE_URL",
+  "EVE_ESI_BASE_URL",
+  "EVE_ESI_COMPATIBILITY_DATE"
+] as const;
+
+export type EveSsoVariableStatus = {
+  name: string;
+  required: boolean;
+  present: boolean;
+};
+
 export type EveSsoConfigStatus = {
   configured: boolean;
+  variables: EveSsoVariableStatus[];
   missingVariables: string[];
   callbackConfigured: boolean;
   scopesConfigured: boolean;
@@ -28,12 +42,25 @@ export function getEveSsoConfigStatus(): EveSsoConfigStatus {
   const missingVariables = requiredEveSsoVariables.filter(
     (variableName) => !hasEnvValue(variableName)
   );
+  const variables = [
+    ...requiredEveSsoVariables.map((variableName) => ({
+      name: variableName,
+      required: true,
+      present: hasEnvValue(variableName)
+    })),
+    ...optionalEveSsoVariables.map((variableName) => ({
+      name: variableName,
+      required: false,
+      present: hasEnvValue(variableName)
+    }))
+  ];
   const scopes = parseScopes(process.env.EVE_SSO_SCOPES);
   const ssoBaseUrlConfigured = hasEnvValue("EVE_SSO_BASE_URL");
   const esiBaseUrlConfigured = hasEnvValue("EVE_ESI_BASE_URL");
 
   return {
     configured: missingVariables.length === 0,
+    variables,
     missingVariables,
     callbackConfigured: hasEnvValue("EVE_SSO_CALLBACK_URL"),
     scopesConfigured: scopes.length > 0,

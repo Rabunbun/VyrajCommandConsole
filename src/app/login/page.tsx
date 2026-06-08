@@ -81,8 +81,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         </button>
         <div className="empty-state">
           {eveSso.configured
-            ? "EVE SSO configuration detected. OAuth login is coming soon and is not active in this phase."
-            : `EVE SSO not configured yet. Missing: ${eveSso.missingVariables.join(", ")}.`}
+            ? "EVE SSO configured, OAuth route not enabled yet."
+            : `EVE SSO not configured. Missing: ${eveSso.missingVariables.join(", ")}.`}
         </div>
       </section>
     </div>
