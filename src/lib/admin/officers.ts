@@ -33,6 +33,13 @@ export type AdminOfficerView = {
       ticker: string;
     } | null;
   }>;
+  eveIdentities: Array<{
+    id: string;
+    characterId: string;
+    characterName: string;
+    lastEveLoginAt: string | null;
+    linkedAt: string | null;
+  }>;
 };
 
 export type OfficerManagementData = {
@@ -82,6 +89,23 @@ export async function getOfficerManagementData(): Promise<OfficerManagementData>
               }
             }
           }
+        },
+        eveIdentities: {
+          orderBy: [
+            {
+              linkedAt: "desc"
+            },
+            {
+              characterName: "asc"
+            }
+          ],
+          select: {
+            id: true,
+            characterId: true,
+            characterName: true,
+            lastEveLoginAt: true,
+            linkedAt: true
+          }
         }
       }
     }),
@@ -127,6 +151,13 @@ type OfficerQueryResult = {
       ticker: string;
     } | null;
   }>;
+  eveIdentities: Array<{
+    id: string;
+    characterId: bigint;
+    characterName: string;
+    lastEveLoginAt: Date | null;
+    linkedAt: Date | null;
+  }>;
 };
 
 function formatOfficerForAdminView(officer: OfficerQueryResult): AdminOfficerView {
@@ -153,6 +184,13 @@ function formatOfficerForAdminView(officer: OfficerQueryResult): AdminOfficerVie
       : globalPermissions,
     corpPermissions: officer.role === OfficerRole.SUPER_ADMIN
       ? []
-      : corpPermissions
+      : corpPermissions,
+    eveIdentities: officer.eveIdentities.map((identity) => ({
+      id: identity.id,
+      characterId: identity.characterId.toString(),
+      characterName: identity.characterName,
+      lastEveLoginAt: identity.lastEveLoginAt?.toISOString() ?? null,
+      linkedAt: identity.linkedAt?.toISOString() ?? null
+    }))
   };
 }

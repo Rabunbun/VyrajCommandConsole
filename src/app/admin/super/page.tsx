@@ -37,6 +37,13 @@ const adminCards = [
     summary: "Review officer/admin actions with safe redacted details."
   },
   {
+    code: "SSO",
+    title: "EVE Identities / SSO Links",
+    href: "/admin/eve-identities",
+    status: "Active",
+    summary: "Link verified EVE characters to internal officer accounts."
+  },
+  {
     code: "SYS",
     title: "System Health",
     href: "/admin/system-health",

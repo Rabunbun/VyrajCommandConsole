@@ -270,6 +270,39 @@ function OfficerCard({
       </div>
 
       <div className="section-stack">
+        <h3 className="section-title">EVE SSO Link</h3>
+        {officer.eveIdentities.length ? (
+          <div className="section-stack">
+            {officer.eveIdentities.map((identity) => (
+              <div className="metric-grid" key={identity.id}>
+                <Metric label="Character" value={identity.characterName} />
+                <Metric label="Character ID" value={identity.characterId} />
+                <Metric
+                  label="Linked At"
+                  value={
+                    identity.linkedAt ? formatDateTime(identity.linkedAt) : "Not linked"
+                  }
+                />
+                <Metric
+                  label="Last EVE Login"
+                  value={
+                    identity.lastEveLoginAt
+                      ? formatDateTime(identity.lastEveLoginAt)
+                      : "Never"
+                  }
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="card-copy">
+            Not linked. Use EVE Identities / SSO Links to connect a verified
+            character to this officer.
+          </p>
+        )}
+      </div>
+
+      <div className="section-stack">
         <h3 className="section-title">Assigned Corps</h3>
         {officer.role === OfficerRole.SUPER_ADMIN ? (
           <div className="section-stack">
