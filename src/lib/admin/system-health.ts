@@ -1,6 +1,7 @@
 import "server-only";
 import { CorpStatus, OfficerRole, OfficerStatus } from "@prisma/client";
 import { checkDatabaseConnection, getDb, isDatabaseConfigured } from "@/lib/db";
+import { getEveSsoConfigStatus, type EveSsoConfigStatus } from "@/lib/eve-sso/config";
 
 export type HealthStatus = "OK" | "Warning" | "Error" | "Not configured";
 
@@ -45,6 +46,7 @@ export type SystemHealthData = {
   generatedAt: string;
   environmentName: string;
   checks: HealthCheck[];
+  eveSso: EveSsoConfigStatus;
   counts: SystemHealthCounts | null;
   recentAudit: RecentAuditHeartbeat[];
   warnings: HealthWarning[];
@@ -61,6 +63,7 @@ export async function getSystemHealthData(): Promise<SystemHealthData> {
   const sessionDurationConfigured = Boolean(sessionDurationRaw);
   const sessionDurationValid = Number.isFinite(sessionDuration) && sessionDuration > 0;
   const databaseUrlConfigured = isDatabaseConfigured();
+  const eveSso = getEveSsoConfigStatus();
 
   const checks: HealthCheck[] = [
     {
@@ -143,6 +146,7 @@ export async function getSystemHealthData(): Promise<SystemHealthData> {
     generatedAt,
     environmentName,
     checks,
+    eveSso,
     counts,
     recentAudit,
     warnings

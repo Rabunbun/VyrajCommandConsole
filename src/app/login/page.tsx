@@ -1,6 +1,7 @@
 import { OfficerRole } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { loginAction } from "@/app/auth-actions";
+import { getEveSsoConfigStatus } from "@/lib/eve-sso/config";
 import { getCurrentOfficerSession } from "@/lib/session";
 
 type LoginPageProps = {
@@ -13,6 +14,7 @@ type LoginPageProps = {
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const session = await getCurrentOfficerSession();
   const params = await searchParams;
+  const eveSso = getEveSsoConfigStatus();
 
   if (session?.officer.role === OfficerRole.SUPER_ADMIN) {
     redirect("/admin/super");
@@ -63,6 +65,26 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           Login
         </button>
       </form>
+
+      <section className="form-panel" aria-labelledby="eve-sso-login-title">
+        <div className="card-heading">
+          <h2 className="section-title" id="eve-sso-login-title">
+            EVE SSO
+          </h2>
+          <p className="card-copy">
+            EVE SSO will verify character identity. Internal Vyraj permissions
+            still control access.
+          </p>
+        </div>
+        <button className="secondary-button" disabled type="button">
+          Login with EVE
+        </button>
+        <div className="empty-state">
+          {eveSso.configured
+            ? "EVE SSO configuration detected. OAuth login is coming soon and is not active in this phase."
+            : `EVE SSO not configured yet. Missing: ${eveSso.missingVariables.join(", ")}.`}
+        </div>
+      </section>
     </div>
   );
 }

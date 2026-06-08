@@ -24,6 +24,11 @@ enum OfficerStatus {
   DISABLED
 }
 
+enum LoginProvider {
+  MANUAL
+  EVE_SSO
+}
+
 enum ContentStatus {
   ACTIVE
   DRAFT
@@ -54,36 +59,37 @@ enum AllianceContentPriority {
 }
 
 model Corp {
-  id                       String   @id @default(uuid()) @db.Uuid
-  slug                     String   @unique
+  id                       String     @id @default(uuid()) @db.Uuid
+  slug                     String     @unique
   name                     String
   ticker                   String
-  description              String   @default("")
+  description              String     @default("")
   status                   CorpStatus @default(ACTIVE)
-  recruitmentStatus        String   @default("Unknown")
-  activeMembers            Int      @default(0)
-  recentOps                Int      @default(0)
-  pendingSrp               Int      @default(0)
-  doctrineReadinessPercent Int      @default(0)
-  announcements            Json     @default("[]")
-  enabledModules           Json     @default("{}")
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  recruitmentStatus        String     @default("Unknown")
+  activeMembers            Int        @default(0)
+  recentOps                Int        @default(0)
+  pendingSrp               Int        @default(0)
+  doctrineReadinessPercent Int        @default(0)
+  announcements            Json       @default("[]")
+  enabledModules           Json       @default("{}")
+  createdAt                DateTime   @default(now())
+  updatedAt                DateTime   @updatedAt
   legacySheetName          String?
   legacyRowNumber          Int?
   legacyImportedAt         DateTime?
 
-  officerAssignments       OfficerCorpAssignment[]
-  officerPermissions       OfficerPermission[]
-  auditLogs                OfficerAuditLog[]
-  operations               Operation[]
-  operationAttendance      OperationAttendance[]
-  srpRequests              SrpRequest[]
-  doctrineFits             DoctrineFit[]
-  doctrineFitReadiness     DoctrineFitReadiness[]
-  doctrinePilots           DoctrinePilot[]
-  recruitmentApplicants    RecruitmentApplicant[]
-  lootSplits               LootSplit[]
+  officerAssignments    OfficerCorpAssignment[]
+  officerPermissions    OfficerPermission[]
+  auditLogs             OfficerAuditLog[]
+  operations            Operation[]
+  operationAttendance   OperationAttendance[]
+  srpRequests           SrpRequest[]
+  doctrineFits          DoctrineFit[]
+  doctrineFitReadiness  DoctrineFitReadiness[]
+  doctrinePilots        DoctrinePilot[]
+  recruitmentApplicants RecruitmentApplicant[]
+  lootSplits            LootSplit[]
+  eveMemberIdentities   EveIdentity[]           @relation("EveIdentityMemberCorp")
 
   @@index([status])
   @@index([legacySheetName, legacyRowNumber])
@@ -125,27 +131,54 @@ model Officer {
   legacyRowNumber  Int?
   legacyImportedAt DateTime?
 
-  sessions         OfficerSession[]
-  corpAssignments  OfficerCorpAssignment[]
-  permissions      OfficerPermission[]
-  auditLogs        OfficerAuditLog[]
+  sessions        OfficerSession[]
+  corpAssignments OfficerCorpAssignment[]
+  permissions     OfficerPermission[]
+  auditLogs       OfficerAuditLog[]
+  eveIdentities   EveIdentity[]
 
   @@index([role, status])
   @@index([legacySheetName, legacyRowNumber])
 }
 
-model OfficerSession {
-  id          String    @id @default(uuid()) @db.Uuid
-  officerId   String    @db.Uuid
-  tokenHash   String    @unique
-  createdAt   DateTime  @default(now())
-  expiresAt   DateTime
-  revokedAt   DateTime?
-  lastSeenAt  DateTime?
-  userAgent   String?
-  ipAddress   String?
+model EveIdentity {
+  id                    String        @id @default(uuid()) @db.Uuid
+  characterId           BigInt        @unique
+  characterName         String
+  corporationId         BigInt?
+  corporationName       String        @default("")
+  allianceId            BigInt?
+  allianceName          String        @default("")
+  officerId             String?       @db.Uuid
+  memberCorpId          String?       @db.Uuid
+  provider              LoginProvider @default(EVE_SSO)
+  linkedAt              DateTime?
+  lastEveLoginAt        DateTime?
+  lastIdentityRefreshAt DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
 
-  officer     Officer   @relation(fields: [officerId], references: [id], onDelete: Cascade)
+  officer    Officer? @relation(fields: [officerId], references: [id], onDelete: SetNull)
+  memberCorp Corp?    @relation("EveIdentityMemberCorp", fields: [memberCorpId], references: [id], onDelete: SetNull)
+
+  @@index([corporationId])
+  @@index([allianceId])
+  @@index([officerId])
+  @@index([memberCorpId])
+}
+
+model OfficerSession {
+  id         String    @id @default(uuid()) @db.Uuid
+  officerId  String    @db.Uuid
+  tokenHash  String    @unique
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  lastSeenAt DateTime?
+  userAgent  String?
+  ipAddress  String?
+
+  officer Officer @relation(fields: [officerId], references: [id], onDelete: Cascade)
 
   @@index([officerId])
   @@index([expiresAt])
@@ -157,8 +190,8 @@ model OfficerCorpAssignment {
   corpId    String   @db.Uuid
   createdAt DateTime @default(now())
 
-  officer   Officer  @relation(fields: [officerId], references: [id], onDelete: Cascade)
-  corp      Corp     @relation(fields: [corpId], references: [id], onDelete: Cascade)
+  officer Officer @relation(fields: [officerId], references: [id], onDelete: Cascade)
+  corp    Corp    @relation(fields: [corpId], references: [id], onDelete: Cascade)
 
   @@unique([officerId, corpId])
   @@index([corpId])
@@ -171,38 +204,38 @@ model OfficerPermission {
   corpId        String?  @db.Uuid
   createdAt     DateTime @default(now())
 
-  officer       Officer  @relation(fields: [officerId], references: [id], onDelete: Cascade)
-  corp          Corp?    @relation(fields: [corpId], references: [id], onDelete: Cascade)
+  officer Officer @relation(fields: [officerId], references: [id], onDelete: Cascade)
+  corp    Corp?   @relation(fields: [corpId], references: [id], onDelete: Cascade)
 
   @@index([officerId, permissionKey])
   @@index([corpId])
 }
 
 model OfficerAuditLog {
-  id             String   @id @default(uuid()) @db.Uuid
-  officerId      String?  @db.Uuid
-  officerName    String   @default("")
-  officerRole    String   @default("")
-  corpId         String?  @db.Uuid
-  corpSlug       String   @default("")
-  corpName       String   @default("")
-  module         String
-  action         String
-  permissionUsed String   @default("")
-  targetType     String   @default("")
-  targetId       String   @default("")
-  targetName     String   @default("")
-  summary        String   @default("")
-  before         Json?
-  after          Json?
-  details        Json     @default("{}")
-  createdAt      DateTime @default(now())
-  legacySheetName String?
-  legacyRowNumber Int?
+  id               String    @id @default(uuid()) @db.Uuid
+  officerId        String?   @db.Uuid
+  officerName      String    @default("")
+  officerRole      String    @default("")
+  corpId           String?   @db.Uuid
+  corpSlug         String    @default("")
+  corpName         String    @default("")
+  module           String
+  action           String
+  permissionUsed   String    @default("")
+  targetType       String    @default("")
+  targetId         String    @default("")
+  targetName       String    @default("")
+  summary          String    @default("")
+  before           Json?
+  after            Json?
+  details          Json      @default("{}")
+  createdAt        DateTime  @default(now())
+  legacySheetName  String?
+  legacyRowNumber  Int?
   legacyImportedAt DateTime?
 
-  officer        Officer? @relation(fields: [officerId], references: [id], onDelete: SetNull)
-  corp           Corp?    @relation(fields: [corpId], references: [id], onDelete: SetNull)
+  officer Officer? @relation(fields: [officerId], references: [id], onDelete: SetNull)
+  corp    Corp?    @relation(fields: [corpId], references: [id], onDelete: SetNull)
 
   @@index([corpId, createdAt])
   @@index([module, action])
@@ -227,25 +260,25 @@ model LegacyImportMap {
 }
 
 model Operation {
-  id               String   @id @default(uuid()) @db.Uuid
-  corpId           String   @db.Uuid
+  id               String    @id @default(uuid()) @db.Uuid
+  corpId           String    @db.Uuid
   operationCode    String?
   operationName    String
-  operationType    String   @default("")
+  operationType    String    @default("")
   operationDate    DateTime?
-  fcLead           String   @default("")
-  location         String   @default("")
-  doctrineUsed     String   @default("")
-  status           String   @default("Planned")
-  notes            String   @default("")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  fcLead           String    @default("")
+  location         String    @default("")
+  doctrineUsed     String    @default("")
+  status           String    @default("Planned")
+  notes            String    @default("")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
   legacySheetName  String?
   legacyRowNumber  Int?
   legacyImportedAt DateTime?
 
-  corp             Corp     @relation(fields: [corpId], references: [id], onDelete: Cascade)
-  attendance       OperationAttendance[]
+  corp       Corp                  @relation(fields: [corpId], references: [id], onDelete: Cascade)
+  attendance OperationAttendance[]
 
   @@index([corpId, status])
   @@index([operationDate])
@@ -269,8 +302,8 @@ model OperationAttendance {
   legacyRowNumber  Int?
   legacyImportedAt DateTime?
 
-  corp             Corp      @relation(fields: [corpId], references: [id], onDelete: Cascade)
-  operation        Operation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+  corp      Corp      @relation(fields: [corpId], references: [id], onDelete: Cascade)
+  operation Operation @relation(fields: [operationId], references: [id], onDelete: Cascade)
 
   @@unique([operationId, characterName])
   @@index([corpId])
@@ -278,54 +311,54 @@ model OperationAttendance {
 }
 
 model SrpRequest {
-  id               String   @id @default(uuid()) @db.Uuid
-  corpId           String   @db.Uuid
-  pilotName        String   @default("")
+  id               String    @id @default(uuid()) @db.Uuid
+  corpId           String    @db.Uuid
+  pilotName        String    @default("")
   characterName    String
-  discordName      String   @default("")
+  discordName      String    @default("")
   shipLost         String
-  killmailLink     String   @default("")
-  doctrineFleet    String   @default("")
-  lossType         String   @default("")
-  estimatedValue   Decimal? @db.Decimal(20, 2)
-  requestedPayout  Decimal? @db.Decimal(20, 2)
-  reviewer         String   @default("")
-  status           String   @default("New")
-  notes            String   @default("")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  killmailLink     String    @default("")
+  doctrineFleet    String    @default("")
+  lossType         String    @default("")
+  estimatedValue   Decimal?  @db.Decimal(20, 2)
+  requestedPayout  Decimal?  @db.Decimal(20, 2)
+  reviewer         String    @default("")
+  status           String    @default("New")
+  notes            String    @default("")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
   legacySheetName  String?
   legacyRowNumber  Int?
   legacyImportedAt DateTime?
 
-  corp             Corp     @relation(fields: [corpId], references: [id], onDelete: Cascade)
+  corp Corp @relation(fields: [corpId], references: [id], onDelete: Cascade)
 
   @@index([corpId, status])
   @@index([legacySheetName, legacyRowNumber])
 }
 
 model DoctrineFit {
-  id               String   @id @default(uuid()) @db.Uuid
-  corpId           String   @db.Uuid
+  id               String    @id @default(uuid()) @db.Uuid
+  corpId           String    @db.Uuid
   doctrineCode     String?
   doctrineName     String
-  category         String   @default("")
-  shipHull         String   @default("")
+  category         String    @default("")
+  shipHull         String    @default("")
   shipTypeId       Int?
-  imageUrl         String   @default("")
-  manualImageUrl   String   @default("")
-  fitText          String   @default("")
-  addedBy          String   @default("")
-  status           String   @default("Active")
-  notes            String   @default("")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  imageUrl         String    @default("")
+  manualImageUrl   String    @default("")
+  fitText          String    @default("")
+  addedBy          String    @default("")
+  status           String    @default("Active")
+  notes            String    @default("")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
   legacySheetName  String?
   legacyRowNumber  Int?
   legacyImportedAt DateTime?
 
-  corp             Corp     @relation(fields: [corpId], references: [id], onDelete: Cascade)
-  readiness        DoctrineFitReadiness[]
+  corp      Corp                   @relation(fields: [corpId], references: [id], onDelete: Cascade)
+  readiness DoctrineFitReadiness[]
 
   @@index([corpId, status])
   @@index([shipTypeId])
@@ -333,27 +366,27 @@ model DoctrineFit {
 }
 
 model DoctrineFitReadiness {
-  id                  String       @id @default(uuid()) @db.Uuid
-  corpId              String       @db.Uuid
-  doctrineFitId       String?      @db.Uuid
-  pilotName           String       @default("")
-  characterName       String
-  discordName         String       @default("")
-  readiness           String       @default("Unknown")
-  canFlyHull          String       @default("Unknown")
-  canUseWeapons       String       @default("Unknown")
-  canUseTank          String       @default("Unknown")
-  canUsePropUtility   String       @default("Unknown")
-  missingSkills       String       @default("")
-  notes               String       @default("")
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
-  legacySheetName     String?
-  legacyRowNumber     Int?
-  legacyImportedAt    DateTime?
+  id                String    @id @default(uuid()) @db.Uuid
+  corpId            String    @db.Uuid
+  doctrineFitId     String?   @db.Uuid
+  pilotName         String    @default("")
+  characterName     String
+  discordName       String    @default("")
+  readiness         String    @default("Unknown")
+  canFlyHull        String    @default("Unknown")
+  canUseWeapons     String    @default("Unknown")
+  canUseTank        String    @default("Unknown")
+  canUsePropUtility String    @default("Unknown")
+  missingSkills     String    @default("")
+  notes             String    @default("")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  legacySheetName   String?
+  legacyRowNumber   Int?
+  legacyImportedAt  DateTime?
 
-  corp                Corp         @relation(fields: [corpId], references: [id], onDelete: Cascade)
-  doctrineFit         DoctrineFit? @relation(fields: [doctrineFitId], references: [id], onDelete: SetNull)
+  corp        Corp         @relation(fields: [corpId], references: [id], onDelete: Cascade)
+  doctrineFit DoctrineFit? @relation(fields: [doctrineFitId], references: [id], onDelete: SetNull)
 
   @@index([corpId, readiness])
   @@index([doctrineFitId])
@@ -361,88 +394,88 @@ model DoctrineFitReadiness {
 }
 
 model DoctrinePilot {
-  id                  String   @id @default(uuid()) @db.Uuid
-  corpId              String   @db.Uuid
-  pilotName           String   @default("")
-  characterName       String
-  discordName         String   @default("")
-  primaryRole         String   @default("")
-  secondaryRoles      String   @default("")
-  tackle              String   @default("Unknown")
-  scout               String   @default("Unknown")
-  logi                String   @default("Unknown")
-  dps                 String   @default("Unknown")
-  ewar                String   @default("Unknown")
-  miningSupport       String   @default("Unknown")
-  hauler              String   @default("Unknown")
-  pochven             String   @default("Unknown")
-  fc                  String   @default("Unknown")
-  preferredShips      String   @default("")
-  missingSkills       String   @default("")
-  reviewer            String   @default("")
-  status              String   @default("Active")
-  notes               String   @default("")
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  legacySheetName     String?
-  legacyRowNumber     Int?
-  legacyImportedAt    DateTime?
+  id               String    @id @default(uuid()) @db.Uuid
+  corpId           String    @db.Uuid
+  pilotName        String    @default("")
+  characterName    String
+  discordName      String    @default("")
+  primaryRole      String    @default("")
+  secondaryRoles   String    @default("")
+  tackle           String    @default("Unknown")
+  scout            String    @default("Unknown")
+  logi             String    @default("Unknown")
+  dps              String    @default("Unknown")
+  ewar             String    @default("Unknown")
+  miningSupport    String    @default("Unknown")
+  hauler           String    @default("Unknown")
+  pochven          String    @default("Unknown")
+  fc               String    @default("Unknown")
+  preferredShips   String    @default("")
+  missingSkills    String    @default("")
+  reviewer         String    @default("")
+  status           String    @default("Active")
+  notes            String    @default("")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  legacySheetName  String?
+  legacyRowNumber  Int?
+  legacyImportedAt DateTime?
 
-  corp                Corp     @relation(fields: [corpId], references: [id], onDelete: Cascade)
+  corp Corp @relation(fields: [corpId], references: [id], onDelete: Cascade)
 
   @@index([corpId, status])
   @@index([legacySheetName, legacyRowNumber])
 }
 
 model RecruitmentApplicant {
-  id                 String   @id @default(uuid()) @db.Uuid
-  corpId             String   @db.Uuid
+  id                 String    @id @default(uuid()) @db.Uuid
+  corpId             String    @db.Uuid
   applicantName      String
-  mainCharacter      String   @default("")
-  discordName        String   @default("")
-  timeZone           String   @default("")
-  preferredContent   String   @default("")
-  skillPoints        String   @default("")
-  source             String   @default("")
-  recruitmentChannel String   @default("")
-  recruiter          String   @default("")
-  status             String   @default("New")
-  notes              String   @default("")
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  mainCharacter      String    @default("")
+  discordName        String    @default("")
+  timeZone           String    @default("")
+  preferredContent   String    @default("")
+  skillPoints        String    @default("")
+  source             String    @default("")
+  recruitmentChannel String    @default("")
+  recruiter          String    @default("")
+  status             String    @default("New")
+  notes              String    @default("")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
   legacySheetName    String?
   legacyRowNumber    Int?
   legacyImportedAt   DateTime?
 
-  corp               Corp     @relation(fields: [corpId], references: [id], onDelete: Cascade)
+  corp Corp @relation(fields: [corpId], references: [id], onDelete: Cascade)
 
   @@index([corpId, status])
   @@index([legacySheetName, legacyRowNumber])
 }
 
 model LootSplit {
-  id                 String                 @id @default(uuid()) @db.Uuid
-  corpId             String                 @db.Uuid
-  operationName      String
-  operationType      String                 @default("")
-  totalIskValue      Decimal                @default(0) @db.Decimal(20, 2)
-  corpCutPercent     Decimal                @default(0) @db.Decimal(7, 4)
-  corpCutAmount      Decimal                @default(0) @db.Decimal(20, 2)
-  srpReservePercent  Decimal                @default(0) @db.Decimal(7, 4)
-  srpReserveAmount   Decimal                @default(0) @db.Decimal(20, 2)
-  payoutPool         Decimal                @default(0) @db.Decimal(20, 2)
-  totalShares        Decimal                @default(0) @db.Decimal(12, 4)
-  createdBy          String                 @default("")
-  status             String                 @default("Ready")
-  notes              String                 @default("")
-  createdAt          DateTime               @default(now())
-  updatedAt          DateTime               @updatedAt
-  legacySheetName    String?
-  legacyRowNumber    Int?
-  legacyImportedAt   DateTime?
+  id                String    @id @default(uuid()) @db.Uuid
+  corpId            String    @db.Uuid
+  operationName     String
+  operationType     String    @default("")
+  totalIskValue     Decimal   @default(0) @db.Decimal(20, 2)
+  corpCutPercent    Decimal   @default(0) @db.Decimal(7, 4)
+  corpCutAmount     Decimal   @default(0) @db.Decimal(20, 2)
+  srpReservePercent Decimal   @default(0) @db.Decimal(7, 4)
+  srpReserveAmount  Decimal   @default(0) @db.Decimal(20, 2)
+  payoutPool        Decimal   @default(0) @db.Decimal(20, 2)
+  totalShares       Decimal   @default(0) @db.Decimal(12, 4)
+  createdBy         String    @default("")
+  status            String    @default("Ready")
+  notes             String    @default("")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  legacySheetName   String?
+  legacyRowNumber   Int?
+  legacyImportedAt  DateTime?
 
-  corp               Corp                   @relation(fields: [corpId], references: [id], onDelete: Cascade)
-  participants       LootSplitParticipant[]
+  corp         Corp                   @relation(fields: [corpId], references: [id], onDelete: Cascade)
+  participants LootSplitParticipant[]
 
   @@index([corpId, status])
   @@index([legacySheetName, legacyRowNumber])
@@ -462,19 +495,19 @@ model LootSplitParticipant {
   legacyRowNumber  Int?
   legacyImportedAt DateTime?
 
-  lootSplit        LootSplit @relation(fields: [lootSplitId], references: [id], onDelete: Cascade)
+  lootSplit LootSplit @relation(fields: [lootSplitId], references: [id], onDelete: Cascade)
 
   @@index([lootSplitId])
   @@index([legacySheetName, legacyRowNumber])
 }
 
 model EveTypeLookup {
-  id               String   @id @default(uuid()) @db.Uuid
-  typeName         String   @unique
-  typeId           Int?     @unique
-  category         String   @default("")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id               String    @id @default(uuid()) @db.Uuid
+  typeName         String    @unique
+  typeId           Int?      @unique
+  category         String    @default("")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
   legacySheetName  String?
   legacyRowNumber  Int?
   legacyImportedAt DateTime?

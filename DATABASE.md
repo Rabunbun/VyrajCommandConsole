@@ -26,6 +26,10 @@ Do not commit `.env` files or production secrets.
 
 Officer passwords are stored with a salted Node.js `scrypt` hash. This does not preserve the old Apps Script SHA-256 format.
 
+Phase 1A EVE SSO environment variables are optional. They are placeholders for
+future OAuth work and are not required for boot, manual login, migrations, or
+builds.
+
 ## Install
 
 ```bash
@@ -158,6 +162,30 @@ It preserves corps, officers, officer permissions, officer corp assignments,
 Alliance Hub content, EVE Type Lookup, and audit logs. It refuses to run unless
 `CONFIRM_RESET_OPERATIONAL_DATA` is exactly `YES`, and it never runs from
 postinstall, build, deploy, or seed scripts.
+
+## EVE SSO Identity Foundation
+
+Phase 1A adds the `LoginProvider` enum and `EveIdentity` table for future EVE
+SSO identity/linking support. The table can store verified EVE character,
+corporation, and alliance identity metadata, plus optional links to an internal
+`Officer` and member `Corp`.
+
+This phase does not activate OAuth login. Manual officer login remains the only
+active login method. No ESI calls are made, no authorization codes are
+exchanged, no EVE JWTs are validated, and no EVE access or refresh tokens are
+stored.
+
+Apply the schema foundation in environments with:
+
+```bash
+npm.cmd run prisma:deploy
+```
+
+Then regenerate Prisma Client when developing locally:
+
+```bash
+npm.cmd run prisma:generate
+```
 
 ## Reset Dev Super Admin Password Safely
 

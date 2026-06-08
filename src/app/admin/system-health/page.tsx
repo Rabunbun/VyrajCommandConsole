@@ -9,6 +9,7 @@ import {
   type HealthStatus,
   type RecentAuditHeartbeat,
   type SystemHealthCounts,
+  type SystemHealthData,
   type HealthWarning
 } from "@/lib/admin/system-health";
 import { getCurrentOfficerSession } from "@/lib/session";
@@ -107,6 +108,8 @@ export default async function SystemHealthPage() {
         checks={authChecks}
       />
 
+      <EveSsoSection config={health.eveSso} />
+
       <section className="section-stack" aria-labelledby="data-counts-title">
         <div className="section-heading">
           <div>
@@ -135,6 +138,74 @@ export default async function SystemHealthPage() {
       <WarningsSection warnings={health.warnings} />
       <RecentAuditSection entries={health.recentAudit} />
     </div>
+  );
+}
+
+function EveSsoSection({ config }: { config: SystemHealthData["eveSso"] }) {
+  const requiredStatus = config.configured ? "OK" : "Not configured";
+  const missingVariables = config.missingVariables.length
+    ? config.missingVariables.join(", ")
+    : "None";
+  const scopes = config.scopes.length
+    ? config.scopes.join(", ")
+    : "No scopes configured";
+
+  const checks: HealthCheck[] = [
+    {
+      label: "EVE SSO configured",
+      status: requiredStatus,
+      detail: config.configured
+        ? "Required EVE SSO environment variables are present."
+        : "EVE SSO is optional in Phase 1A and is not active yet."
+    },
+    {
+      label: "Missing required env vars",
+      status: config.missingVariables.length ? "Not configured" : "OK",
+      detail: missingVariables
+    },
+    {
+      label: "Callback URL",
+      status: config.callbackConfigured ? "OK" : "Not configured",
+      detail: config.callbackConfigured ? "Configured." : "Missing EVE_SSO_CALLBACK_URL."
+    },
+    {
+      label: "Scopes",
+      status: config.scopesConfigured ? "OK" : "Warning",
+      detail: scopes
+    },
+    {
+      label: "SSO base URL",
+      status: config.ssoBaseUrlConfigured ? "OK" : "Warning",
+      detail: config.ssoBaseUrlStatus === "configured" ? "Configured." : "Using default EVE SSO base URL."
+    },
+    {
+      label: "ESI base URL",
+      status: config.esiBaseUrlConfigured ? "OK" : "Warning",
+      detail: config.esiBaseUrlStatus === "configured" ? "Configured." : "Using default ESI base URL."
+    },
+    {
+      label: "Compatibility date",
+      status: config.compatibilityDateConfigured ? "OK" : "Warning",
+      detail: config.compatibilityDateConfigured ? "Configured." : "Not configured yet."
+    },
+    {
+      label: "Token storage",
+      status: "Not configured",
+      detail: "Not enabled. No EVE access or refresh tokens are stored in Phase 1A."
+    },
+    {
+      label: "OAuth routes",
+      status: "Not configured",
+      detail: "Not implemented. No EVE OAuth start or callback route exists in Phase 1A."
+    }
+  ];
+
+  return (
+    <HealthSection
+      description="Future EVE SSO readiness without exposing client secrets, callback values, tokens, or auth codes."
+      title="EVE SSO Status"
+      checks={checks}
+    />
   );
 }
 

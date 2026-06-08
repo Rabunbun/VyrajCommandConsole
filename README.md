@@ -67,6 +67,20 @@ Required:
 - `DEV_SUPER_ADMIN_PASSWORD`: seed password for local/dev Super Admin accounts, or an intentional initial setup value only.
 - `SEED_SUPER_ADMIN_PASSWORD`: optional clearer name for a one-time production baseline seed password. If set, it takes precedence during seeding.
 
+Optional Phase 1A EVE SSO placeholders:
+
+- `EVE_SSO_CLIENT_ID`
+- `EVE_SSO_CLIENT_SECRET`
+- `EVE_SSO_CALLBACK_URL`
+- `EVE_SSO_SCOPES`
+- `EVE_SSO_BASE_URL`
+- `EVE_ESI_BASE_URL`
+- `EVE_ESI_COMPATIBILITY_DATE`
+
+These EVE variables are not required for the app to boot. OAuth login is not
+active yet, no ESI calls are made, and manual officer login remains the only
+active login method.
+
 Never commit real `.env` files. Production values belong in Vercel Environment Variables.
 
 ## GitHub Setup
@@ -168,6 +182,18 @@ requests, recruitment applicants, loot splits, and loot split participants. It
 preserves corps, officers, officer permissions, officer corp assignments,
 Alliance Hub content, EVE Type Lookup, and audit logs. The command refuses to run
 unless `CONFIRM_RESET_OPERATIONAL_DATA` is exactly `YES`.
+
+## EVE SSO Phase 1A
+
+Phase 1A adds database and configuration foundations for future EVE SSO identity
+linking only. It adds an `EveIdentity` schema model, safe environment-status
+helpers, a disabled/coming-soon EVE SSO section on `/login`, and EVE SSO config
+status on `/admin/system-health`.
+
+OAuth start/callback routes are not implemented yet. The app does not exchange
+authorization codes, validate EVE JWTs, call ESI, store EVE access tokens, or
+store EVE refresh tokens. EVE SSO will verify character identity in a later
+phase; internal Vyraj permissions will still control access.
 
 ## Deployment Checklist
 
