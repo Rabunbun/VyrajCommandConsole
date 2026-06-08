@@ -1,10 +1,11 @@
 # EVE SSO Setup Notes
 
-Phase 1A/1B status: EVE SSO is not active yet.
+Phase 1C status: EVE SSO identity-only login is available when required
+configuration is present.
 
-Manual officer login remains the only active login method. The `Login with EVE`
-button is intentionally disabled until OAuth start/callback routes are
-implemented in a later phase.
+Manual officer login remains active. `Login with EVE` verifies character
+identity only; it creates a normal Vyraj officer session only when the verified
+EVE identity is already explicitly linked to an active Officer record.
 
 ## Security Principle
 
@@ -28,8 +29,9 @@ Optional/readiness variables:
 - `EVE_ESI_BASE_URL`
 - `EVE_ESI_COMPATIBILITY_DATE`
 
-These variables are optional in Phase 1A/1B. The app should boot and manual login
-should work when they are missing.
+These variables remain optional for app boot. Manual login works when they are
+missing. `Login with EVE` is enabled only when the required variables are
+present.
 
 ## EVE Developer App Checklist
 
@@ -61,12 +63,21 @@ server functions see the new values.
 
 ## Current Non-Goals
 
-Phase 1A/1B does not:
+Phase 1C implements:
 
-- implement `/api/auth/eve/start`
-- implement `/api/auth/eve/callback`
-- exchange OAuth authorization codes
-- validate EVE JWTs
+- `/api/auth/eve/start`
+- `/api/auth/eve/callback`
+- OAuth state protection with an HTTP-only cookie
+- server-side authorization-code exchange
+- EVE JWT validation
+- `EveIdentity` create/update for verified characters
+- normal OfficerSession creation for identities already linked to active
+  Officers
+- unlinked identity explanation state for verified characters without linked
+  officer access
+
+Phase 1C does not:
+
 - call ESI
 - store EVE access tokens
 - store EVE refresh tokens
@@ -75,4 +86,4 @@ Phase 1A/1B does not:
 - change manual officer login
 - change existing app sessions
 
-No EVE tokens are stored in Phase 1A/1B.
+No EVE tokens are stored in Phase 1C.

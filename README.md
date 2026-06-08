@@ -67,7 +67,7 @@ Required:
 - `DEV_SUPER_ADMIN_PASSWORD`: seed password for local/dev Super Admin accounts, or an intentional initial setup value only.
 - `SEED_SUPER_ADMIN_PASSWORD`: optional clearer name for a one-time production baseline seed password. If set, it takes precedence during seeding.
 
-Optional Phase 1A/1B EVE SSO placeholders:
+Optional EVE SSO variables:
 
 - `EVE_SSO_CLIENT_ID`
 - `EVE_SSO_CLIENT_SECRET`
@@ -77,10 +77,11 @@ Optional Phase 1A/1B EVE SSO placeholders:
 - `EVE_ESI_BASE_URL`
 - `EVE_ESI_COMPATIBILITY_DATE`
 
-These EVE variables are not required for the app to boot. OAuth login is not
-active yet, no ESI calls are made, and manual officer login remains the only
-active login method. See [EVE_SSO_SETUP.md](./EVE_SSO_SETUP.md) for the future
-EVE developer app and Vercel environment checklist.
+These EVE variables are not required for the app to boot. EVE SSO identity-only
+login is enabled only when required values are configured. No ESI calls are made,
+no EVE tokens are stored, and manual officer login remains active. See
+[EVE_SSO_SETUP.md](./EVE_SSO_SETUP.md) for the EVE developer app and Vercel
+environment checklist.
 
 Never commit real `.env` files. Production values belong in Vercel Environment Variables.
 
@@ -184,17 +185,18 @@ preserves corps, officers, officer permissions, officer corp assignments,
 Alliance Hub content, EVE Type Lookup, and audit logs. The command refuses to run
 unless `CONFIRM_RESET_OPERATIONAL_DATA` is exactly `YES`.
 
-## EVE SSO Phase 1A/1B
+## EVE SSO Phase 1A-1C
 
-Phase 1A/1B adds database, configuration, and admin-readiness foundations for
-future EVE SSO identity linking only. It adds an `EveIdentity` schema model,
-safe environment-status helpers, a disabled EVE SSO section on `/login`, and an
-EVE SSO setup checklist on `/admin/system-health`.
+Phase 1A/1B added database, configuration, and admin-readiness foundations for
+future EVE SSO identity linking. Phase 1C adds identity-only OAuth start/callback
+routes, state protection, server-side token exchange, EVE JWT validation, and
+`EveIdentity` create/update.
 
-OAuth start/callback routes are not implemented yet. The app does not exchange
-authorization codes, validate EVE JWTs, call ESI, store EVE access tokens, or
-store EVE refresh tokens. EVE SSO will verify character identity in a later
-phase; internal Vyraj permissions will still control access.
+EVE SSO verifies character identity. It creates a normal Vyraj officer session
+only when that EVE identity is already linked to an active Officer. The app does
+not call ESI, store EVE access tokens, store EVE refresh tokens, auto-link
+officers, or grant permissions from EVE corp/alliance membership. Internal Vyraj
+permissions still control access.
 
 ## Deployment Checklist
 

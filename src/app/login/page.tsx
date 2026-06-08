@@ -1,4 +1,5 @@
 import { OfficerRole } from "@prisma/client";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { loginAction } from "@/app/auth-actions";
 import { getEveSsoConfigStatus } from "@/lib/eve-sso/config";
@@ -76,12 +77,18 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             still control access.
           </p>
         </div>
-        <button className="secondary-button" disabled type="button">
-          Login with EVE
-        </button>
+        {eveSso.eveLoginEnabled ? (
+          <Link className="command-button" href="/api/auth/eve/start">
+            Login with EVE
+          </Link>
+        ) : (
+          <button className="secondary-button" disabled type="button">
+            Login with EVE
+          </button>
+        )}
         <div className="empty-state">
-          {eveSso.configured
-            ? "EVE SSO configured, OAuth route not enabled yet."
+          {eveSso.eveLoginEnabled
+            ? "EVE SSO is configured. Character identity verification is enabled, and internal Vyraj permissions still control access."
             : `EVE SSO not configured. Missing: ${eveSso.missingVariables.join(", ")}.`}
         </div>
       </section>

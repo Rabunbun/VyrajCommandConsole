@@ -26,9 +26,9 @@ Do not commit `.env` files or production secrets.
 
 Officer passwords are stored with a salted Node.js `scrypt` hash. This does not preserve the old Apps Script SHA-256 format.
 
-Phase 1A/1B EVE SSO environment variables are optional. They are placeholders
-for future OAuth work and are not required for boot, manual login, migrations,
-or builds.
+EVE SSO environment variables are optional for boot, manual login, migrations,
+and builds. EVE SSO identity-only login is enabled only when the required EVE
+SSO values are configured.
 
 ## Install
 
@@ -165,16 +165,18 @@ postinstall, build, deploy, or seed scripts.
 
 ## EVE SSO Identity Foundation
 
-Phase 1A adds the `LoginProvider` enum and `EveIdentity` table for future EVE
-SSO identity/linking support. Phase 1B adds clearer System Health readiness
-checks and admin setup documentation. The table can store verified EVE
-character, corporation, and alliance identity metadata, plus optional links to
-an internal `Officer` and member `Corp`.
+Phase 1A adds the `LoginProvider` enum and `EveIdentity` table for EVE SSO
+identity/linking support. Phase 1B adds clearer System Health readiness checks
+and admin setup documentation. Phase 1C adds identity-only OAuth start/callback,
+state validation, server-side authorization-code exchange, JWT validation, and
+`EveIdentity` create/update. The table can store verified EVE character,
+corporation, and alliance identity metadata, plus optional links to an internal
+`Officer` and member `Corp`.
 
-This phase does not activate OAuth login. Manual officer login remains the only
-active login method. No ESI calls are made, no authorization codes are
-exchanged, no EVE JWTs are validated, and no EVE access or refresh tokens are
-stored.
+Manual officer login remains active. EVE SSO creates officer access only when a
+verified identity is already linked to an active Officer. No ESI calls are made,
+no EVE access or refresh tokens are stored, no officers are auto-linked, and no
+permissions are granted from EVE identity.
 
 See [EVE_SSO_SETUP.md](./EVE_SSO_SETUP.md) for the future EVE developer app,
 callback URL, and Vercel environment variable checklist.

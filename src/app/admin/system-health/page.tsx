@@ -164,7 +164,7 @@ function EveSsoSection({ config }: { config: SystemHealthData["eveSso"] }) {
       label: "EVE SSO config readiness",
       status: config.configured ? "OK" : "Not configured",
       detail: config.configured
-        ? "Required EVE SSO environment variables are present, but login is still disabled in Phase 1B."
+        ? "Required EVE SSO environment variables are present. Identity-only EVE login is available."
         : "Required EVE SSO environment variables are missing. Login remains disabled."
     },
     {
@@ -197,17 +197,28 @@ function EveSsoSection({ config }: { config: SystemHealthData["eveSso"] }) {
     {
       label: "Token storage",
       status: "Not configured",
-      detail: "Not enabled. No EVE access or refresh tokens are stored in Phase 1A/1B."
+      detail: "Not enabled. No EVE access or refresh tokens are stored."
     },
     {
       label: "OAuth routes",
+      status: config.oauthRoutesImplemented ? "OK" : "Not configured",
+      detail: config.oauthRoutesImplemented
+        ? "Implemented for identity-only EVE SSO."
+        : "Not implemented."
+    },
+    {
+      label: "ESI sync",
       status: "Not configured",
-      detail: "Not implemented. No EVE OAuth start or callback route exists in Phase 1B."
+      detail: config.esiSyncEnabled
+        ? "Enabled."
+        : "Not enabled. No background ESI sync or corp stats sync exists."
     },
     {
       label: "EVE login enabled",
-      status: "Not configured",
-      detail: "No. The Login with EVE button remains disabled until OAuth routes are implemented."
+      status: config.eveLoginEnabled ? "OK" : "Not configured",
+      detail: config.eveLoginEnabled
+        ? "Yes. Login with EVE is available for identity verification only."
+        : "No. Complete required EVE SSO configuration before enabling Login with EVE."
     }
   ];
 

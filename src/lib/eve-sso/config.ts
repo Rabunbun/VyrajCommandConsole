@@ -35,7 +35,9 @@ export type EveSsoConfigStatus = {
   esiBaseUrlStatus: "configured" | "defaulted";
   compatibilityDateConfigured: boolean;
   tokenStorageEnabled: false;
-  oauthRoutesImplemented: false;
+  oauthRoutesImplemented: true;
+  esiSyncEnabled: false;
+  eveLoginEnabled: boolean;
 };
 
 export function getEveSsoConfigStatus(): EveSsoConfigStatus {
@@ -71,7 +73,22 @@ export function getEveSsoConfigStatus(): EveSsoConfigStatus {
     esiBaseUrlStatus: esiBaseUrlConfigured ? "configured" : "defaulted",
     compatibilityDateConfigured: hasEnvValue("EVE_ESI_COMPATIBILITY_DATE"),
     tokenStorageEnabled: false,
-    oauthRoutesImplemented: false
+    oauthRoutesImplemented: true,
+    esiSyncEnabled: false,
+    eveLoginEnabled: missingVariables.length === 0
+  };
+}
+
+export function getEveSsoServerConfig() {
+  const status = getEveSsoConfigStatus();
+
+  return {
+    ...status,
+    clientId: process.env.EVE_SSO_CLIENT_ID?.trim() || "",
+    clientSecret: process.env.EVE_SSO_CLIENT_SECRET?.trim() || "",
+    callbackUrl: process.env.EVE_SSO_CALLBACK_URL?.trim() || "",
+    ssoBaseUrl: process.env.EVE_SSO_BASE_URL?.trim() || defaultSsoBaseUrl,
+    esiBaseUrl: process.env.EVE_ESI_BASE_URL?.trim() || defaultEsiBaseUrl
   };
 }
 

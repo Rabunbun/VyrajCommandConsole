@@ -1,0 +1,58 @@
+import Link from "next/link";
+import { getUnlinkedIdentityFromCookie } from "@/lib/eve-sso/oauth";
+
+export const dynamic = "force-dynamic";
+
+export default async function UnlinkedEveIdentityPage() {
+  const identity = await getUnlinkedIdentityFromCookie();
+  const hasInactiveOfficerLink = Boolean(identity?.officer);
+
+  return (
+    <div className="page-stack">
+      <header className="page-heading">
+        <div className="eyebrow">EVE SSO</div>
+        <h1 className="page-title">Identity Verified</h1>
+        <p className="page-copy">
+          EVE SSO verified your character identity. Internal Vyraj permissions
+          still control officer and admin access.
+        </p>
+        <div className="badge-row">
+          <Link className="command-button" href="/">
+            Alliance Hub
+          </Link>
+          <Link className="secondary-button" href="/login">
+            Officer Login
+          </Link>
+        </div>
+      </header>
+
+      <section className="form-panel" aria-labelledby="eve-identity-status-title">
+        <div className="card-heading">
+          <h2 className="section-title" id="eve-identity-status-title">
+            EVE Identity Status
+          </h2>
+          <p className="card-copy">
+            {identity?.characterName
+              ? `${identity.characterName} is verified.`
+              : "EVE identity was verified, but this status link has expired."}
+          </p>
+        </div>
+        <div className="status-grid">
+          <div className="status-panel">
+            <div className="status-label">Identity</div>
+            <div className="status-value">Verified</div>
+          </div>
+          <div className="status-panel">
+            <div className="status-label">Officer Link</div>
+            <div className="status-value">No Active Link</div>
+          </div>
+        </div>
+        <div className="empty-state">
+          {hasInactiveOfficerLink
+            ? "This EVE character is not linked to an active Vyraj officer account. Ask a Super Admin to review the officer link if access is required."
+            : "No Vyraj officer account is linked to this EVE character yet. Ask a Super Admin to link this character if officer access is required."}
+        </div>
+      </section>
+    </div>
+  );
+}
