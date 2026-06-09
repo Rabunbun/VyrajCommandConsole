@@ -43,8 +43,19 @@ export type AdminEnabledModules = Record<CorpModuleKey, boolean>;
 export type AdminCorpEveIdentityConfig = {
   eveCorporationId: string | null;
   eveCorporationName: string;
+  eveTicker: string;
+  ceoId: string | null;
+  ceoName: string;
+  memberCount: number | null;
+  taxRate: number | null;
+  creationDate: string | null;
   eveAllianceId: string | null;
   eveAllianceName: string;
+  publicDescription: string;
+  publicUrl: string;
+  lastPublicEsiSyncAt: string | null;
+  publicEsiSyncStatus: string;
+  publicEsiSyncError: string;
   syncEnabled: boolean;
   lastVerifiedAt: string | null;
 };
@@ -107,8 +118,19 @@ export async function getCorpManagementData(): Promise<CorpManagementData> {
         select: {
           eveCorporationId: true,
           eveCorporationName: true,
+          eveTicker: true,
+          ceoId: true,
+          ceoName: true,
+          memberCount: true,
+          taxRate: true,
+          creationDate: true,
           eveAllianceId: true,
           eveAllianceName: true,
+          publicDescription: true,
+          publicUrl: true,
+          lastPublicEsiSyncAt: true,
+          publicEsiSyncStatus: true,
+          publicEsiSyncError: true,
           syncEnabled: true,
           lastVerifiedAt: true
         }
@@ -128,9 +150,22 @@ export async function getCorpManagementData(): Promise<CorpManagementData> {
             eveCorporationId:
               corp.eveIdentityConfig.eveCorporationId?.toString() ?? null,
             eveCorporationName: corp.eveIdentityConfig.eveCorporationName,
+            eveTicker: corp.eveIdentityConfig.eveTicker,
+            ceoId: corp.eveIdentityConfig.ceoId?.toString() ?? null,
+            ceoName: corp.eveIdentityConfig.ceoName,
+            memberCount: corp.eveIdentityConfig.memberCount,
+            taxRate: corp.eveIdentityConfig.taxRate,
+            creationDate:
+              corp.eveIdentityConfig.creationDate?.toISOString() ?? null,
             eveAllianceId:
               corp.eveIdentityConfig.eveAllianceId?.toString() ?? null,
             eveAllianceName: corp.eveIdentityConfig.eveAllianceName,
+            publicDescription: corp.eveIdentityConfig.publicDescription,
+            publicUrl: corp.eveIdentityConfig.publicUrl,
+            lastPublicEsiSyncAt:
+              corp.eveIdentityConfig.lastPublicEsiSyncAt?.toISOString() ?? null,
+            publicEsiSyncStatus: corp.eveIdentityConfig.publicEsiSyncStatus,
+            publicEsiSyncError: corp.eveIdentityConfig.publicEsiSyncError,
             syncEnabled: corp.eveIdentityConfig.syncEnabled,
             lastVerifiedAt:
               corp.eveIdentityConfig.lastVerifiedAt?.toISOString() ?? null

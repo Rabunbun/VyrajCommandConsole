@@ -26,8 +26,18 @@ export type PublicCorpCard = {
 export type PublicCorpEveIdentity = {
   eveCorporationId: string | null;
   eveCorporationName: string;
+  eveTicker: string;
+  ceoId: string | null;
+  ceoName: string;
+  memberCount: number | null;
+  taxRate: number | null;
+  creationDate: string | null;
   eveAllianceId: string | null;
   eveAllianceName: string;
+  publicDescription: string;
+  publicUrl: string;
+  lastPublicEsiSyncAt: string | null;
+  publicEsiSyncStatus: string;
   syncEnabled: boolean;
 };
 
@@ -107,8 +117,18 @@ export async function getActivePublicCorps(): Promise<PublicCorpCard[]> {
         select: {
           eveCorporationId: true,
           eveCorporationName: true,
+          eveTicker: true,
+          ceoId: true,
+          ceoName: true,
+          memberCount: true,
+          taxRate: true,
+          creationDate: true,
           eveAllianceId: true,
           eveAllianceName: true,
+          publicDescription: true,
+          publicUrl: true,
+          lastPublicEsiSyncAt: true,
+          publicEsiSyncStatus: true,
           syncEnabled: true
         }
       }
@@ -189,8 +209,18 @@ export async function getPublicCorpPortalData(
         select: {
           eveCorporationId: true,
           eveCorporationName: true,
+          eveTicker: true,
+          ceoId: true,
+          ceoName: true,
+          memberCount: true,
+          taxRate: true,
+          creationDate: true,
           eveAllianceId: true,
           eveAllianceName: true,
+          publicDescription: true,
+          publicUrl: true,
+          lastPublicEsiSyncAt: true,
+          publicEsiSyncStatus: true,
           syncEnabled: true
         }
       }
@@ -251,8 +281,18 @@ function asEnabledModules(value: unknown): PublicEnabledModules {
 function formatPublicEveIdentity(config: {
   eveCorporationId: bigint | null;
   eveCorporationName: string;
+  eveTicker: string;
+  ceoId: bigint | null;
+  ceoName: string;
+  memberCount: number | null;
+  taxRate: number | null;
+  creationDate: Date | null;
   eveAllianceId: bigint | null;
   eveAllianceName: string;
+  publicDescription: string;
+  publicUrl: string;
+  lastPublicEsiSyncAt: Date | null;
+  publicEsiSyncStatus: string;
   syncEnabled: boolean;
 } | null): PublicCorpEveIdentity | null {
   if (!config) {
@@ -262,8 +302,18 @@ function formatPublicEveIdentity(config: {
   return {
     eveCorporationId: config.eveCorporationId?.toString() ?? null,
     eveCorporationName: config.eveCorporationName,
+    eveTicker: config.eveTicker,
+    ceoId: config.ceoId?.toString() ?? null,
+    ceoName: config.ceoName,
+    memberCount: config.memberCount,
+    taxRate: config.taxRate,
+    creationDate: config.creationDate?.toISOString() ?? null,
     eveAllianceId: config.eveAllianceId?.toString() ?? null,
     eveAllianceName: config.eveAllianceName,
+    publicDescription: config.publicDescription,
+    publicUrl: config.publicUrl,
+    lastPublicEsiSyncAt: config.lastPublicEsiSyncAt?.toISOString() ?? null,
+    publicEsiSyncStatus: config.publicEsiSyncStatus,
     syncEnabled: config.syncEnabled
   };
 }

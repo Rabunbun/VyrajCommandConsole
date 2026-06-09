@@ -316,16 +316,20 @@ function AuditPreview({ items }: { items: AllianceAuditPreviewItem[] }) {
 }
 
 function CorpCard({ corp }: { corp: PublicCorpCard }) {
+  const profile = corp.eveIdentity;
+  const displayName = profile?.eveCorporationName || corp.name;
+  const displayTicker = profile?.eveTicker || corp.ticker;
+
   return (
     <Link className="data-card" href={`/corp/${corp.slug}`}>
       <div className="card-heading">
-        <h3 className="card-title">{corp.name}</h3>
-        <div className="card-subtitle">{corp.ticker}</div>
+        <h3 className="card-title">{displayName}</h3>
+        <div className="card-subtitle">{displayTicker}</div>
       </div>
       <p className="card-copy">{corp.description}</p>
       <div className="badge-row">
         {corp.eveIdentity?.eveCorporationId ? (
-          <span className="health-badge" data-status="OK">
+          <span className="eve-linked-badge">
             EVE-linked
           </span>
         ) : null}
@@ -333,10 +337,20 @@ function CorpCard({ corp }: { corp: PublicCorpCard }) {
         <span className="badge">{corp.recruitmentStatus}</span>
       </div>
       <div className="metric-grid">
-        <Metric label="Members" value={corp.activeMembers} />
-        <Metric label="Recent Ops" value={corp.recentOps} />
-        <Metric label="Pending SRP" value={corp.pendingSrp} />
-        <Metric label="Doctrine" value={`${corp.doctrineReadinessPercent}%`} />
+        <Metric label="CEO" value={profile?.ceoName || "Unknown"} />
+        <Metric
+          label="Members"
+          value={
+            profile?.memberCount !== null && profile?.memberCount !== undefined
+              ? formatNumber(profile.memberCount)
+              : "Not synced"
+          }
+        />
+        <Metric label="Tax Rate" value={formatTaxRate(profile?.taxRate ?? null)} />
+        <Metric
+          label="Founded"
+          value={profile?.creationDate ? formatDate(profile.creationDate) : "Unknown"}
+        />
       </div>
     </Link>
   );
@@ -367,4 +381,25 @@ function formatSubtitle(value: string) {
   }
 
   return value;
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("en-US").format(value);
+}
+
+function formatTaxRate(value: number | null) {
+  if (value === null) {
+    return "Unknown";
+  }
+
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 2,
+    style: "percent"
+  }).format(value);
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium"
+  }).format(new Date(value));
 }

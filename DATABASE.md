@@ -192,6 +192,16 @@ corporation ID matches `CorpEveIdentityConfig.eveCorporationId`,
 `EveIdentity.memberCorpId` may be updated as informational future routing
 foundation only.
 
+Phase 2C extends `CorpEveIdentityConfig` with a saved public ESI corporation
+profile cache: EVE ticker, CEO, member count, tax rate, founding date, public
+description, URL, public sync timestamp/status/error, and refreshed alliance
+metadata. Super Admins refresh this manually from Corp Management. Public pages
+read stored values only and do not call ESI during render.
+
+Phase 2C still does not store EVE access tokens, store refresh tokens, request
+new scopes, call authenticated corporation/director ESI, auto-route members, or
+grant permissions from EVE profile data.
+
 See [EVE_SSO_SETUP.md](./EVE_SSO_SETUP.md) for the future EVE developer app,
 callback URL, and Vercel environment variable checklist.
 

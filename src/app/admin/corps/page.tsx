@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import {
   createCorpAction,
   deleteCorpAction,
+  refreshCorpPublicEsiProfileAction,
   updateCorpAction
 } from "@/app/admin/corps/actions";
 import { logoutAction } from "@/app/auth-actions";
@@ -259,6 +260,71 @@ function CorpCard({
           </div>
         ) : (
           <p className="card-copy">No EVE corporation identity configured.</p>
+        )}
+      </div>
+
+      <div className="section-stack">
+        <h3 className="section-title">Public EVE Profile</h3>
+        {corp.eveIdentityConfig?.eveCorporationId ? (
+          <>
+            <div className="metric-grid">
+              <Metric
+                label="CEO"
+                value={formatNamedId(
+                  corp.eveIdentityConfig.ceoName,
+                  corp.eveIdentityConfig.ceoId
+                )}
+              />
+              <Metric
+                label="Members"
+                value={
+                  corp.eveIdentityConfig.memberCount !== null
+                    ? formatNumber(corp.eveIdentityConfig.memberCount)
+                    : "Unknown"
+                }
+              />
+              <Metric
+                label="Tax Rate"
+                value={formatPercent(corp.eveIdentityConfig.taxRate)}
+              />
+              <Metric
+                label="Founded"
+                value={
+                  corp.eveIdentityConfig.creationDate
+                    ? formatDate(corp.eveIdentityConfig.creationDate)
+                    : "Unknown"
+                }
+              />
+              <Metric
+                label="Profile Sync"
+                value={corp.eveIdentityConfig.publicEsiSyncStatus || "Never Synced"}
+              />
+              <Metric
+                label="Last Sync"
+                value={
+                  corp.eveIdentityConfig.lastPublicEsiSyncAt
+                    ? formatDateTime(corp.eveIdentityConfig.lastPublicEsiSyncAt)
+                    : "Never"
+                }
+              />
+            </div>
+            {corp.eveIdentityConfig.publicEsiSyncError ? (
+              <div className="error-state">
+                Last public ESI profile refresh issue:{" "}
+                {corp.eveIdentityConfig.publicEsiSyncError}
+              </div>
+            ) : null}
+            <form action={refreshCorpPublicEsiProfileAction}>
+              <input name="corpId" type="hidden" value={corp.id} />
+              <button className="secondary-button" type="submit">
+                Refresh Public EVE Profile
+              </button>
+            </form>
+          </>
+        ) : (
+          <p className="card-copy">
+            Configure an EVE corporation ID before refreshing public profile data.
+          </p>
         )}
       </div>
 
@@ -577,4 +643,25 @@ function formatDateTime(value: string) {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(new Date(value));
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium"
+  }).format(new Date(value));
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("en-US").format(value);
+}
+
+function formatPercent(value: number | null) {
+  if (value === null) {
+    return "Unknown";
+  }
+
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 2,
+    style: "percent"
+  }).format(value);
 }

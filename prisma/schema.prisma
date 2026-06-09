@@ -101,8 +101,19 @@ model CorpEveIdentityConfig {
   corpId               String    @unique @db.Uuid
   eveCorporationId     BigInt?   @unique
   eveCorporationName   String    @default("")
+  eveTicker            String    @default("")
+  ceoId                BigInt?
+  ceoName              String    @default("")
+  memberCount          Int?
+  taxRate              Float?
+  creationDate         DateTime?
   eveAllianceId        BigInt?
   eveAllianceName      String    @default("")
+  publicDescription    String    @default("")
+  publicUrl            String    @default("")
+  lastPublicEsiSyncAt  DateTime?
+  publicEsiSyncStatus  String    @default("Never Synced")
+  publicEsiSyncError   String    @default("")
   syncEnabled          Boolean   @default(false)
   lastVerifiedAt       DateTime?
   createdAt            DateTime  @default(now())
@@ -112,6 +123,8 @@ model CorpEveIdentityConfig {
 
   @@index([eveAllianceId])
   @@index([syncEnabled])
+  @@index([publicEsiSyncStatus])
+  @@index([lastPublicEsiSyncAt])
 }
 
 model AllianceHubContent {

@@ -224,6 +224,22 @@ slug to confirm. Deletion is blocked when related officer assignments,
 permissions, operations, attendance, SRP, doctrine, recruitment, loot split, or
 matched EVE identity records exist. Audit logs are preserved.
 
+## EVE Public Corp Profiles
+
+Phase 2C adds a manual Super Admin refresh for public EVE corporation profile
+data. Corp Management can refresh stored public ESI fields for configured corps:
+corporation name, ticker, CEO, member count, tax rate, founding date, alliance,
+description, URL, and sync status.
+
+Public Alliance Hub corp cards read only saved database values. They do not call
+ESI during page render, and they no longer show internal operational metrics
+such as Recent Ops, Pending SRP, or Doctrine readiness. Those operational values
+remain inside Corp Portals and dashboards.
+
+The public profile refresh uses unauthenticated public ESI only. It does not
+store EVE tokens, request new scopes, use director/corp-private ESI, auto-link
+officers, auto-route members, or grant permissions.
+
 ## Deployment Checklist
 
 Before deployment:

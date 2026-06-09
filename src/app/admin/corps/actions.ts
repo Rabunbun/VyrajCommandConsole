@@ -12,6 +12,11 @@ import {
   type AdminEnabledModules
 } from "@/lib/admin/corps";
 import { getDb } from "@/lib/db";
+import {
+  fetchCorpPublicEsiProfile,
+  PublicEsiError,
+  type CorpPublicEsiProfile
+} from "@/lib/eve-sso/public-esi";
 import { getCurrentOfficerSession } from "@/lib/session";
 
 const corpManagementPath = "/admin/corps";
@@ -451,6 +456,171 @@ export async function deleteCorpAction(formData: FormData) {
   redirectWithMessage("success", successMessage);
 }
 
+export async function refreshCorpPublicEsiProfileAction(formData: FormData) {
+  const admin = await requireSuperAdminForCorpMutation();
+  let successMessage = "Public EVE profile refreshed.";
+
+  try {
+    const corpId = cleanText(formData.get("corpId"));
+
+    if (!corpId) {
+      throw new Error("Corp ID is required.");
+    }
+
+    const existing = await getDb().corp.findUnique({
+      where: { id: corpId },
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        ticker: true,
+        eveIdentityConfig: {
+          select: {
+            eveCorporationId: true,
+            eveCorporationName: true,
+            eveTicker: true,
+            ceoId: true,
+            ceoName: true,
+            memberCount: true,
+            taxRate: true,
+            creationDate: true,
+            eveAllianceId: true,
+            eveAllianceName: true,
+            publicDescription: true,
+            publicUrl: true,
+            lastPublicEsiSyncAt: true,
+            publicEsiSyncStatus: true,
+            publicEsiSyncError: true,
+            syncEnabled: true,
+            lastVerifiedAt: true
+          }
+        }
+      }
+    });
+
+    if (!existing) {
+      throw new Error("Corp record not found.");
+    }
+
+    if (!existing.eveIdentityConfig?.eveCorporationId) {
+      throw new Error("Configure an EVE corporation ID before refreshing public ESI profile data.");
+    }
+
+    const before = serializePublicEsiProfile(existing.eveIdentityConfig);
+
+    try {
+      const profile = await fetchCorpPublicEsiProfile(
+        existing.eveIdentityConfig.eveCorporationId
+      );
+      const syncStatus = profile.warnings.length ? "Partial" : "Success";
+      const syncError = profile.warnings.map(formatPublicEsiWarning).join(" | ");
+      const updated = await getDb().corpEveIdentityConfig.update({
+        where: { corpId: existing.id },
+        data: {
+          eveCorporationName: profile.corporationName,
+          eveTicker: profile.ticker,
+          ceoId: profile.ceoId,
+          ceoName: profile.ceoName,
+          memberCount: profile.memberCount,
+          taxRate: profile.taxRate,
+          creationDate: profile.creationDate,
+          eveAllianceId: profile.allianceId,
+          eveAllianceName: profile.allianceName,
+          publicDescription: profile.description,
+          publicUrl: profile.url,
+          lastPublicEsiSyncAt: new Date(),
+          publicEsiSyncStatus: syncStatus,
+          publicEsiSyncError: syncError
+        },
+        select: publicEsiProfileSelect()
+      });
+      const after = serializePublicEsiProfile(updated);
+
+      await logOfficerAudit({
+        officerId: admin.officer.id,
+        officerName: admin.officer.officerName,
+        officerRole: admin.officer.role,
+        corpId: existing.id,
+        corpSlug: existing.slug,
+        corpName: existing.name,
+        module: "Corp Management",
+        action: "Corp Public ESI Profile Refreshed",
+        targetType: "Corp",
+        targetId: existing.id,
+        targetName: existing.name,
+        summary: `Refreshed public EVE profile for ${existing.name}.`,
+        details: {
+          actor: {
+            officerId: admin.officer.id,
+            officerName: admin.officer.officerName
+          },
+          corp: {
+            id: existing.id,
+            name: existing.name,
+            slug: existing.slug
+          },
+          eveCorporationId: profile.eveCorporationId.toString(),
+          before,
+          after,
+          warnings: profile.warnings
+        }
+      });
+
+      revalidateCorpPaths(existing.slug);
+      successMessage =
+        syncStatus === "Success"
+          ? `Public EVE profile refreshed for ${existing.name}.`
+          : `Public EVE profile partially refreshed for ${existing.name}.`;
+    } catch (error) {
+      const failure = serializePublicEsiFailure(error);
+
+      await getDb().corpEveIdentityConfig.update({
+        where: { corpId: existing.id },
+        data: {
+          publicEsiSyncStatus: "Failed",
+          publicEsiSyncError: failure.message
+        }
+      });
+
+      await logOfficerAudit({
+        officerId: admin.officer.id,
+        officerName: admin.officer.officerName,
+        officerRole: admin.officer.role,
+        corpId: existing.id,
+        corpSlug: existing.slug,
+        corpName: existing.name,
+        module: "Corp Management",
+        action: "Corp Public ESI Profile Refresh Failed",
+        targetType: "Corp",
+        targetId: existing.id,
+        targetName: existing.name,
+        summary: `Public EVE profile refresh failed for ${existing.name}.`,
+        details: {
+          actor: {
+            officerId: admin.officer.id,
+            officerName: admin.officer.officerName
+          },
+          corp: {
+            id: existing.id,
+            name: existing.name,
+            slug: existing.slug
+          },
+          eveCorporationId:
+            existing.eveIdentityConfig.eveCorporationId.toString(),
+          failure
+        }
+      });
+
+      revalidateCorpPaths(existing.slug);
+      throw new Error(`Public EVE profile refresh failed: ${failure.message}`);
+    }
+  } catch (error) {
+    redirectWithMessage("error", getErrorMessage(error));
+  }
+
+  redirectWithMessage("success", successMessage);
+}
+
 async function requireSuperAdminForCorpMutation() {
   const session = await getCurrentOfficerSession();
 
@@ -676,6 +846,80 @@ function serializeEveConfig(
     syncEnabled: config.syncEnabled,
     lastVerifiedAt: config.lastVerifiedAt?.toISOString() ?? null
   };
+}
+
+function publicEsiProfileSelect() {
+  return {
+    eveCorporationId: true,
+    eveCorporationName: true,
+    eveTicker: true,
+    ceoId: true,
+    ceoName: true,
+    memberCount: true,
+    taxRate: true,
+    creationDate: true,
+    eveAllianceId: true,
+    eveAllianceName: true,
+    publicDescription: true,
+    publicUrl: true,
+    lastPublicEsiSyncAt: true,
+    publicEsiSyncStatus: true,
+    publicEsiSyncError: true
+  } satisfies Prisma.CorpEveIdentityConfigSelect;
+}
+
+function serializePublicEsiProfile(config: {
+  eveCorporationId: bigint | null;
+  eveCorporationName: string;
+  eveTicker: string;
+  ceoId: bigint | null;
+  ceoName: string;
+  memberCount: number | null;
+  taxRate: number | null;
+  creationDate: Date | null;
+  eveAllianceId: bigint | null;
+  eveAllianceName: string;
+  publicDescription: string;
+  publicUrl: string;
+  lastPublicEsiSyncAt: Date | null;
+  publicEsiSyncStatus: string;
+  publicEsiSyncError: string;
+}) {
+  return {
+    eveCorporationId: config.eveCorporationId?.toString() ?? null,
+    corporationName: config.eveCorporationName,
+    ticker: config.eveTicker,
+    ceoId: config.ceoId?.toString() ?? null,
+    ceoName: config.ceoName,
+    memberCount: config.memberCount,
+    taxRate: config.taxRate,
+    creationDate: config.creationDate?.toISOString() ?? null,
+    allianceId: config.eveAllianceId?.toString() ?? null,
+    allianceName: config.eveAllianceName,
+    description: config.publicDescription,
+    url: config.publicUrl,
+    lastPublicEsiSyncAt:
+      config.lastPublicEsiSyncAt?.toISOString() ?? null,
+    publicEsiSyncStatus: config.publicEsiSyncStatus,
+    publicEsiSyncError: config.publicEsiSyncError
+  };
+}
+
+function serializePublicEsiFailure(error: unknown) {
+  return {
+    stage: error instanceof PublicEsiError ? error.stage : "unknown",
+    httpStatus: error instanceof PublicEsiError ? error.httpStatus ?? null : null,
+    message:
+      error instanceof Error
+        ? error.message
+        : "Public EVE profile refresh failed."
+  };
+}
+
+function formatPublicEsiWarning(
+  warning: CorpPublicEsiProfile["warnings"][number]
+) {
+  return `${warning.stage}${warning.httpStatus ? ` ${warning.httpStatus}` : ""}: ${warning.message}`;
 }
 
 function hasMeaningfulEveConfig(config: {

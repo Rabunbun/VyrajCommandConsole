@@ -39,6 +39,10 @@ export type SystemHealthCounts = {
   eveIdentitiesWithCorporationId: number;
   eveIdentitiesWithAllianceId: number;
   eveIdentitiesMatchedToConfiguredCorp: number;
+  corpPublicEsiProfilesSynced: number;
+  corpPublicEsiProfilesNeverSynced: number;
+  recentFailedCorpPublicEsiProfileRefreshes: number;
+  lastSuccessfulCorpPublicEsiSyncAt: string | null;
 };
 
 export type RecentAuditHeartbeat = {
@@ -184,6 +188,10 @@ async function readDatabaseSummary() {
       eveIdentities,
       eveIdentitiesWithCorporationId,
       eveIdentitiesWithAllianceId,
+      corpPublicEsiProfilesSynced,
+      corpPublicEsiProfilesNeverSynced,
+      recentFailedCorpPublicEsiProfileRefreshes,
+      lastSuccessfulPublicProfileSync,
       recentAuditRows
     ] = await Promise.all([
       getDb().corp.count(),
@@ -238,6 +246,45 @@ async function readDatabaseSummary() {
           allianceId: {
             not: null
           }
+        }
+      }),
+      getDb().corpEveIdentityConfig.count({
+        where: {
+          eveCorporationId: {
+            not: null
+          },
+          lastPublicEsiSyncAt: {
+            not: null
+          }
+        }
+      }),
+      getDb().corpEveIdentityConfig.count({
+        where: {
+          eveCorporationId: {
+            not: null
+          },
+          lastPublicEsiSyncAt: null
+        }
+      }),
+      getDb().corpEveIdentityConfig.count({
+        where: {
+          publicEsiSyncStatus: "Failed"
+        }
+      }),
+      getDb().corpEveIdentityConfig.findFirst({
+        where: {
+          lastPublicEsiSyncAt: {
+            not: null
+          },
+          publicEsiSyncStatus: {
+            in: ["Success", "Partial"]
+          }
+        },
+        orderBy: {
+          lastPublicEsiSyncAt: "desc"
+        },
+        select: {
+          lastPublicEsiSyncAt: true
         }
       }),
       getDb().officerAuditLog.findMany({
@@ -299,7 +346,12 @@ async function readDatabaseSummary() {
         eveIdentities,
         eveIdentitiesWithCorporationId,
         eveIdentitiesWithAllianceId,
-        eveIdentitiesMatchedToConfiguredCorp
+        eveIdentitiesMatchedToConfiguredCorp,
+        corpPublicEsiProfilesSynced,
+        corpPublicEsiProfilesNeverSynced,
+        recentFailedCorpPublicEsiProfileRefreshes,
+        lastSuccessfulCorpPublicEsiSyncAt:
+          lastSuccessfulPublicProfileSync?.lastPublicEsiSyncAt?.toISOString() ?? null
       },
       recentAudit: recentAuditRows.map((entry) => ({
         ...entry,

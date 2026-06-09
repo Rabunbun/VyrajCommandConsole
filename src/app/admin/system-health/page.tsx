@@ -114,6 +114,8 @@ export default async function SystemHealthPage() {
 
       <CorpEveMappingSection counts={health.counts} />
 
+      <CorpPublicEsiProfileSection counts={health.counts} />
+
       <section className="section-stack" aria-labelledby="data-counts-title">
         <div className="section-heading">
           <div>
@@ -130,7 +132,9 @@ export default async function SystemHealthPage() {
             {countCards.map((card) => (
               <div className="status-panel" key={card.key}>
                 <div className="status-label">{card.label}</div>
-                <div className="status-value">{formatNumber(health.counts?.[card.key] || 0)}</div>
+                <div className="status-value">
+                  {formatNumber(Number(health.counts?.[card.key] || 0))}
+                </div>
               </div>
             ))}
           </div>
@@ -142,6 +146,63 @@ export default async function SystemHealthPage() {
       <WarningsSection warnings={health.warnings} />
       <RecentAuditSection entries={health.recentAudit} />
     </div>
+  );
+}
+
+function CorpPublicEsiProfileSection({
+  counts
+}: {
+  counts: SystemHealthCounts | null;
+}) {
+  const checks: HealthCheck[] = counts
+    ? [
+        {
+          label: "Corps with EVE corporation ID",
+          status:
+            counts.corpEveCorporationIdsConfigured > 0 ? "OK" : "Warning",
+          detail: formatNumber(counts.corpEveCorporationIdsConfigured)
+        },
+        {
+          label: "Public profiles synced",
+          status: counts.corpPublicEsiProfilesSynced > 0 ? "OK" : "Warning",
+          detail: formatNumber(counts.corpPublicEsiProfilesSynced)
+        },
+        {
+          label: "Stale / never synced",
+          status:
+            counts.corpPublicEsiProfilesNeverSynced > 0 ? "Warning" : "OK",
+          detail: formatNumber(counts.corpPublicEsiProfilesNeverSynced)
+        },
+        {
+          label: "Recent failed refreshes",
+          status:
+            counts.recentFailedCorpPublicEsiProfileRefreshes > 0
+              ? "Warning"
+              : "OK",
+          detail: formatNumber(counts.recentFailedCorpPublicEsiProfileRefreshes)
+        },
+        {
+          label: "Last successful refresh",
+          status: counts.lastSuccessfulCorpPublicEsiSyncAt ? "OK" : "Warning",
+          detail: counts.lastSuccessfulCorpPublicEsiSyncAt
+            ? formatDateTime(counts.lastSuccessfulCorpPublicEsiSyncAt)
+            : "Never"
+        }
+      ]
+    : [
+        {
+          label: "Public corp ESI profiles",
+          status: "Error",
+          detail: "Database counts are unavailable."
+        }
+      ];
+
+  return (
+    <HealthSection
+      checks={checks}
+      description="Stored public EVE corporation profile cache. Public pages read these saved values only."
+      title="Corp Public ESI Profiles"
+    />
   );
 }
 
