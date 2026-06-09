@@ -17,6 +17,12 @@ export type EveIdentityAdminView = {
   corporationName: string;
   allianceId: string | null;
   allianceName: string;
+  memberCorp: {
+    id: string;
+    slug: string;
+    name: string;
+    ticker: string;
+  } | null;
   linkedAt: string | null;
   lastEveLoginAt: string | null;
   createdAt: string;
@@ -48,6 +54,14 @@ export async function getEveIdentityAdminData(): Promise<EveIdentityAdminData> {
         corporationName: true,
         allianceId: true,
         allianceName: true,
+        memberCorp: {
+          select: {
+            id: true,
+            slug: true,
+            name: true,
+            ticker: true
+          }
+        },
         linkedAt: true,
         lastEveLoginAt: true,
         createdAt: true,
@@ -89,6 +103,7 @@ export async function getEveIdentityAdminData(): Promise<EveIdentityAdminData> {
       corporationName: identity.corporationName,
       allianceId: identity.allianceId?.toString() ?? null,
       allianceName: identity.allianceName,
+      memberCorp: identity.memberCorp,
       linkedAt: identity.linkedAt?.toISOString() ?? null,
       lastEveLoginAt: identity.lastEveLoginAt?.toISOString() ?? null,
       createdAt: identity.createdAt.toISOString(),

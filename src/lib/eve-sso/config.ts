@@ -88,7 +88,8 @@ export function getEveSsoServerConfig() {
     clientSecret: process.env.EVE_SSO_CLIENT_SECRET?.trim() || "",
     callbackUrl: process.env.EVE_SSO_CALLBACK_URL?.trim() || "",
     ssoBaseUrl: process.env.EVE_SSO_BASE_URL?.trim() || defaultSsoBaseUrl,
-    esiBaseUrl: process.env.EVE_ESI_BASE_URL?.trim() || defaultEsiBaseUrl
+    esiBaseUrl: process.env.EVE_ESI_BASE_URL?.trim() || defaultEsiBaseUrl,
+    esiCompatibilityDate: process.env.EVE_ESI_COMPATIBILITY_DATE?.trim() || ""
   };
 }
 

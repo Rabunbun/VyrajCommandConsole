@@ -231,6 +231,14 @@ function EveIdentityCard({
           label="Alliance"
           value={formatNamedId(identity.allianceName, identity.allianceId)}
         />
+        <Metric
+          label="Matched Vyraj Corp"
+          value={
+            identity.memberCorp
+              ? `${identity.memberCorp.name} [${identity.memberCorp.ticker}]`
+              : "No configured match"
+          }
+        />
         <Metric label="Created" value={formatDateTime(identity.createdAt)} />
         <Metric label="Updated" value={formatDateTime(identity.updatedAt)} />
       </div>

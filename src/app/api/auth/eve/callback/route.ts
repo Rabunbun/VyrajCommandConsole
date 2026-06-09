@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   clearOAuthStateCookie,
   createLinkedOfficerSession,
+  enrichEveIdentityFromPublicEsi,
   exchangeCodeForEveTokens,
   getPostLoginRedirectForOfficer,
   logEveSsoResult,
@@ -54,9 +55,24 @@ export async function GET(request: NextRequest) {
   try {
     const tokenResponse = await exchangeCodeForEveTokens(code);
     const identityClaims = await validateEveAccessToken(tokenResponse.access_token || "");
-    const identity = await upsertEveIdentity({
+    const enrichment = await enrichEveIdentityFromPublicEsi({
       characterId: identityClaims.characterId,
       characterName: identityClaims.characterName
+    });
+
+    if (enrichment.status === "failed") {
+      await logEveSsoResult({
+        action: "EVE Identity Enrichment Failed",
+        characterId: identityClaims.characterId,
+        characterName: identityClaims.characterName,
+        summary: `EVE identity was verified, but public corp/alliance enrichment failed: ${enrichment.message}`
+      });
+    }
+
+    const identity = await upsertEveIdentity({
+      characterId: identityClaims.characterId,
+      characterName: identityClaims.characterName,
+      enrichment: enrichment.status === "enriched" ? enrichment.enrichment : null
     });
     const officer = await createLinkedOfficerSession(identity);
 

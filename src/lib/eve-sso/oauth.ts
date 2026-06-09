@@ -32,6 +32,36 @@ type EveJwtClaims = {
   sub?: string;
 };
 
+type EveCharacterPublicData = {
+  alliance_id?: number;
+  corporation_id?: number;
+  name?: string;
+};
+
+type EveCorporationPublicData = {
+  alliance_id?: number;
+  name?: string;
+};
+
+type EveAlliancePublicData = {
+  name?: string;
+};
+
+type EveIdentityEnrichment = {
+  characterName: string;
+  corporationId: bigint | null;
+  corporationName: string;
+  allianceId: bigint | null;
+  allianceName: string;
+  memberCorpId: string | null;
+  matchedCorp: {
+    id: string;
+    slug: string;
+    name: string;
+    ticker: string;
+  } | null;
+};
+
 type Jwks = {
   keys?: Array<JsonWebKey & { kid?: string; alg?: string }>;
 };
@@ -192,26 +222,72 @@ export async function validateEveAccessToken(accessToken: string) {
 export async function upsertEveIdentity(input: {
   characterId: bigint;
   characterName: string;
+  enrichment?: EveIdentityEnrichment | null;
 }) {
-  return getDb().eveIdentity.upsert({
+  const now = new Date();
+  const existing = await getDb().eveIdentity.findUnique({
+    where: { characterId: input.characterId },
+    select: {
+      id: true,
+      characterId: true,
+      characterName: true,
+      corporationId: true,
+      corporationName: true,
+      allianceId: true,
+      allianceName: true,
+      memberCorpId: true
+    }
+  });
+  const enriched = input.enrichment ?? null;
+  const updateData = {
+    characterName: enriched?.characterName || input.characterName,
+    provider: LoginProvider.EVE_SSO,
+    lastEveLoginAt: now,
+    lastIdentityRefreshAt: now
+  };
+  const enrichedData = enriched
+    ? {
+        corporationId: enriched.corporationId,
+        corporationName: enriched.corporationName,
+        allianceId: enriched.allianceId,
+        allianceName: enriched.allianceName,
+        memberCorpId: enriched.memberCorpId
+      }
+    : {};
+  const identity = await getDb().eveIdentity.upsert({
     where: { characterId: input.characterId },
     update: {
-      characterName: input.characterName,
-      provider: LoginProvider.EVE_SSO,
-      lastEveLoginAt: new Date(),
-      lastIdentityRefreshAt: new Date()
+      ...updateData,
+      ...enrichedData
     },
     create: {
       characterId: input.characterId,
-      characterName: input.characterName,
-      provider: LoginProvider.EVE_SSO,
-      lastEveLoginAt: new Date(),
-      lastIdentityRefreshAt: new Date()
+      ...updateData,
+      ...enrichedData
     },
     include: {
       officer: true
     }
   });
+
+  if (enriched) {
+    await logEveIdentityEnrichmentIfChanged({
+      before: existing,
+      after: {
+        id: identity.id,
+        characterId: identity.characterId,
+        characterName: identity.characterName,
+        corporationId: identity.corporationId,
+        corporationName: identity.corporationName,
+        allianceId: identity.allianceId,
+        allianceName: identity.allianceName,
+        memberCorpId: identity.memberCorpId
+      },
+      matchedCorp: enriched.matchedCorp
+    });
+  }
+
+  return identity;
 }
 
 export async function createLinkedOfficerSession(identity: Awaited<ReturnType<typeof upsertEveIdentity>>) {
@@ -267,6 +343,19 @@ export async function getUnlinkedIdentityFromCookie() {
     where: { id: identityId },
     select: {
       characterName: true,
+      characterId: true,
+      corporationId: true,
+      corporationName: true,
+      allianceId: true,
+      allianceName: true,
+      memberCorp: {
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+          ticker: true
+        }
+      },
       lastEveLoginAt: true,
       officer: {
         select: {
@@ -277,6 +366,94 @@ export async function getUnlinkedIdentityFromCookie() {
   });
 
   return identity;
+}
+
+export async function enrichEveIdentityFromPublicEsi(input: {
+  characterId: bigint;
+  characterName: string;
+}): Promise<
+  | {
+      status: "enriched";
+      enrichment: EveIdentityEnrichment;
+    }
+  | {
+      status: "failed";
+      message: string;
+    }
+> {
+  try {
+    const config = getEveSsoServerConfig();
+    const characterData = await fetchEsiJson<EveCharacterPublicData>(
+      `/latest/characters/${input.characterId.toString()}/`,
+      config
+    );
+    const corporationId = characterData.corporation_id
+      ? BigInt(characterData.corporation_id)
+      : null;
+    const characterName = cleanEveText(characterData.name) || input.characterName;
+    let corporationName = "";
+    let allianceId = characterData.alliance_id
+      ? BigInt(characterData.alliance_id)
+      : null;
+    let allianceName = "";
+
+    if (corporationId) {
+      const corporationData = await fetchOptionalEsiJson<EveCorporationPublicData>(
+        `/latest/corporations/${corporationId.toString()}/`,
+        config
+      );
+      corporationName = cleanEveText(corporationData?.name);
+
+      if (!allianceId && corporationData?.alliance_id) {
+        allianceId = BigInt(corporationData.alliance_id);
+      }
+    }
+
+    if (allianceId) {
+      const allianceData = await fetchOptionalEsiJson<EveAlliancePublicData>(
+        `/latest/alliances/${allianceId.toString()}/`,
+        config
+      );
+      allianceName = cleanEveText(allianceData?.name);
+    }
+
+    const matchedCorp = corporationId
+      ? await getDb().corpEveIdentityConfig.findUnique({
+          where: { eveCorporationId: corporationId },
+          select: {
+            corp: {
+              select: {
+                id: true,
+                slug: true,
+                name: true,
+                ticker: true
+              }
+            }
+          }
+        })
+      : null;
+
+    return {
+      status: "enriched",
+      enrichment: {
+        characterName,
+        corporationId,
+        corporationName,
+        allianceId,
+        allianceName,
+        memberCorpId: matchedCorp?.corp.id ?? null,
+        matchedCorp: matchedCorp?.corp ?? null
+      }
+    };
+  } catch (error) {
+    return {
+      status: "failed",
+      message:
+        error instanceof Error
+          ? error.message
+          : "EVE identity enrichment failed."
+    };
+  }
 }
 
 export async function logEveSsoResult(input: {
@@ -401,4 +578,134 @@ function base64UrlToBuffer(value: string) {
   const padded = normalized.padEnd(normalized.length + (4 - normalized.length % 4) % 4, "=");
 
   return Buffer.from(padded, "base64");
+}
+
+async function fetchEsiJson<T>(
+  path: string,
+  config: ReturnType<typeof getEveSsoServerConfig>
+) {
+  const response = await fetchEsi(path, config);
+
+  if (!response.ok) {
+    throw new Error(`Public ESI request failed with status ${response.status}.`);
+  }
+
+  return await response.json() as T;
+}
+
+async function fetchOptionalEsiJson<T>(
+  path: string,
+  config: ReturnType<typeof getEveSsoServerConfig>
+) {
+  const response = await fetchEsi(path, config);
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return await response.json() as T;
+}
+
+async function fetchEsi(
+  path: string,
+  config: ReturnType<typeof getEveSsoServerConfig>
+) {
+  const baseUrl = config.esiBaseUrl.replace(/\/$/, "");
+  const url = new URL(path, `${baseUrl}/`);
+  url.searchParams.set("datasource", "tranquility");
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "User-Agent": "VyrajCommandConsoleV2 EVE SSO identity enrichment"
+  };
+
+  if (config.esiCompatibilityDate) {
+    headers["X-Compatibility-Date"] = config.esiCompatibilityDate;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4000);
+
+  try {
+    return await fetch(url, {
+      cache: "no-store",
+      headers,
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function logEveIdentityEnrichmentIfChanged(input: {
+  before: {
+    id: string;
+    characterId: bigint;
+    characterName: string;
+    corporationId: bigint | null;
+    corporationName: string;
+    allianceId: bigint | null;
+    allianceName: string;
+    memberCorpId: string | null;
+  } | null;
+  after: {
+    id: string;
+    characterId: bigint;
+    characterName: string;
+    corporationId: bigint | null;
+    corporationName: string;
+    allianceId: bigint | null;
+    allianceName: string;
+    memberCorpId: string | null;
+  };
+  matchedCorp: EveIdentityEnrichment["matchedCorp"];
+}) {
+  const before = serializeIdentityEnrichment(input.before);
+  const after = serializeIdentityEnrichment(input.after);
+
+  if (JSON.stringify(before) === JSON.stringify(after)) {
+    return;
+  }
+
+  await logOfficerAudit({
+    module: "EVE SSO",
+    action: "EveIdentity Enriched",
+    targetType: "EveIdentity",
+    targetId: input.after.id,
+    targetName: input.after.characterName,
+    summary: `Refreshed EVE identity enrichment for ${input.after.characterName}.`,
+    details: {
+      characterId: input.after.characterId.toString(),
+      before,
+      after,
+      matchedConfiguredCorp: input.matchedCorp
+    }
+  });
+}
+
+function serializeIdentityEnrichment(input: {
+  characterId: bigint;
+  characterName: string;
+  corporationId: bigint | null;
+  corporationName: string;
+  allianceId: bigint | null;
+  allianceName: string;
+  memberCorpId: string | null;
+} | null) {
+  if (!input) {
+    return null;
+  }
+
+  return {
+    characterId: input.characterId.toString(),
+    characterName: input.characterName,
+    corporationId: input.corporationId?.toString() ?? null,
+    corporationName: input.corporationName,
+    allianceId: input.allianceId?.toString() ?? null,
+    allianceName: input.allianceName,
+    memberCorpId: input.memberCorpId
+  };
+}
+
+function cleanEveText(value: string | undefined) {
+  return typeof value === "string" ? value.trim() : "";
 }

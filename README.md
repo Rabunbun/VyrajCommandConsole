@@ -208,6 +208,15 @@ Phase 2A adds manual Corp EVE identity mapping in Corp Management:
 No ESI calls are made in Phase 2A. The sync flag is stored for future use only;
 it does not sync data, route members, or grant access.
 
+Phase 2B enriches `EveIdentity` during successful EVE SSO login using public,
+unauthenticated ESI lookups for current character corporation/alliance metadata.
+If public ESI enrichment fails, login still proceeds after JWT identity
+validation and previous corp/alliance values are preserved.
+
+Phase 2B does not store EVE access tokens, store refresh tokens, request new
+scopes, run background sync, auto-link officers, auto-route members, or grant
+permissions from EVE corporation/alliance membership.
+
 ## Deployment Checklist
 
 Before deployment:

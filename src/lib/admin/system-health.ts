@@ -35,6 +35,10 @@ export type SystemHealthCounts = {
   corpEveSyncEnabled: number;
   corpMissingEveCorporationId: number;
   corpEveSyncEnabledMissingCorporationId: number;
+  eveIdentities: number;
+  eveIdentitiesWithCorporationId: number;
+  eveIdentitiesWithAllianceId: number;
+  eveIdentitiesMatchedToConfiguredCorp: number;
 };
 
 export type RecentAuditHeartbeat = {
@@ -177,6 +181,10 @@ async function readDatabaseSummary() {
       corpEveCorporationIdsConfigured,
       corpEveSyncEnabled,
       corpEveSyncEnabledMissingCorporationId,
+      eveIdentities,
+      eveIdentitiesWithCorporationId,
+      eveIdentitiesWithAllianceId,
+      eveIdentitiesMatchedToConfiguredCorp,
       recentAuditRows
     ] = await Promise.all([
       getDb().corp.count(),
@@ -218,6 +226,28 @@ async function readDatabaseSummary() {
           eveCorporationId: null
         }
       }),
+      getDb().eveIdentity.count(),
+      getDb().eveIdentity.count({
+        where: {
+          corporationId: {
+            not: null
+          }
+        }
+      }),
+      getDb().eveIdentity.count({
+        where: {
+          allianceId: {
+            not: null
+          }
+        }
+      }),
+      getDb().eveIdentity.count({
+        where: {
+          memberCorpId: {
+            not: null
+          }
+        }
+      }),
       getDb().officerAuditLog.findMany({
         orderBy: [{ createdAt: "desc" }],
         take: 5,
@@ -252,7 +282,11 @@ async function readDatabaseSummary() {
         corpEveSyncEnabled,
         corpMissingEveCorporationId:
           corps - corpEveCorporationIdsConfigured,
-        corpEveSyncEnabledMissingCorporationId
+        corpEveSyncEnabledMissingCorporationId,
+        eveIdentities,
+        eveIdentitiesWithCorporationId,
+        eveIdentitiesWithAllianceId,
+        eveIdentitiesMatchedToConfiguredCorp
       },
       recentAudit: recentAuditRows.map((entry) => ({
         ...entry,

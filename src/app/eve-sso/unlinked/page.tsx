@@ -43,8 +43,38 @@ export default async function UnlinkedEveIdentityPage() {
             <div className="status-value">Verified</div>
           </div>
           <div className="status-panel">
+            <div className="status-label">Character</div>
+            <div className="status-value">
+              {identity?.characterName || "Verified character"}
+            </div>
+          </div>
+          <div className="status-panel">
             <div className="status-label">Officer Link</div>
             <div className="status-value">No Active Link</div>
+          </div>
+          <div className="status-panel">
+            <div className="status-label">Current Corp</div>
+            <div className="status-value">
+              {identity
+                ? formatNamedId(identity.corporationName, identity.corporationId?.toString() ?? null)
+                : "Unknown"}
+            </div>
+          </div>
+          <div className="status-panel">
+            <div className="status-label">Current Alliance</div>
+            <div className="status-value">
+              {identity
+                ? formatNamedId(identity.allianceName, identity.allianceId?.toString() ?? null)
+                : "Unknown"}
+            </div>
+          </div>
+          <div className="status-panel">
+            <div className="status-label">Matched Vyraj Corp</div>
+            <div className="status-value">
+              {identity?.memberCorp
+                ? `${identity.memberCorp.name} [${identity.memberCorp.ticker}]`
+                : "No configured match"}
+            </div>
           </div>
         </div>
         <div className="empty-state">
@@ -55,4 +85,12 @@ export default async function UnlinkedEveIdentityPage() {
       </section>
     </div>
   );
+}
+
+function formatNamedId(name: string, id: string | null) {
+  if (name && id) {
+    return `${name} (${id})`;
+  }
+
+  return name || id || "Unknown";
 }

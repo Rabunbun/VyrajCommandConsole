@@ -1,8 +1,8 @@
 # EVE SSO Setup Notes
 
-Phase 2A status: EVE SSO identity-only login is available when required
-configuration is present. Super Admins can also manually map Vyraj Corp Registry
-records to EVE corporation/alliance identifiers for future ESI phases.
+Phase 2B status: EVE SSO identity-only login is available when required
+configuration is present. EVE login also performs best-effort public enrichment
+of the verified character's current corporation/alliance identity.
 
 Manual officer login remains active. `Login with EVE` verifies character
 identity only; it creates a normal Vyraj officer session only when the verified
@@ -103,3 +103,16 @@ store EVE access or refresh tokens, does not sync corp stats, does not auto-rout
 members, and does not grant officer/admin access from EVE corporation or
 alliance membership. The `syncEnabled` flag is stored only so a later ESI phase
 can decide which configured corps are eligible for sync.
+
+## Character Corp/Alliance Enrichment
+
+Phase 2B refreshes `EveIdentity` corporation/alliance fields during successful
+EVE SSO login using public, unauthenticated ESI character/corporation/alliance
+lookups. If public ESI is unavailable, login continues after the EVE JWT identity
+is verified, and prior stored corp/alliance fields are preserved.
+
+Phase 2B still does not store access tokens, store refresh tokens, request new
+scopes, run background sync, auto-link officers, grant permissions, or auto-route
+members. If a character's corporation ID matches a manually configured
+`CorpEveIdentityConfig`, `EveIdentity.memberCorpId` may be updated as
+informational future routing foundation only.

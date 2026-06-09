@@ -110,6 +110,8 @@ export default async function SystemHealthPage() {
 
       <EveSsoSection config={health.eveSso} />
 
+      <EveIdentityEnrichmentSection counts={health.counts} />
+
       <CorpEveMappingSection counts={health.counts} />
 
       <section className="section-stack" aria-labelledby="data-counts-title">
@@ -140,6 +142,53 @@ export default async function SystemHealthPage() {
       <WarningsSection warnings={health.warnings} />
       <RecentAuditSection entries={health.recentAudit} />
     </div>
+  );
+}
+
+function EveIdentityEnrichmentSection({
+  counts
+}: {
+  counts: SystemHealthCounts | null;
+}) {
+  const checks: HealthCheck[] = counts
+    ? [
+        {
+          label: "EVE identities",
+          status: counts.eveIdentities > 0 ? "OK" : "Warning",
+          detail: formatNumber(counts.eveIdentities)
+        },
+        {
+          label: "Identities with corporation ID",
+          status:
+            counts.eveIdentitiesWithCorporationId > 0 ? "OK" : "Warning",
+          detail: formatNumber(counts.eveIdentitiesWithCorporationId)
+        },
+        {
+          label: "Identities with alliance ID",
+          status: counts.eveIdentitiesWithAllianceId > 0 ? "OK" : "Warning",
+          detail: formatNumber(counts.eveIdentitiesWithAllianceId)
+        },
+        {
+          label: "Matched to configured corp",
+          status:
+            counts.eveIdentitiesMatchedToConfiguredCorp > 0 ? "OK" : "Warning",
+          detail: formatNumber(counts.eveIdentitiesMatchedToConfiguredCorp)
+        }
+      ]
+    : [
+        {
+          label: "EVE identity enrichment",
+          status: "Error",
+          detail: "Database counts are unavailable."
+        }
+      ];
+
+  return (
+    <HealthSection
+      checks={checks}
+      description="Best-effort character corp/alliance enrichment from EVE login. No tokens are stored."
+      title="EVE Identity Enrichment"
+    />
   );
 }
 
