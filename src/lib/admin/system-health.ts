@@ -31,6 +31,8 @@ export type SystemHealthCounts = {
   lootSplits: number;
   auditLogEntries: number;
   eveTypeLookupRows: number;
+  publishedShipTypeLookupRows: number;
+  lastEveTypeLookupRefreshAt: string | null;
   corpEveCorporationIdsConfigured: number;
   corpEveSyncEnabled: number;
   corpMissingEveCorporationId: number;
@@ -182,6 +184,8 @@ async function readDatabaseSummary() {
       lootSplits,
       auditLogEntries,
       eveTypeLookupRows,
+      publishedShipTypeLookupRows,
+      lastEveTypeLookupRefresh,
       corpEveCorporationIdsConfigured,
       corpEveSyncEnabled,
       corpEveSyncEnabledMissingCorporationId,
@@ -215,6 +219,47 @@ async function readDatabaseSummary() {
       getDb().lootSplit.count(),
       getDb().officerAuditLog.count(),
       getDb().eveTypeLookup.count(),
+      getDb().eveTypeLookup.count({
+        where: {
+          typeId: {
+            not: null
+          },
+          isPublished: true,
+          OR: [
+            {
+              categoryName: {
+                equals: "Ship",
+                mode: "insensitive"
+              }
+            },
+            {
+              category: {
+                equals: "Ship",
+                mode: "insensitive"
+              }
+            },
+            {
+              category: {
+                equals: "Ships",
+                mode: "insensitive"
+              }
+            }
+          ]
+        }
+      }),
+      getDb().eveTypeLookup.findFirst({
+        where: {
+          lastRefreshedAt: {
+            not: null
+          }
+        },
+        orderBy: {
+          lastRefreshedAt: "desc"
+        },
+        select: {
+          lastRefreshedAt: true
+        }
+      }),
       getDb().corpEveIdentityConfig.count({
         where: {
           eveCorporationId: {
@@ -338,6 +383,9 @@ async function readDatabaseSummary() {
         lootSplits,
         auditLogEntries,
         eveTypeLookupRows,
+        publishedShipTypeLookupRows,
+        lastEveTypeLookupRefreshAt:
+          lastEveTypeLookupRefresh?.lastRefreshedAt?.toISOString() ?? null,
         corpEveCorporationIdsConfigured,
         corpEveSyncEnabled,
         corpMissingEveCorporationId:
@@ -417,6 +465,14 @@ function buildWarnings(input: {
       warnings.push({
         label: "No EVE type lookup rows",
         detail: "Doctrine image/type helpers may be limited until lookup rows are seeded."
+      });
+    }
+
+    if (input.counts.publishedShipTypeLookupRows === 0) {
+      warnings.push({
+        label: "No cached EVE ship types",
+        detail:
+          "Run the public ESI ship type refresh before relying on full doctrine ship selection."
       });
     }
 

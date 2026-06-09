@@ -251,7 +251,10 @@ function OfficerOperationsPanel({
 }) {
   return (
     <section className="section-stack" aria-label="Officer operation management">
-      <div className="form-panel form-panel-wide">
+      <details className="create-disclosure form-panel form-panel-wide">
+        <summary className="create-summary">
+          <span className="command-button">Create Operation</span>
+        </summary>
         <div className="card-heading">
           <h2 className="section-title">Create Operation</h2>
           <p className="card-copy">
@@ -268,7 +271,7 @@ function OfficerOperationsPanel({
             </button>
           </div>
         </form>
-      </div>
+      </details>
 
       {operations.length ? (
         <div className="section-stack">

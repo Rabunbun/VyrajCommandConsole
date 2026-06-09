@@ -165,7 +165,10 @@ function MessageBanner({
 
 function CreateContentPanel() {
   return (
-    <section className="form-panel form-panel-wide" aria-label="Create content">
+    <details className="create-disclosure form-panel form-panel-wide" aria-label="Create content">
+      <summary className="create-summary">
+        <span className="command-button">Create Announcement</span>
+      </summary>
       <div className="card-heading">
         <h2 className="section-title">Create Content</h2>
         <p className="card-copy">
@@ -182,7 +185,7 @@ function CreateContentPanel() {
           </button>
         </div>
       </form>
-    </section>
+    </details>
   );
 }
 

@@ -32,7 +32,8 @@ const countCards: Array<{
   { key: "recruitmentApplicants", label: "Recruitment" },
   { key: "lootSplits", label: "Loot Splits" },
   { key: "auditLogEntries", label: "Audit Logs" },
-  { key: "eveTypeLookupRows", label: "EVE Type Rows" }
+  { key: "eveTypeLookupRows", label: "EVE Type Rows" },
+  { key: "publishedShipTypeLookupRows", label: "Ship Type Rows" }
 ];
 
 export default async function SystemHealthPage() {
@@ -116,6 +117,8 @@ export default async function SystemHealthPage() {
 
       <CorpPublicEsiProfileSection counts={health.counts} />
 
+      <EveShipTypeLookupSection counts={health.counts} />
+
       <section className="section-stack" aria-labelledby="data-counts-title">
         <div className="section-heading">
           <div>
@@ -146,6 +149,53 @@ export default async function SystemHealthPage() {
       <WarningsSection warnings={health.warnings} />
       <RecentAuditSection entries={health.recentAudit} />
     </div>
+  );
+}
+
+function EveShipTypeLookupSection({
+  counts
+}: {
+  counts: SystemHealthCounts | null;
+}) {
+  const checks: HealthCheck[] = counts
+    ? [
+        {
+          label: "Cached ship types",
+          status: counts.publishedShipTypeLookupRows > 0 ? "OK" : "Warning",
+          detail: formatNumber(counts.publishedShipTypeLookupRows)
+        },
+        {
+          label: "Total EVE type rows",
+          status: counts.eveTypeLookupRows > 0 ? "OK" : "Warning",
+          detail: formatNumber(counts.eveTypeLookupRows)
+        },
+        {
+          label: "Last ship type refresh",
+          status: counts.lastEveTypeLookupRefreshAt ? "OK" : "Warning",
+          detail: counts.lastEveTypeLookupRefreshAt
+            ? formatDateTime(counts.lastEveTypeLookupRefreshAt)
+            : "Never"
+        },
+        {
+          label: "Normal page ESI calls",
+          status: "OK",
+          detail: "Doctrine pages read cached database rows only."
+        }
+      ]
+    : [
+        {
+          label: "EVE ship type lookup",
+          status: "Error",
+          detail: "Database counts are unavailable."
+        }
+      ];
+
+  return (
+    <HealthSection
+      checks={checks}
+      description="Cached public EVE ship type data for doctrine selectors and image URLs."
+      title="EVE Ship Type Lookup"
+    />
   );
 }
 

@@ -224,6 +224,19 @@ slug to confirm. Deletion is blocked when related officer assignments,
 permissions, operations, attendance, SRP, doctrine, recruitment, loot split, or
 matched EVE identity records exist. Audit logs are preserved.
 
+## Officer Deletion Guardrails
+
+Super Admins can delete officer accounts from Officer Management by typing the
+officer name to confirm. The delete action is blocked for the currently logged-in
+Super Admin, the last active Super Admin, and any officer still linked to an EVE
+identity. Unlink EVE identities first from EVE Identities / SSO Links.
+
+When deletion is allowed, officer-owned sessions, global permissions, and corp
+assignments are removed transactionally with the officer account. Corps,
+`EveIdentity` rows, and audit logs are preserved. Delete attempts and blocked
+deletes are audit logged without password hashes, session tokens, OAuth state,
+auth codes, or EVE tokens.
+
 ## EVE Public Corp Profiles
 
 Phase 2C adds a manual Super Admin refresh for public EVE corporation profile
@@ -239,6 +252,25 @@ remain inside Corp Portals and dashboards.
 The public profile refresh uses unauthenticated public ESI only. It does not
 store EVE tokens, request new scopes, use director/corp-private ESI, auto-link
 officers, auto-route members, or grant permissions.
+
+## EVE Ship Type Lookup
+
+Doctrine ship selection uses cached public EVE ship type rows from
+`EveTypeLookup`. Refresh the full published Ship category from public,
+unauthenticated ESI with:
+
+```bash
+npm.cmd run eve:refresh-ship-types
+```
+
+The refresh imports published EVE ship types from category `Ship`, including T1,
+T2, navy, faction, pirate, Triglavian, EDENCOM, capital, industrial, ORE, and
+special hulls returned by ESI. It stores the EVE Type ID, type name, group name,
+category name, and generated EVE image server render/icon URLs.
+
+Doctrine pages read cached database rows only. They do not call ESI during
+normal render, do not request scopes, and do not store EVE access or refresh
+tokens.
 
 ## Deployment Checklist
 

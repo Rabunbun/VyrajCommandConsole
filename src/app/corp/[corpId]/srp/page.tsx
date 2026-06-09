@@ -146,7 +146,10 @@ function MessageBanner({
 
 function SrpSubmissionPanel({ corp }: { corp: SrpCorpView }) {
   return (
-    <section className="form-panel form-panel-wide" aria-label="Submit SRP request">
+    <details className="create-disclosure form-panel form-panel-wide" aria-label="Submit SRP request">
+      <summary className="create-summary">
+        <span className="command-button">Create SRP Request</span>
+      </summary>
       <div className="card-heading">
         <h2 className="section-title">Submit SRP Request</h2>
         <p className="card-copy">
@@ -212,7 +215,7 @@ function SrpSubmissionPanel({ corp }: { corp: SrpCorpView }) {
           </button>
         </div>
       </form>
-    </section>
+    </details>
   );
 }
 

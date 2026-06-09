@@ -202,6 +202,24 @@ Phase 2C still does not store EVE access tokens, store refresh tokens, request
 new scopes, call authenticated corporation/director ESI, auto-route members, or
 grant permissions from EVE profile data.
 
+Phase 2C.5 extends `EveTypeLookup` for cached ship profile metadata used by
+Doctrine selection: EVE Type ID, type name, group name, category name, generated
+render/icon URLs, published status, and refresh timestamp. Populate or refresh
+the full published EVE Ship category with:
+
+```bash
+npm.cmd run eve:refresh-ship-types
+```
+
+The refresh uses public, unauthenticated ESI and writes only cached lookup rows.
+Normal app pages read saved rows and do not call ESI during render.
+
+Phase 2C.5 also adds Super Admin-only officer deletion guardrails. Deletion is
+blocked for self-delete, the last active Super Admin, and officers linked to an
+EVE identity. Allowed deletion removes only the officer plus officer-owned
+sessions, permissions, and corp assignments; corps, `EveIdentity` rows, and
+audit logs are preserved.
+
 See [EVE_SSO_SETUP.md](./EVE_SSO_SETUP.md) for the future EVE developer app,
 callback URL, and Vercel environment variable checklist.
 

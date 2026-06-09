@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   createOfficerAction,
+  deleteOfficerAction,
   resetOfficerPasswordAction,
   setOfficerStatusAction,
   updateOfficerAction
@@ -83,6 +84,7 @@ export default async function OfficerManagementPage({
           {data.officers.map((officer) => (
             <OfficerCard
               corps={data.corps}
+              currentOfficerId={session.officer.id}
               officer={officer}
               key={officer.id}
               permissionOptions={data.permissionOptions}
@@ -169,7 +171,10 @@ function CreateOfficerPanel({
   permissionOptions: readonly OfficerPermissionOption[];
 }) {
   return (
-    <section className="form-panel form-panel-wide" aria-label="Create officer">
+    <details className="create-disclosure form-panel form-panel-wide" aria-label="Create officer">
+      <summary className="create-summary">
+        <span className="command-button">Create Officer</span>
+      </summary>
       <div className="card-heading">
         <h2 className="section-title">Create Officer</h2>
         <p className="card-copy">
@@ -234,20 +239,23 @@ function CreateOfficerPanel({
           </button>
         </div>
       </form>
-    </section>
+    </details>
   );
 }
 
 function OfficerCard({
   corps,
+  currentOfficerId,
   officer,
   permissionOptions
 }: {
   corps: AdminCorpOption[];
+  currentOfficerId: string;
   officer: AdminOfficerView;
   permissionOptions: readonly OfficerPermissionOption[];
 }) {
   const assignedCorpIds = officer.assignedCorps.map((corp) => corp.id);
+  const isCurrentOfficer = officer.id === currentOfficerId;
 
   return (
     <article className="data-card">
@@ -441,6 +449,42 @@ function OfficerCard({
             </label>
             <button className="secondary-button" type="submit">
               Reset Password
+            </button>
+          </form>
+
+          <form action={deleteOfficerAction} className="action-panel danger-panel">
+            <input name="officerId" type="hidden" value={officer.id} />
+            <div className="card-heading">
+              <h3 className="card-title">Delete Officer</h3>
+              <p className="card-copy">
+                Permanent deletion removes this officer account plus its sessions,
+                permissions, and corp assignments. Linked EVE identities must be
+                unlinked first. Audit logs are preserved.
+              </p>
+            </div>
+            {isCurrentOfficer ? (
+              <div className="error-state">
+                Self-delete is blocked for the currently logged-in Super Admin.
+              </div>
+            ) : null}
+            {officer.eveIdentities.length ? (
+              <div className="error-state">
+                This officer has a linked EVE identity. Unlink it from EVE
+                Identities / SSO Links before deleting this account.
+              </div>
+            ) : null}
+            <label className="field-stack">
+              <span className="field-label">Type officer name to confirm</span>
+              <input
+                autoComplete="off"
+                className="text-input"
+                name="deleteConfirmation"
+                placeholder={officer.officerName}
+                required
+              />
+            </label>
+            <button className="danger-button" type="submit">
+              Delete Officer
             </button>
           </form>
         </div>

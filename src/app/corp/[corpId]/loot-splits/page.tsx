@@ -149,7 +149,10 @@ function MessageBanner({
 
 function LootSplitCalculator({ corp }: { corp: LootSplitCorpView }) {
   return (
-    <section className="form-panel form-panel-wide" aria-label="Create loot split">
+    <details className="create-disclosure form-panel form-panel-wide" aria-label="Create loot split">
+      <summary className="create-summary">
+        <span className="command-button">Create Loot Split</span>
+      </summary>
       <div className="card-heading">
         <h2 className="section-title">Calculator / Save Split</h2>
         <p className="card-copy">
@@ -279,7 +282,7 @@ function LootSplitCalculator({ corp }: { corp: LootSplitCorpView }) {
           </button>
         </div>
       </form>
-    </section>
+    </details>
   );
 }
 

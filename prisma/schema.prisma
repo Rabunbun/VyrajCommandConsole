@@ -538,6 +538,12 @@ model EveTypeLookup {
   typeName         String    @unique
   typeId           Int?      @unique
   category         String    @default("")
+  categoryName     String    @default("")
+  groupName        String    @default("")
+  renderUrl        String    @default("")
+  iconUrl          String    @default("")
+  isPublished      Boolean   @default(true)
+  lastRefreshedAt  DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   legacySheetName  String?
@@ -545,5 +551,9 @@ model EveTypeLookup {
   legacyImportedAt DateTime?
 
   @@index([category])
+  @@index([categoryName])
+  @@index([groupName])
+  @@index([isPublished])
+  @@index([lastRefreshedAt])
   @@index([legacySheetName, legacyRowNumber])
 }

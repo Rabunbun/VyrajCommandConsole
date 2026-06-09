@@ -166,7 +166,10 @@ function CreateCorpPanel({
   const defaultModules = getDefaultEnabledModules();
 
   return (
-    <section className="form-panel form-panel-wide" aria-label="Create corp">
+    <details className="create-disclosure form-panel form-panel-wide" aria-label="Create corp">
+      <summary className="create-summary">
+        <span className="command-button">Create Corp</span>
+      </summary>
       <div className="card-heading">
         <h2 className="section-title">Create Corp</h2>
         <p className="card-copy">
@@ -188,7 +191,7 @@ function CreateCorpPanel({
           </button>
         </div>
       </form>
-    </section>
+    </details>
   );
 }
 

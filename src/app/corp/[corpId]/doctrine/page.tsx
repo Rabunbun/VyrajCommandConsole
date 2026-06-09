@@ -10,8 +10,10 @@ import {
   doctrineReadinessStatusOptions,
   getDoctrinePageData,
   type DoctrineCorpView,
-  type DoctrineFitView
+  type DoctrineFitView,
+  type DoctrineShipTypeOption
 } from "@/lib/modules/doctrine";
+import { EveShipImage } from "@/components/eve-ship-image";
 import { formatStatusLabel } from "@/lib/public-data";
 import { getCurrentOfficerSession } from "@/lib/session";
 
@@ -70,7 +72,11 @@ export default async function DoctrinePage({
       <ReadinessSubmissionPanel corp={result.corp} fits={result.fits} />
 
       {result.canManageDoctrine ? (
-        <OfficerDoctrinePanel corp={result.corp} fits={result.fits} />
+        <OfficerDoctrinePanel
+          corp={result.corp}
+          fits={result.fits}
+          shipTypes={result.shipTypes}
+        />
       ) : null}
 
       <DoctrineFitList
@@ -250,31 +256,37 @@ function ReadinessSubmissionPanel({
 
 function OfficerDoctrinePanel({
   corp,
-  fits
+  fits,
+  shipTypes
 }: {
   corp: DoctrineCorpView;
   fits: DoctrineFitView[];
+  shipTypes: DoctrineShipTypeOption[];
 }) {
   return (
     <section className="section-stack" aria-label="Officer doctrine management">
-      <div className="form-panel form-panel-wide">
+      <ShipTypeDatalist shipTypes={shipTypes} />
+      <details className="create-disclosure form-panel form-panel-wide">
+        <summary className="create-summary">
+          <span className="command-button">Create Doctrine</span>
+        </summary>
         <div className="card-heading">
           <h2 className="section-title">Create Doctrine Fit</h2>
           <p className="card-copy">
-            Type ID is optional. If the ship name matches a lookup row with a
-            Type ID, the image URL is filled automatically.
+            Search by EVE ship name or enter an exact Type ID. Type ID drives
+            the rendered EVE ship image.
           </p>
         </div>
         <form action={createDoctrineFitAction} className="section-stack">
           <input name="corpSlug" type="hidden" value={corp.slug} />
-          <DoctrineFitFields />
+          <DoctrineFitFields shipTypes={shipTypes} />
           <div className="badge-row">
             <button className="command-button" type="submit">
               Create Doctrine Fit
             </button>
           </div>
         </form>
-      </div>
+      </details>
 
       {fits.length ? (
         <div className="section-stack">
@@ -287,7 +299,7 @@ function OfficerDoctrinePanel({
               <form action={updateDoctrineFitAction} className="section-stack">
                 <input name="corpSlug" type="hidden" value={corp.slug} />
                 <input name="doctrineFitId" type="hidden" value={fit.id} />
-                <DoctrineFitFields fit={fit} />
+                <DoctrineFitFields fit={fit} shipTypes={shipTypes} />
                 <div className="badge-row">
                   <button className="command-button" type="submit">
                     Save Doctrine Fit
@@ -320,10 +332,11 @@ function DoctrineFitList({
             <div className="section-heading">
               <div className="doctrine-card-heading">
                 {fit.imageUrl ? (
-                  <img
+                  <EveShipImage
                     alt=""
                     className="doctrine-ship-image"
-                    src={fit.imageUrl}
+                    iconUrl={fit.iconUrl}
+                    renderUrl={fit.imageUrl}
                   />
                 ) : (
                   <div className="doctrine-ship-placeholder" aria-hidden="true">
@@ -335,6 +348,13 @@ function DoctrineFitList({
                   <div className="card-subtitle">
                     {fit.shipName || "Unknown hull"}
                   </div>
+                  {fit.shipGroupName || fit.shipTypeId ? (
+                    <div className="card-copy">
+                      {[fit.shipGroupName, fit.shipTypeId ? `Type ${fit.shipTypeId}` : ""]
+                        .filter(Boolean)
+                        .join(" / ")}
+                    </div>
+                  ) : null}
                 </div>
               </div>
               <div className="badge-row">
@@ -416,7 +436,37 @@ function ReadinessRoster({ fit }: { fit: DoctrineFitView }) {
   );
 }
 
-function DoctrineFitFields({ fit }: { fit?: DoctrineFitView }) {
+function ShipTypeDatalist({
+  shipTypes
+}: {
+  shipTypes: DoctrineShipTypeOption[];
+}) {
+  if (!shipTypes.length) {
+    return null;
+  }
+
+  return (
+    <datalist id="eve-ship-type-options">
+      {shipTypes.map((shipType) => (
+        <option
+          key={shipType.typeId}
+          label={[shipType.groupName, `Type ${shipType.typeId}`]
+            .filter(Boolean)
+            .join(" / ")}
+          value={shipType.typeName}
+        />
+      ))}
+    </datalist>
+  );
+}
+
+function DoctrineFitFields({
+  fit,
+  shipTypes
+}: {
+  fit?: DoctrineFitView;
+  shipTypes: DoctrineShipTypeOption[];
+}) {
   return (
     <>
       <div className="form-grid">
@@ -435,8 +485,9 @@ function DoctrineFitFields({ fit }: { fit?: DoctrineFitView }) {
           <input
             className="text-input"
             defaultValue={fit?.shipName}
+            list={shipTypes.length ? "eve-ship-type-options" : undefined}
             name="shipName"
-            required
+            placeholder={shipTypes.length ? "Search cached EVE ship types" : ""}
           />
         </label>
 

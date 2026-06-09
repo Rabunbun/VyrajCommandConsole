@@ -16,6 +16,7 @@
     "prisma:seed:dev": "tsx prisma/seed.ts --mode=dev",
     "prisma:seed:prod": "tsx prisma/seed.ts --mode=prod",
     "prisma:reset:operational-data": "tsx scripts/reset-operational-data.ts",
+    "eve:refresh-ship-types": "tsx scripts/refresh-eve-ship-types.ts",
     "db:studio": "prisma studio"
   },
   "dependencies": {

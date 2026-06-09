@@ -521,6 +521,138 @@ export async function resetOfficerPasswordAction(formData: FormData) {
   redirectWithMessage("success", successMessage);
 }
 
+export async function deleteOfficerAction(formData: FormData) {
+  const admin = await requireSuperAdminForMutation();
+  let successMessage = "Officer deleted.";
+
+  try {
+    const officerId = cleanText(formData.get("officerId"));
+    const confirmation = normalizeOfficerName(formData.get("deleteConfirmation"));
+
+    if (!officerId) {
+      throw new Error("Officer ID is required.");
+    }
+
+    const existing = await getDb().officer.findUnique({
+      where: { id: officerId },
+      select: {
+        id: true,
+        officerName: true,
+        role: true,
+        status: true,
+        _count: {
+          select: {
+            corpAssignments: true,
+            eveIdentities: true,
+            permissions: true,
+            sessions: true
+          }
+        }
+      }
+    });
+
+    if (!existing) {
+      throw new Error("Officer account not found.");
+    }
+
+    if (confirmation !== existing.officerName) {
+      await logOfficerDeleteBlocked(admin, existing, "Typed confirmation did not match officer name.");
+      throw new Error("Type the officer name exactly to confirm deletion.");
+    }
+
+    if (existing.id === admin.officer.id) {
+      await logOfficerDeleteBlocked(admin, existing, "Self-delete blocked.");
+      throw new Error("You cannot delete your current Super Admin account.");
+    }
+
+    if (
+      existing.role === OfficerRole.SUPER_ADMIN &&
+      existing.status === OfficerStatus.ACTIVE
+    ) {
+      const remainingActiveSuperAdmins = await getDb().officer.count({
+        where: {
+          id: { not: existing.id },
+          role: OfficerRole.SUPER_ADMIN,
+          status: OfficerStatus.ACTIVE
+        }
+      });
+
+      if (remainingActiveSuperAdmins < 1) {
+        await logOfficerDeleteBlocked(admin, existing, "Last active Super Admin delete blocked.");
+        throw new Error("At least one active Super Admin must remain.");
+      }
+    }
+
+    if (existing._count.eveIdentities > 0) {
+      await logOfficerDeleteBlocked(admin, existing, "Linked EVE identity exists.");
+      throw new Error("Unlink this officer's EVE identity before deleting the officer.");
+    }
+
+    const deleted = await getDb().$transaction(async (tx) => {
+      const removedSessions = await tx.officerSession.deleteMany({
+        where: { officerId }
+      });
+      const removedPermissions = await tx.officerPermission.deleteMany({
+        where: { officerId }
+      });
+      const removedAssignments = await tx.officerCorpAssignment.deleteMany({
+        where: { officerId }
+      });
+      const officer = await tx.officer.delete({
+        where: { id: officerId },
+        select: {
+          id: true,
+          officerName: true,
+          role: true,
+          status: true
+        }
+      });
+
+      return {
+        officer,
+        removedAssignmentCount: removedAssignments.count,
+        removedPermissionCount: removedPermissions.count,
+        removedSessionCount: removedSessions.count
+      };
+    });
+
+    await logOfficerAudit({
+      officerId: admin.officer.id,
+      officerName: admin.officer.officerName,
+      officerRole: admin.officer.role,
+      module: "Officer Management",
+      action: "Officer Deleted",
+      targetType: "Officer",
+      targetId: deleted.officer.id,
+      targetName: deleted.officer.officerName,
+      summary: `Deleted officer account ${deleted.officer.officerName}.`,
+      details: {
+        actor: {
+          id: admin.officer.id,
+          officerName: admin.officer.officerName
+        },
+        target: {
+          id: deleted.officer.id,
+          officerName: deleted.officer.officerName,
+          role: deleted.officer.role,
+          status: deleted.officer.status
+        },
+        removedAssignmentCount: deleted.removedAssignmentCount,
+        removedPermissionCount: deleted.removedPermissionCount,
+        removedSessionCount: deleted.removedSessionCount,
+        linkedEveIdentityCount: existing._count.eveIdentities
+      }
+    });
+
+    revalidatePath(officerManagementPath);
+    successMessage = `Officer ${deleted.officer.officerName} deleted.`;
+  } catch (error) {
+    redirectWithMessage("error", getErrorMessage(error));
+  }
+
+  redirectWithMessage("success", successMessage);
+}
+
 async function requireSuperAdminForMutation() {
   const session = await getCurrentOfficerSession();
 
@@ -544,6 +676,52 @@ async function requireSuperAdminForMutation() {
   }
 
   return session;
+}
+
+async function logOfficerDeleteBlocked(
+  admin: Awaited<ReturnType<typeof requireSuperAdminForMutation>>,
+  officer: {
+    id: string;
+    officerName: string;
+    role: OfficerRole;
+    status: OfficerStatus;
+    _count?: {
+      corpAssignments?: number;
+      eveIdentities?: number;
+      permissions?: number;
+      sessions?: number;
+    };
+  },
+  reason: string
+) {
+  await logOfficerAudit({
+    officerId: admin.officer.id,
+    officerName: admin.officer.officerName,
+    officerRole: admin.officer.role,
+    module: "Officer Management",
+    action: "Officer Delete Blocked",
+    targetType: "Officer",
+    targetId: officer.id,
+    targetName: officer.officerName,
+    summary: `Blocked delete for officer ${officer.officerName}: ${reason}`,
+    details: {
+      actor: {
+        id: admin.officer.id,
+        officerName: admin.officer.officerName
+      },
+      target: {
+        id: officer.id,
+        officerName: officer.officerName,
+        role: officer.role,
+        status: officer.status
+      },
+      reason,
+      linkedEveIdentityCount: officer._count?.eveIdentities ?? 0,
+      sessionCount: officer._count?.sessions ?? 0,
+      assignmentCount: officer._count?.corpAssignments ?? 0,
+      permissionCount: officer._count?.permissions ?? 0
+    }
+  });
 }
 
 async function officerNameExists(normalizedOfficerName: string) {

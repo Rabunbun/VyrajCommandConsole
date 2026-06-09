@@ -48,6 +48,9 @@ export type DoctrineFitView = {
   doctrineName: string;
   shipName: string;
   shipTypeId: number | null;
+  shipGroupName: string;
+  shipCategoryName: string;
+  iconUrl: string;
   imageUrl: string;
   fitText: string;
   status: string;
@@ -59,11 +62,21 @@ export type DoctrineFitView = {
   readinessSummary: Record<string, number>;
 };
 
+export type DoctrineShipTypeOption = {
+  typeId: number;
+  typeName: string;
+  groupName: string;
+  categoryName: string;
+  renderUrl: string;
+  iconUrl: string;
+};
+
 export type DoctrinePageData =
   | {
       status: "ready";
       corp: DoctrineCorpView;
       fits: DoctrineFitView[];
+      shipTypes: DoctrineShipTypeOption[];
       canManageDoctrine: boolean;
       accessMode: "Member View" | "Officer View" | "Super Admin View";
     }
@@ -157,9 +170,37 @@ export async function getDoctrinePageData(
   }
 
   const canManage = canManageDoctrine(session, corp.id);
+  const shipTypes = canManage ? await getDoctrineShipTypes() : [];
+  const shipTypeIds = corp.doctrineFits
+    .map((fit) => fit.shipTypeId)
+    .filter((typeId): typeId is number => Boolean(typeId));
+  const fitShipTypes = shipTypeIds.length
+    ? await getDb().eveTypeLookup.findMany({
+        where: {
+          typeId: {
+            in: Array.from(new Set(shipTypeIds))
+          }
+        },
+        select: {
+          category: true,
+          categoryName: true,
+          groupName: true,
+          iconUrl: true,
+          renderUrl: true,
+          typeId: true,
+          typeName: true
+        }
+      })
+    : [];
+  const shipTypeById = new Map(
+    fitShipTypes
+      .filter((type) => type.typeId)
+      .map((type) => [type.typeId as number, type])
+  );
   const fits = corp.doctrineFits
     .filter((fit) => canManage || normalizeOptionValue(fit.status, "ACTIVE") === "ACTIVE")
     .map((fit) => {
+      const shipType = fit.shipTypeId ? shipTypeById.get(fit.shipTypeId) : null;
       const readiness = fit.readiness.map((entry) => ({
         id: entry.id,
         pilotName: entry.pilotName,
@@ -175,13 +216,17 @@ export async function getDoctrinePageData(
       const imageUrl =
         fit.manualImageUrl ||
         fit.imageUrl ||
+        shipType?.renderUrl ||
         buildEveTypeImageUrl(fit.shipTypeId);
 
       return {
         id: fit.id,
         doctrineName: fit.doctrineName,
-        shipName: fit.shipHull,
+        shipName: shipType?.typeName || fit.shipHull,
         shipTypeId: fit.shipTypeId,
+        shipGroupName: shipType?.groupName || "",
+        shipCategoryName: shipType?.categoryName || shipType?.category || "",
+        iconUrl: shipType?.iconUrl || buildEveTypeIconUrl(fit.shipTypeId),
         imageUrl,
         fitText: fit.fitText,
         status: normalizeOptionValue(fit.status, "ACTIVE"),
@@ -204,9 +249,60 @@ export async function getDoctrinePageData(
     status: "ready",
     corp: publicCorp,
     fits,
+    shipTypes,
     canManageDoctrine: canManage,
     accessMode
   };
+}
+
+export async function getDoctrineShipTypes(): Promise<DoctrineShipTypeOption[]> {
+  const types = await getDb().eveTypeLookup.findMany({
+    where: {
+      typeId: {
+        not: null
+      },
+      isPublished: true,
+      OR: [
+        {
+          categoryName: {
+            equals: "Ship",
+            mode: "insensitive"
+          }
+        },
+        {
+          category: {
+            equals: "Ship",
+            mode: "insensitive"
+          }
+        },
+        {
+          category: {
+            equals: "Ships",
+            mode: "insensitive"
+          }
+        }
+      ]
+    },
+    orderBy: [{ groupName: "asc" }, { typeName: "asc" }],
+    select: {
+      category: true,
+      categoryName: true,
+      groupName: true,
+      iconUrl: true,
+      renderUrl: true,
+      typeId: true,
+      typeName: true
+    }
+  });
+
+  return types.map((type) => ({
+    typeId: type.typeId as number,
+    typeName: type.typeName,
+    groupName: type.groupName || "",
+    categoryName: type.categoryName || type.category || "Ship",
+    renderUrl: type.renderUrl || buildEveTypeImageUrl(type.typeId),
+    iconUrl: type.iconUrl || buildEveTypeIconUrl(type.typeId)
+  }));
 }
 
 export function canManageDoctrine(
@@ -242,7 +338,13 @@ export function normalizeDoctrinePilotName(value: string) {
 
 export function buildEveTypeImageUrl(typeId: number | null | undefined) {
   return typeId
-    ? `https://images.evetech.net/types/${typeId}/render?size=128`
+    ? `https://images.evetech.net/types/${typeId}/render?size=512`
+    : "";
+}
+
+export function buildEveTypeIconUrl(typeId: number | null | undefined) {
+  return typeId
+    ? `https://images.evetech.net/types/${typeId}/icon?size=128`
     : "";
 }
 

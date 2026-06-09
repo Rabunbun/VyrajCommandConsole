@@ -297,7 +297,7 @@ async function getPublicDoctrineCorp(corpSlug: string) {
 
 async function parseDoctrineFitForm(formData: FormData) {
   const doctrineName = cleanText(formData.get("doctrineName"));
-  const shipName = normalizeDisplayName(formData.get("shipName"));
+  const submittedShipName = normalizeDisplayName(formData.get("shipName"));
   const fitText = cleanText(formData.get("fitText"));
   const status = parseFitStatus(formData.get("status"));
   const notes = cleanText(formData.get("notes"));
@@ -307,34 +307,50 @@ async function parseDoctrineFitForm(formData: FormData) {
     throw new Error("Doctrine name is required.");
   }
 
+  if (!submittedShipName && !submittedTypeId) {
+    throw new Error("Ship name or Ship Type ID is required.");
+  }
+
+  const lookup = submittedTypeId
+    ? await getDb().eveTypeLookup.findUnique({
+        where: {
+          typeId: submittedTypeId
+        },
+        select: doctrineTypeLookupSelect
+      })
+    : await getDb().eveTypeLookup.findFirst({
+        where: {
+          typeName: {
+            equals: submittedShipName,
+            mode: "insensitive"
+          }
+        },
+        select: doctrineTypeLookupSelect
+      });
+
+  const shipTypeId = submittedTypeId || lookup?.typeId || null;
+  const shipName = lookup?.typeName || submittedShipName;
+
   if (!shipName) {
     throw new Error("Ship name is required.");
   }
-
-  const lookup = await getDb().eveTypeLookup.findFirst({
-    where: {
-      typeName: {
-        equals: shipName,
-        mode: "insensitive"
-      }
-    },
-    select: {
-      typeId: true
-    }
-  });
-
-  const shipTypeId = submittedTypeId || lookup?.typeId || null;
 
   return {
     doctrineName,
     shipName,
     shipTypeId,
-    imageUrl: buildEveTypeImageUrl(shipTypeId),
+    imageUrl: lookup?.renderUrl || buildEveTypeImageUrl(shipTypeId),
     fitText,
     status,
     notes
   };
 }
+
+const doctrineTypeLookupSelect = {
+  renderUrl: true,
+  typeId: true,
+  typeName: true
+} as const;
 
 function parseFitStatus(value: FormDataEntryValue | null) {
   const status = normalizeStatus(String(value || ""));

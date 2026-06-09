@@ -176,7 +176,10 @@ function MessageBanner({
 
 function CreateApplicantPanel({ corp }: { corp: RecruitmentCorpView }) {
   return (
-    <section className="form-panel form-panel-wide" aria-label="Create applicant">
+    <details className="create-disclosure form-panel form-panel-wide" aria-label="Create applicant">
+      <summary className="create-summary">
+        <span className="command-button">Create Applicant</span>
+      </summary>
       <div className="card-heading">
         <h2 className="section-title">Create Applicant</h2>
         <p className="card-copy">
@@ -194,7 +197,7 @@ function CreateApplicantPanel({ corp }: { corp: RecruitmentCorpView }) {
           </button>
         </div>
       </form>
-    </section>
+    </details>
   );
 }
 
