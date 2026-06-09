@@ -40,6 +40,15 @@ export type CorpModuleOption = (typeof corpModuleOptions)[number];
 
 export type AdminEnabledModules = Record<CorpModuleKey, boolean>;
 
+export type AdminCorpEveIdentityConfig = {
+  eveCorporationId: string | null;
+  eveCorporationName: string;
+  eveAllianceId: string | null;
+  eveAllianceName: string;
+  syncEnabled: boolean;
+  lastVerifiedAt: string | null;
+};
+
 export type AdminCorpView = {
   id: string;
   slug: string;
@@ -54,6 +63,7 @@ export type AdminCorpView = {
   doctrineReadinessPercent: number;
   announcements: string[];
   enabledModules: AdminEnabledModules;
+  eveIdentityConfig: AdminCorpEveIdentityConfig | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -93,6 +103,16 @@ export async function getCorpManagementData(): Promise<CorpManagementData> {
       doctrineReadinessPercent: true,
       announcements: true,
       enabledModules: true,
+      eveIdentityConfig: {
+        select: {
+          eveCorporationId: true,
+          eveCorporationName: true,
+          eveAllianceId: true,
+          eveAllianceName: true,
+          syncEnabled: true,
+          lastVerifiedAt: true
+        }
+      },
       createdAt: true,
       updatedAt: true
     }
@@ -103,6 +123,19 @@ export async function getCorpManagementData(): Promise<CorpManagementData> {
       ...corp,
       announcements: asStringArray(corp.announcements),
       enabledModules: asEnabledModules(corp.enabledModules),
+      eveIdentityConfig: corp.eveIdentityConfig
+        ? {
+            eveCorporationId:
+              corp.eveIdentityConfig.eveCorporationId?.toString() ?? null,
+            eveCorporationName: corp.eveIdentityConfig.eveCorporationName,
+            eveAllianceId:
+              corp.eveIdentityConfig.eveAllianceId?.toString() ?? null,
+            eveAllianceName: corp.eveIdentityConfig.eveAllianceName,
+            syncEnabled: corp.eveIdentityConfig.syncEnabled,
+            lastVerifiedAt:
+              corp.eveIdentityConfig.lastVerifiedAt?.toISOString() ?? null
+          }
+        : null,
       createdAt: corp.createdAt.toISOString(),
       updatedAt: corp.updatedAt.toISOString()
     })),

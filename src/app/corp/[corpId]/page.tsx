@@ -166,6 +166,45 @@ async function CorpPortalContent({
         <Metric label="Doctrine Readiness" value={`${corp.doctrineReadinessPercent}%`} />
       </section>
 
+      <section className="section-stack" aria-labelledby="eve-identity-title">
+        <div className="section-heading">
+          <div>
+            <h2 className="section-title" id="eve-identity-title">
+              EVE Identity
+            </h2>
+            <p className="card-copy">
+              Manual registry mapping for future ESI phases. No live ESI sync
+              runs from this panel.
+            </p>
+          </div>
+          <span className="badge">{getEveIdentityStatus(corp)}</span>
+        </div>
+        {corp.eveIdentity?.eveCorporationId ? (
+          <div className="status-grid">
+            <Metric
+              label="EVE Corp"
+              value={formatNamedId(
+                corp.eveIdentity.eveCorporationName,
+                corp.eveIdentity.eveCorporationId
+              )}
+            />
+            <Metric
+              label="EVE Alliance"
+              value={formatNamedId(
+                corp.eveIdentity.eveAllianceName,
+                corp.eveIdentity.eveAllianceId
+              )}
+            />
+            <Metric
+              label="Sync Status"
+              value={corp.eveIdentity.syncEnabled ? "Stored for future sync" : "Sync disabled"}
+            />
+          </div>
+        ) : (
+          <div className="empty-state">No EVE corporation identity configured.</div>
+        )}
+      </section>
+
       <section className="section-stack" aria-labelledby="announcements-title">
         <h2 className="section-title" id="announcements-title">
           Corp Announcements
@@ -241,4 +280,20 @@ function Metric({ label, value }: { label: string; value: number | string }) {
       <div className="status-value">{value}</div>
     </div>
   );
+}
+
+function getEveIdentityStatus(corp: PublicCorpPortal) {
+  if (!corp.eveIdentity?.eveCorporationId) {
+    return "Not configured";
+  }
+
+  return corp.eveIdentity.syncEnabled ? "Configured / sync flag on" : "Configured / sync disabled";
+}
+
+function formatNamedId(name: string, id: string | null) {
+  if (name && id) {
+    return `${name} (${id})`;
+  }
+
+  return name || id || "Unknown";
 }

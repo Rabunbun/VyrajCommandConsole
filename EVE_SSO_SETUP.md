@@ -1,7 +1,8 @@
 # EVE SSO Setup Notes
 
-Phase 1C status: EVE SSO identity-only login is available when required
-configuration is present.
+Phase 2A status: EVE SSO identity-only login is available when required
+configuration is present. Super Admins can also manually map Vyraj Corp Registry
+records to EVE corporation/alliance identifiers for future ESI phases.
 
 Manual officer login remains active. `Login with EVE` verifies character
 identity only; it creates a normal Vyraj officer session only when the verified
@@ -87,3 +88,18 @@ Phase 1C does not:
 - change existing app sessions
 
 No EVE tokens are stored in Phase 1C.
+
+## Corp EVE Identity Mapping
+
+Phase 2A adds manual Corp EVE identity configuration in Corp Management:
+
+- EVE corporation ID/name
+- EVE alliance ID/name
+- future `syncEnabled` flag
+- optional future verification timestamp storage
+
+This is manual registry metadata only. Phase 2A does not call ESI, does not
+store EVE access or refresh tokens, does not sync corp stats, does not auto-route
+members, and does not grant officer/admin access from EVE corporation or
+alliance membership. The `syncEnabled` flag is stored only so a later ESI phase
+can decide which configured corps are eligible for sync.

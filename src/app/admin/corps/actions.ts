@@ -9,8 +9,7 @@ import {
   asStringArray,
   corpModuleOptions,
   getDefaultEnabledModules,
-  type AdminEnabledModules,
-  type CorpModuleKey
+  type AdminEnabledModules
 } from "@/lib/admin/corps";
 import { getDb } from "@/lib/db";
 import { getCurrentOfficerSession } from "@/lib/session";
@@ -18,6 +17,7 @@ import { getCurrentOfficerSession } from "@/lib/session";
 const corpManagementPath = "/admin/corps";
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const moduleKeys = corpModuleOptions.map((module) => module.key);
+const maxPostgresBigInt = BigInt("9223372036854775807");
 
 export async function createCorpAction(formData: FormData) {
   const admin = await requireSuperAdminForCorpMutation();
@@ -45,7 +45,10 @@ export async function createCorpAction(formData: FormData) {
         pendingSrp: data.pendingSrp,
         doctrineReadinessPercent: data.doctrineReadinessPercent,
         announcements: data.announcements,
-        enabledModules: data.enabledModules
+        enabledModules: data.enabledModules,
+        eveIdentityConfig: {
+          create: data.eveIdentityConfig
+        }
       },
       select: {
         id: true,
@@ -54,7 +57,16 @@ export async function createCorpAction(formData: FormData) {
         ticker: true,
         status: true,
         announcements: true,
-        enabledModules: true
+        enabledModules: true,
+        eveIdentityConfig: {
+          select: {
+            eveCorporationId: true,
+            eveCorporationName: true,
+            eveAllianceId: true,
+            eveAllianceName: true,
+            syncEnabled: true
+          }
+        }
       }
     });
 
@@ -80,6 +92,27 @@ export async function createCorpAction(formData: FormData) {
         }
       }
     });
+
+    if (hasMeaningfulEveConfig(data.eveIdentityConfig)) {
+      await logOfficerAudit({
+        officerId: admin.officer.id,
+        officerName: admin.officer.officerName,
+        officerRole: admin.officer.role,
+        corpId: created.id,
+        corpSlug: created.slug,
+        corpName: created.name,
+        module: "Corp Management",
+        action: "Corp EVE Config Updated",
+        targetType: "Corp",
+        targetId: created.id,
+        targetName: created.name,
+        summary: `Configured EVE identity fields for ${created.name}.`,
+        details: {
+          before: null,
+          after: serializeEveConfig(created.eveIdentityConfig)
+        }
+      });
+    }
 
     revalidateCorpPaths(created.slug);
     successMessage = `Corp ${created.name} created.`;
@@ -116,7 +149,17 @@ export async function updateCorpAction(formData: FormData) {
         pendingSrp: true,
         doctrineReadinessPercent: true,
         announcements: true,
-        enabledModules: true
+        enabledModules: true,
+        eveIdentityConfig: {
+          select: {
+            eveCorporationId: true,
+            eveCorporationName: true,
+            eveAllianceId: true,
+            eveAllianceName: true,
+            syncEnabled: true,
+            lastVerifiedAt: true
+          }
+        }
       }
     });
 
@@ -141,7 +184,13 @@ export async function updateCorpAction(formData: FormData) {
         pendingSrp: data.pendingSrp,
         doctrineReadinessPercent: data.doctrineReadinessPercent,
         announcements: data.announcements,
-        enabledModules: data.enabledModules
+        enabledModules: data.enabledModules,
+        eveIdentityConfig: {
+          upsert: {
+            create: data.eveIdentityConfig,
+            update: data.eveIdentityConfig
+          }
+        }
       },
       select: {
         id: true,
@@ -156,12 +205,24 @@ export async function updateCorpAction(formData: FormData) {
         pendingSrp: true,
         doctrineReadinessPercent: true,
         announcements: true,
-        enabledModules: true
+        enabledModules: true,
+        eveIdentityConfig: {
+          select: {
+            eveCorporationId: true,
+            eveCorporationName: true,
+            eveAllianceId: true,
+            eveAllianceName: true,
+            syncEnabled: true,
+            lastVerifiedAt: true
+          }
+        }
       }
     });
 
     const afterAnnouncements = asStringArray(updated.announcements);
     const afterEnabledModules = asEnabledModules(updated.enabledModules);
+    const beforeEveConfig = serializeEveConfig(existing.eveIdentityConfig);
+    const afterEveConfig = serializeEveConfig(updated.eveIdentityConfig);
 
     await logOfficerAudit({
       officerId: admin.officer.id,
@@ -269,6 +330,27 @@ export async function updateCorpAction(formData: FormData) {
       });
     }
 
+    if (!eveConfigsMatch(beforeEveConfig, afterEveConfig)) {
+      await logOfficerAudit({
+        officerId: admin.officer.id,
+        officerName: admin.officer.officerName,
+        officerRole: admin.officer.role,
+        corpId: updated.id,
+        corpSlug: updated.slug,
+        corpName: updated.name,
+        module: "Corp Management",
+        action: "Corp EVE Config Updated",
+        targetType: "Corp",
+        targetId: updated.id,
+        targetName: updated.name,
+        summary: `Updated EVE identity config for ${updated.name}.`,
+        details: {
+          before: beforeEveConfig,
+          after: afterEveConfig
+        }
+      });
+    }
+
     revalidateCorpPaths(updated.slug);
     successMessage = `Corp ${updated.name} updated.`;
   } catch (error) {
@@ -315,6 +397,7 @@ function parseCorpForm(
   const description = cleanText(formData.get("description"));
   const status = parseCorpStatus(formData.get("status"));
   const recruitmentStatus = cleanText(formData.get("recruitmentStatus")) || "Unknown";
+  const eveIdentityConfig = parseEveIdentityConfig(formData);
 
   if (!name) {
     throw new Error("Corp name is required.");
@@ -342,7 +425,8 @@ function parseCorpForm(
       formData.get("doctrineReadinessPercent")
     ),
     announcements: parseAnnouncements(formData.get("announcements")),
-    enabledModules: parseEnabledModules(formData.getAll("enabledModules"))
+    enabledModules: parseEnabledModules(formData.getAll("enabledModules")),
+    eveIdentityConfig
   };
 }
 
@@ -428,6 +512,42 @@ function parsePercent(value: FormDataEntryValue | null) {
   return percent;
 }
 
+function parseEveIdentityConfig(formData: FormData) {
+  return {
+    eveCorporationId: parseOptionalBigIntId(
+      formData.get("eveCorporationId"),
+      "EVE corporation ID"
+    ),
+    eveCorporationName: cleanText(formData.get("eveCorporationName")),
+    eveAllianceId: parseOptionalBigIntId(
+      formData.get("eveAllianceId"),
+      "EVE alliance ID"
+    ),
+    eveAllianceName: cleanText(formData.get("eveAllianceName")),
+    syncEnabled: formData.get("eveSyncEnabled") === "on"
+  };
+}
+
+function parseOptionalBigIntId(value: FormDataEntryValue | null, label: string) {
+  const raw = cleanText(value);
+
+  if (!raw) {
+    return null;
+  }
+
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(`${label} must be numeric.`);
+  }
+
+  const id = BigInt(raw);
+
+  if (id > maxPostgresBigInt) {
+    throw new Error(`${label} is too large.`);
+  }
+
+  return id;
+}
+
 function arraysMatch(first: string[], second: string[]) {
   return JSON.stringify(first) === JSON.stringify(second);
 }
@@ -436,10 +556,65 @@ function modulesMatch(first: AdminEnabledModules, second: AdminEnabledModules) {
   return moduleKeys.every((key) => first[key] === second[key]);
 }
 
+function serializeEveConfig(
+  config: {
+    eveCorporationId: bigint | null;
+    eveCorporationName: string;
+    eveAllianceId: bigint | null;
+    eveAllianceName: string;
+    syncEnabled: boolean;
+    lastVerifiedAt?: Date | null;
+  } | null
+) {
+  if (!config) {
+    return {
+      eveCorporationId: null,
+      eveCorporationName: "",
+      eveAllianceId: null,
+      eveAllianceName: "",
+      syncEnabled: false,
+      lastVerifiedAt: null
+    };
+  }
+
+  return {
+    eveCorporationId: config.eveCorporationId?.toString() ?? null,
+    eveCorporationName: config.eveCorporationName,
+    eveAllianceId: config.eveAllianceId?.toString() ?? null,
+    eveAllianceName: config.eveAllianceName,
+    syncEnabled: config.syncEnabled,
+    lastVerifiedAt: config.lastVerifiedAt?.toISOString() ?? null
+  };
+}
+
+function hasMeaningfulEveConfig(config: {
+  eveCorporationId: bigint | null;
+  eveCorporationName: string;
+  eveAllianceId: bigint | null;
+  eveAllianceName: string;
+  syncEnabled: boolean;
+}) {
+  return Boolean(
+    config.eveCorporationId ||
+      config.eveCorporationName ||
+      config.eveAllianceId ||
+      config.eveAllianceName ||
+      config.syncEnabled
+  );
+}
+
+function eveConfigsMatch(
+  first: ReturnType<typeof serializeEveConfig>,
+  second: ReturnType<typeof serializeEveConfig>
+) {
+  return JSON.stringify(first) === JSON.stringify(second);
+}
+
 function revalidateCorpPaths(slug: string) {
   revalidatePath(corpManagementPath);
   revalidatePath("/");
   revalidatePath(`/corp/${slug}`);
+  revalidatePath("/admin/system-health");
 }
 
 function cleanText(value: FormDataEntryValue | null) {
@@ -451,6 +626,14 @@ function getErrorMessage(error: unknown) {
     error instanceof Prisma.PrismaClientKnownRequestError &&
     error.code === "P2002"
   ) {
+    const target = Array.isArray(error.meta?.target)
+      ? error.meta.target.join(", ")
+      : String(error.meta?.target || "");
+
+    if (target.includes("eveCorporationId")) {
+      return "That EVE corporation ID is already assigned to another corp.";
+    }
+
     return "A corp with that slug already exists.";
   }
 

@@ -219,6 +219,46 @@ function CorpCard({
       </div>
 
       <div className="section-stack">
+        <h3 className="section-title">EVE Identity</h3>
+        {corp.eveIdentityConfig?.eveCorporationId ? (
+          <div className="metric-grid">
+            <Metric
+              label="EVE Corp"
+              value={formatNamedId(
+                corp.eveIdentityConfig.eveCorporationName,
+                corp.eveIdentityConfig.eveCorporationId
+              )}
+            />
+            <Metric
+              label="EVE Alliance"
+              value={formatNamedId(
+                corp.eveIdentityConfig.eveAllianceName,
+                corp.eveIdentityConfig.eveAllianceId
+              )}
+            />
+            <Metric
+              label="Sync Flag"
+              value={
+                corp.eveIdentityConfig.syncEnabled
+                  ? "Enabled for future ESI"
+                  : "Disabled"
+              }
+            />
+            <Metric
+              label="Last Verified"
+              value={
+                corp.eveIdentityConfig.lastVerifiedAt
+                  ? formatDateTime(corp.eveIdentityConfig.lastVerifiedAt)
+                  : "Not verified"
+              }
+            />
+          </div>
+        ) : (
+          <p className="card-copy">No EVE corporation identity configured.</p>
+        )}
+      </div>
+
+      <div className="section-stack">
         <h3 className="section-title">Announcements</h3>
         {corp.announcements.length ? (
           <div className="badge-row">
@@ -405,6 +445,62 @@ function CorpFields({
       </label>
 
       <fieldset className="fieldset-panel">
+        <legend className="field-label">EVE Identity Config</legend>
+        <p className="card-copy">
+          Sync enabled is stored for future ESI phases. No ESI calls are made yet.
+        </p>
+        <div className="form-grid">
+          <label className="field-stack">
+            <span className="field-label">EVE Corporation ID</span>
+            <input
+              className="text-input"
+              defaultValue={corp?.eveIdentityConfig?.eveCorporationId || ""}
+              inputMode="numeric"
+              name="eveCorporationId"
+              pattern="[0-9]*"
+            />
+          </label>
+
+          <label className="field-stack">
+            <span className="field-label">EVE Corporation Name</span>
+            <input
+              className="text-input"
+              defaultValue={corp?.eveIdentityConfig?.eveCorporationName || ""}
+              name="eveCorporationName"
+            />
+          </label>
+
+          <label className="field-stack">
+            <span className="field-label">EVE Alliance ID</span>
+            <input
+              className="text-input"
+              defaultValue={corp?.eveIdentityConfig?.eveAllianceId || ""}
+              inputMode="numeric"
+              name="eveAllianceId"
+              pattern="[0-9]*"
+            />
+          </label>
+
+          <label className="field-stack">
+            <span className="field-label">EVE Alliance Name</span>
+            <input
+              className="text-input"
+              defaultValue={corp?.eveIdentityConfig?.eveAllianceName || ""}
+              name="eveAllianceName"
+            />
+          </label>
+        </div>
+        <label className="checkbox-row">
+          <input
+            defaultChecked={corp?.eveIdentityConfig?.syncEnabled || false}
+            name="eveSyncEnabled"
+            type="checkbox"
+          />
+          <span>Store sync enabled flag for a future ESI phase</span>
+        </label>
+      </fieldset>
+
+      <fieldset className="fieldset-panel">
         <legend className="field-label">Enabled Modules</legend>
         <div className="checkbox-grid">
           {moduleOptions.map((module) => (
@@ -431,4 +527,19 @@ function Metric({ label, value }: { label: string; value: string | number }) {
       <div className="metric-value">{value}</div>
     </div>
   );
+}
+
+function formatNamedId(name: string, id: string | null) {
+  if (name && id) {
+    return `${name} (${id})`;
+  }
+
+  return name || id || "Unknown";
+}
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(value));
 }

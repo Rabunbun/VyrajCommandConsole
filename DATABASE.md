@@ -173,10 +173,18 @@ state validation, server-side authorization-code exchange, JWT validation, and
 corporation, and alliance identity metadata, plus optional links to an internal
 `Officer` and member `Corp`.
 
+Phase 2A adds `CorpEveIdentityConfig` for manual Corp Registry mapping to EVE
+corporation/alliance IDs and names, plus a stored future `syncEnabled` flag.
+This config is edited through Corp Management and summarized in System Health.
+
 Manual officer login remains active. EVE SSO creates officer access only when a
 verified identity is already linked to an active Officer. No ESI calls are made,
 no EVE access or refresh tokens are stored, no officers are auto-linked, and no
-permissions are granted from EVE identity.
+permissions are granted from EVE identity or EVE corp/alliance membership.
+
+Phase 2A still does not call ESI, sync corp data, store tokens, auto-route
+members, or auto-grant officer/admin access. The corp sync flag is stored for a
+future phase only.
 
 See [EVE_SSO_SETUP.md](./EVE_SSO_SETUP.md) for the future EVE developer app,
 callback URL, and Vercel environment variable checklist.

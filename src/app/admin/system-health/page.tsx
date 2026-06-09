@@ -110,6 +110,8 @@ export default async function SystemHealthPage() {
 
       <EveSsoSection config={health.eveSso} />
 
+      <CorpEveMappingSection counts={health.counts} />
+
       <section className="section-stack" aria-labelledby="data-counts-title">
         <div className="section-heading">
           <div>
@@ -138,6 +140,61 @@ export default async function SystemHealthPage() {
       <WarningsSection warnings={health.warnings} />
       <RecentAuditSection entries={health.recentAudit} />
     </div>
+  );
+}
+
+function CorpEveMappingSection({
+  counts
+}: {
+  counts: SystemHealthCounts | null;
+}) {
+  const checks: HealthCheck[] = counts
+    ? [
+        {
+          label: "Total corps",
+          status: counts.corps > 0 ? "OK" : "Warning",
+          detail: formatNumber(counts.corps)
+        },
+        {
+          label: "Corps with EVE corporation ID",
+          status:
+            counts.corpEveCorporationIdsConfigured > 0 ? "OK" : "Warning",
+          detail: formatNumber(counts.corpEveCorporationIdsConfigured)
+        },
+        {
+          label: "Corps missing EVE corporation ID",
+          status:
+            counts.corpMissingEveCorporationId > 0 ? "Warning" : "OK",
+          detail: formatNumber(counts.corpMissingEveCorporationId)
+        },
+        {
+          label: "Corps with future sync enabled",
+          status: counts.corpEveSyncEnabled > 0 ? "Warning" : "OK",
+          detail: `${formatNumber(counts.corpEveSyncEnabled)}. No ESI sync runs in Phase 2A.`
+        },
+        {
+          label: "Sync enabled without corporation ID",
+          status:
+            counts.corpEveSyncEnabledMissingCorporationId > 0
+              ? "Warning"
+              : "OK",
+          detail: formatNumber(counts.corpEveSyncEnabledMissingCorporationId)
+        }
+      ]
+    : [
+        {
+          label: "Corp EVE mapping",
+          status: "Error",
+          detail: "Database counts are unavailable."
+        }
+      ];
+
+  return (
+    <HealthSection
+      checks={checks}
+      description="Manual corp-to-EVE identity mapping readiness. No ESI calls are made."
+      title="Corp EVE Mapping"
+    />
   );
 }
 

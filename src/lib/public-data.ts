@@ -20,6 +20,15 @@ export type PublicCorpCard = {
   recentOps: number;
   pendingSrp: number;
   doctrineReadinessPercent: number;
+  eveIdentity: PublicCorpEveIdentity | null;
+};
+
+export type PublicCorpEveIdentity = {
+  eveCorporationId: string | null;
+  eveCorporationName: string;
+  eveAllianceId: string | null;
+  eveAllianceName: string;
+  syncEnabled: boolean;
 };
 
 export type PublicAllianceHubContent = {
@@ -93,11 +102,23 @@ export async function getActivePublicCorps(): Promise<PublicCorpCard[]> {
       activeMembers: true,
       recentOps: true,
       pendingSrp: true,
-      doctrineReadinessPercent: true
+      doctrineReadinessPercent: true,
+      eveIdentityConfig: {
+        select: {
+          eveCorporationId: true,
+          eveCorporationName: true,
+          eveAllianceId: true,
+          eveAllianceName: true,
+          syncEnabled: true
+        }
+      }
     }
   });
 
-  return corps;
+  return corps.map((corp) => ({
+    ...corp,
+    eveIdentity: formatPublicEveIdentity(corp.eveIdentityConfig)
+  }));
 }
 
 export async function getPublicAllianceHubContent(): Promise<PublicAllianceHubContent[]> {
@@ -163,7 +184,16 @@ export async function getPublicCorpPortalData(
       pendingSrp: true,
       doctrineReadinessPercent: true,
       announcements: true,
-      enabledModules: true
+      enabledModules: true,
+      eveIdentityConfig: {
+        select: {
+          eveCorporationId: true,
+          eveCorporationName: true,
+          eveAllianceId: true,
+          eveAllianceName: true,
+          syncEnabled: true
+        }
+      }
     }
   });
 
@@ -180,7 +210,8 @@ export async function getPublicCorpPortalData(
     corp: {
       ...corp,
       announcements: asStringArray(corp.announcements),
-      enabledModules: asEnabledModules(corp.enabledModules)
+      enabledModules: asEnabledModules(corp.enabledModules),
+      eveIdentity: formatPublicEveIdentity(corp.eveIdentityConfig)
     }
   };
 }
@@ -214,5 +245,25 @@ function asEnabledModules(value: unknown): PublicEnabledModules {
     recruitment: source.recruitment === true,
     lootSplits: source.lootSplits === true || source.loot === true,
     dashboard: source.dashboard === true
+  };
+}
+
+function formatPublicEveIdentity(config: {
+  eveCorporationId: bigint | null;
+  eveCorporationName: string;
+  eveAllianceId: bigint | null;
+  eveAllianceName: string;
+  syncEnabled: boolean;
+} | null): PublicCorpEveIdentity | null {
+  if (!config) {
+    return null;
+  }
+
+  return {
+    eveCorporationId: config.eveCorporationId?.toString() ?? null,
+    eveCorporationName: config.eveCorporationName,
+    eveAllianceId: config.eveAllianceId?.toString() ?? null,
+    eveAllianceName: config.eveAllianceName,
+    syncEnabled: config.syncEnabled
   };
 }

@@ -31,6 +31,10 @@ export type SystemHealthCounts = {
   lootSplits: number;
   auditLogEntries: number;
   eveTypeLookupRows: number;
+  corpEveCorporationIdsConfigured: number;
+  corpEveSyncEnabled: number;
+  corpMissingEveCorporationId: number;
+  corpEveSyncEnabledMissingCorporationId: number;
 };
 
 export type RecentAuditHeartbeat = {
@@ -170,6 +174,9 @@ async function readDatabaseSummary() {
       lootSplits,
       auditLogEntries,
       eveTypeLookupRows,
+      corpEveCorporationIdsConfigured,
+      corpEveSyncEnabled,
+      corpEveSyncEnabledMissingCorporationId,
       recentAuditRows
     ] = await Promise.all([
       getDb().corp.count(),
@@ -193,6 +200,24 @@ async function readDatabaseSummary() {
       getDb().lootSplit.count(),
       getDb().officerAuditLog.count(),
       getDb().eveTypeLookup.count(),
+      getDb().corpEveIdentityConfig.count({
+        where: {
+          eveCorporationId: {
+            not: null
+          }
+        }
+      }),
+      getDb().corpEveIdentityConfig.count({
+        where: {
+          syncEnabled: true
+        }
+      }),
+      getDb().corpEveIdentityConfig.count({
+        where: {
+          syncEnabled: true,
+          eveCorporationId: null
+        }
+      }),
       getDb().officerAuditLog.findMany({
         orderBy: [{ createdAt: "desc" }],
         take: 5,
@@ -222,7 +247,12 @@ async function readDatabaseSummary() {
         recruitmentApplicants,
         lootSplits,
         auditLogEntries,
-        eveTypeLookupRows
+        eveTypeLookupRows,
+        corpEveCorporationIdsConfigured,
+        corpEveSyncEnabled,
+        corpMissingEveCorporationId:
+          corps - corpEveCorporationIdsConfigured,
+        corpEveSyncEnabledMissingCorporationId
       },
       recentAudit: recentAuditRows.map((entry) => ({
         ...entry,
@@ -288,6 +318,14 @@ function buildWarnings(input: {
       warnings.push({
         label: "No EVE type lookup rows",
         detail: "Doctrine image/type helpers may be limited until lookup rows are seeded."
+      });
+    }
+
+    if (input.counts.corpEveSyncEnabledMissingCorporationId > 0) {
+      warnings.push({
+        label: "Corp EVE sync flag without corporation ID",
+        detail:
+          "One or more corps have future sync enabled without an EVE corporation ID."
       });
     }
   }

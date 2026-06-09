@@ -185,7 +185,7 @@ preserves corps, officers, officer permissions, officer corp assignments,
 Alliance Hub content, EVE Type Lookup, and audit logs. The command refuses to run
 unless `CONFIRM_RESET_OPERATIONAL_DATA` is exactly `YES`.
 
-## EVE SSO Phase 1A-1C
+## EVE SSO / ESI Foundations
 
 Phase 1A/1B added database, configuration, and admin-readiness foundations for
 future EVE SSO identity linking. Phase 1C adds identity-only OAuth start/callback
@@ -197,6 +197,16 @@ only when that EVE identity is already linked to an active Officer. The app does
 not call ESI, store EVE access tokens, store EVE refresh tokens, auto-link
 officers, or grant permissions from EVE corp/alliance membership. Internal Vyraj
 permissions still control access.
+
+Phase 2A adds manual Corp EVE identity mapping in Corp Management:
+
+- EVE corporation ID/name.
+- EVE alliance ID/name.
+- Future sync-enabled flag.
+- System Health counts for corp EVE mapping readiness.
+
+No ESI calls are made in Phase 2A. The sync flag is stored for future use only;
+it does not sync data, route members, or grant access.
 
 ## Deployment Checklist
 

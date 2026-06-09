@@ -326,6 +326,9 @@ function CorpCard({ corp }: { corp: PublicCorpCard }) {
       <div className="badge-row">
         <span className="badge">{formatStatusLabel(corp.status)}</span>
         <span className="badge">{corp.recruitmentStatus}</span>
+        {corp.eveIdentity?.eveCorporationId ? (
+          <span className="badge">EVE-linked</span>
+        ) : null}
       </div>
       <div className="metric-grid">
         <Metric label="Members" value={corp.activeMembers} />
