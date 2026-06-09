@@ -184,7 +184,6 @@ async function readDatabaseSummary() {
       eveIdentities,
       eveIdentitiesWithCorporationId,
       eveIdentitiesWithAllianceId,
-      eveIdentitiesMatchedToConfiguredCorp,
       recentAuditRows
     ] = await Promise.all([
       getDb().corp.count(),
@@ -241,13 +240,6 @@ async function readDatabaseSummary() {
           }
         }
       }),
-      getDb().eveIdentity.count({
-        where: {
-          memberCorpId: {
-            not: null
-          }
-        }
-      }),
       getDb().officerAuditLog.findMany({
         orderBy: [{ createdAt: "desc" }],
         take: 5,
@@ -261,6 +253,27 @@ async function readDatabaseSummary() {
         }
       })
     ]);
+    const configuredCorporationIds = await getDb().corpEveIdentityConfig.findMany({
+      where: {
+        eveCorporationId: {
+          not: null
+        }
+      },
+      select: {
+        eveCorporationId: true
+      }
+    });
+    const eveIdentitiesMatchedToConfiguredCorp = configuredCorporationIds.length
+      ? await getDb().eveIdentity.count({
+          where: {
+            corporationId: {
+              in: configuredCorporationIds
+                .map((config) => config.eveCorporationId)
+                .filter((id): id is bigint => Boolean(id))
+            }
+          }
+        })
+      : 0;
 
     return {
       counts: {

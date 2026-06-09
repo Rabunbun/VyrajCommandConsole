@@ -76,6 +76,14 @@ export default async function UnlinkedEveIdentityPage() {
                 : "No configured match"}
             </div>
           </div>
+          <div className="status-panel">
+            <div className="status-label">Identity Refreshed</div>
+            <div className="status-value">
+              {identity?.lastIdentityRefreshAt
+                ? formatDateTime(identity.lastIdentityRefreshAt)
+                : "Unknown"}
+            </div>
+          </div>
         </div>
         <div className="empty-state">
           {hasInactiveOfficerLink
@@ -93,4 +101,11 @@ function formatNamedId(name: string, id: string | null) {
   }
 
   return name || id || "Unknown";
+}
+
+function formatDateTime(value: Date) {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(value);
 }

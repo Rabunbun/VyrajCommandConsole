@@ -1,7 +1,11 @@
 import { CorpStatus, OfficerRole } from "@prisma/client";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createCorpAction, updateCorpAction } from "@/app/admin/corps/actions";
+import {
+  createCorpAction,
+  deleteCorpAction,
+  updateCorpAction
+} from "@/app/admin/corps/actions";
 import { logoutAction } from "@/app/auth-actions";
 import { logOfficerAudit } from "@/lib/audit";
 import {
@@ -303,6 +307,37 @@ function CorpCard({
             <button className="command-button" type="submit">
               Save Corp
             </button>
+          </div>
+        </form>
+      </details>
+
+      <details className="details-panel">
+        <summary className="details-summary">Delete Corp</summary>
+        <form action={deleteCorpAction} className="section-stack">
+          <input name="corpId" type="hidden" value={corp.id} />
+          <div className="error-state">
+            Deleting a corp is permanent. This action is blocked when related
+            operational data, officer assignments, officer permissions, or
+            matched EVE identities exist. Audit logs are preserved.
+            {corp.eveIdentityConfig
+              ? " EVE identity config will be deleted with the corp."
+              : ""}
+          </div>
+          <label className="field-stack">
+            <span className="field-label">Type corp slug to confirm</span>
+            <input
+              autoComplete="off"
+              className="text-input"
+              name="deleteConfirmation"
+              placeholder={corp.slug}
+              required
+            />
+          </label>
+          <div className="badge-row">
+            <button className="danger-button" type="submit">
+              Delete Corp
+            </button>
+            <span className="badge">{corp.slug}</span>
           </div>
         </form>
       </details>

@@ -65,7 +65,14 @@ export async function GET(request: NextRequest) {
         action: "EVE Identity Enrichment Failed",
         characterId: identityClaims.characterId,
         characterName: identityClaims.characterName,
-        summary: `EVE identity was verified, but public corp/alliance enrichment failed: ${enrichment.message}`
+        summary: `EVE identity was verified, but public corp/alliance enrichment failed at ${enrichment.stage}.`,
+        details: {
+          characterId: identityClaims.characterId.toString(),
+          characterName: identityClaims.characterName,
+          stage: enrichment.stage,
+          httpStatus: enrichment.httpStatus ?? null,
+          message: enrichment.message
+        }
       });
     }
 

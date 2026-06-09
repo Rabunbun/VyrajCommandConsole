@@ -217,6 +217,14 @@ function EveIdentityCard({
           }
         />
         <Metric
+          label="Last Identity Refresh"
+          value={
+            identity.lastIdentityRefreshAt
+              ? formatDateTime(identity.lastIdentityRefreshAt)
+              : "Never"
+          }
+        />
+        <Metric
           label="Linked At"
           value={identity.linkedAt ? formatDateTime(identity.linkedAt) : "Not linked"}
         />
@@ -234,8 +242,8 @@ function EveIdentityCard({
         <Metric
           label="Matched Vyraj Corp"
           value={
-            identity.memberCorp
-              ? `${identity.memberCorp.name} [${identity.memberCorp.ticker}]`
+            identity.memberCorp || identity.configuredCorpMatch
+              ? `${(identity.memberCorp || identity.configuredCorpMatch)?.name} [${(identity.memberCorp || identity.configuredCorpMatch)?.ticker}]`
               : "No configured match"
           }
         />

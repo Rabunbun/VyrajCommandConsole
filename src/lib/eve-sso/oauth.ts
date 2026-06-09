@@ -1,7 +1,7 @@
 import "server-only";
 import { createPublicKey, randomBytes, timingSafeEqual, verify } from "node:crypto";
 import { cookies } from "next/headers";
-import { LoginProvider, OfficerRole, OfficerStatus } from "@prisma/client";
+import { LoginProvider, OfficerRole, OfficerStatus, Prisma } from "@prisma/client";
 import { logOfficerAudit } from "@/lib/audit";
 import { getDb } from "@/lib/db";
 import { createOfficerSession } from "@/lib/session";
@@ -53,7 +53,7 @@ type EveIdentityEnrichment = {
   corporationName: string;
   allianceId: bigint | null;
   allianceName: string;
-  memberCorpId: string | null;
+  memberCorpId?: string | null;
   matchedCorp: {
     id: string;
     slug: string;
@@ -61,6 +61,19 @@ type EveIdentityEnrichment = {
     ticker: string;
   } | null;
 };
+
+type EveEnrichmentStage = "character" | "corporation" | "alliance" | "match" | "save";
+
+class EveEnrichmentError extends Error {
+  constructor(
+    message: string,
+    readonly stage: EveEnrichmentStage,
+    readonly httpStatus?: number
+  ) {
+    super(message);
+    this.name = "EveEnrichmentError";
+  }
+}
 
 type Jwks = {
   keys?: Array<JsonWebKey & { kid?: string; alg?: string }>;
@@ -251,24 +264,38 @@ export async function upsertEveIdentity(input: {
         corporationName: enriched.corporationName,
         allianceId: enriched.allianceId,
         allianceName: enriched.allianceName,
-        memberCorpId: enriched.memberCorpId
+        ...(enriched.memberCorpId !== undefined
+          ? { memberCorpId: enriched.memberCorpId }
+          : {})
       }
     : {};
-  const identity = await getDb().eveIdentity.upsert({
-    where: { characterId: input.characterId },
-    update: {
-      ...updateData,
-      ...enrichedData
-    },
-    create: {
+  let identity;
+
+  try {
+    identity = await getDb().eveIdentity.upsert({
+      where: { characterId: input.characterId },
+      update: {
+        ...updateData,
+        ...enrichedData
+      },
+      create: {
+        characterId: input.characterId,
+        ...updateData,
+        ...enrichedData
+      },
+      include: {
+        officer: true
+      }
+    });
+  } catch (error) {
+    logEveEnrichmentWarning({
       characterId: input.characterId,
-      ...updateData,
-      ...enrichedData
-    },
-    include: {
-      officer: true
-    }
-  });
+      stage: "save",
+      message: error instanceof Error ? error.message : "EveIdentity save failed."
+    });
+
+    throw error;
+  }
 
   if (enriched) {
     await logEveIdentityEnrichmentIfChanged({
@@ -357,6 +384,7 @@ export async function getUnlinkedIdentityFromCookie() {
         }
       },
       lastEveLoginAt: true,
+      lastIdentityRefreshAt: true,
       officer: {
         select: {
           status: true
@@ -378,6 +406,8 @@ export async function enrichEveIdentityFromPublicEsi(input: {
     }
   | {
       status: "failed";
+      stage: EveEnrichmentStage;
+      httpStatus?: number;
       message: string;
     }
 > {
@@ -385,7 +415,8 @@ export async function enrichEveIdentityFromPublicEsi(input: {
     const config = getEveSsoServerConfig();
     const characterData = await fetchEsiJson<EveCharacterPublicData>(
       `/latest/characters/${input.characterId.toString()}/`,
-      config
+      config,
+      "character"
     );
     const corporationId = characterData.corporation_id
       ? BigInt(characterData.corporation_id)
@@ -400,7 +431,9 @@ export async function enrichEveIdentityFromPublicEsi(input: {
     if (corporationId) {
       const corporationData = await fetchOptionalEsiJson<EveCorporationPublicData>(
         `/latest/corporations/${corporationId.toString()}/`,
-        config
+        config,
+        "corporation",
+        input.characterId
       );
       corporationName = cleanEveText(corporationData?.name);
 
@@ -412,26 +445,52 @@ export async function enrichEveIdentityFromPublicEsi(input: {
     if (allianceId) {
       const allianceData = await fetchOptionalEsiJson<EveAlliancePublicData>(
         `/latest/alliances/${allianceId.toString()}/`,
-        config
+        config,
+        "alliance",
+        input.characterId
       );
       allianceName = cleanEveText(allianceData?.name);
     }
 
-    const matchedCorp = corporationId
-      ? await getDb().corpEveIdentityConfig.findUnique({
-          where: { eveCorporationId: corporationId },
-          select: {
-            corp: {
-              select: {
-                id: true,
-                slug: true,
-                name: true,
-                ticker: true
+    let matchedCorp:
+      | {
+          corp: {
+            id: string;
+            slug: string;
+            name: string;
+            ticker: string;
+          };
+        }
+      | null
+      | undefined = null;
+
+    try {
+      matchedCorp = corporationId
+        ? await getDb().corpEveIdentityConfig.findUnique({
+            where: { eveCorporationId: corporationId },
+            select: {
+              corp: {
+                select: {
+                  id: true,
+                  slug: true,
+                  name: true,
+                  ticker: true
+                }
               }
             }
-          }
-        })
-      : null;
+          })
+        : null;
+    } catch (error) {
+      logEveEnrichmentWarning({
+        characterId: input.characterId,
+        stage: "match",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Configured corp match failed."
+      });
+      matchedCorp = undefined;
+    }
 
     return {
       status: "enriched",
@@ -441,17 +500,31 @@ export async function enrichEveIdentityFromPublicEsi(input: {
         corporationName,
         allianceId,
         allianceName,
-        memberCorpId: matchedCorp?.corp.id ?? null,
+        memberCorpId:
+          matchedCorp === undefined ? undefined : matchedCorp?.corp.id ?? null,
         matchedCorp: matchedCorp?.corp ?? null
       }
     };
   } catch (error) {
+    const stage = error instanceof EveEnrichmentError ? error.stage : "character";
+    const httpStatus = error instanceof EveEnrichmentError ? error.httpStatus : undefined;
+    const message =
+      error instanceof Error
+        ? error.message
+        : "EVE identity enrichment failed.";
+
+    logEveEnrichmentWarning({
+      characterId: input.characterId,
+      stage,
+      httpStatus,
+      message
+    });
+
     return {
       status: "failed",
-      message:
-        error instanceof Error
-          ? error.message
-          : "EVE identity enrichment failed."
+      stage,
+      httpStatus,
+      message
     };
   }
 }
@@ -461,6 +534,7 @@ export async function logEveSsoResult(input: {
   characterId?: bigint;
   characterName?: string;
   summary: string;
+  details?: Prisma.InputJsonObject;
 }) {
   await logOfficerAudit({
     module: "Auth",
@@ -468,7 +542,8 @@ export async function logEveSsoResult(input: {
     targetType: input.characterName ? "EveIdentity" : "EVE SSO",
     targetId: input.characterId ? input.characterId.toString() : "",
     targetName: input.characterName || "",
-    summary: input.summary
+    summary: input.summary,
+    details: input.details ?? {}
   });
 }
 
@@ -582,12 +657,17 @@ function base64UrlToBuffer(value: string) {
 
 async function fetchEsiJson<T>(
   path: string,
-  config: ReturnType<typeof getEveSsoServerConfig>
+  config: ReturnType<typeof getEveSsoServerConfig>,
+  stage: EveEnrichmentStage
 ) {
-  const response = await fetchEsi(path, config);
+  const response = await fetchEsi(path, config, stage);
 
   if (!response.ok) {
-    throw new Error(`Public ESI request failed with status ${response.status}.`);
+    throw new EveEnrichmentError(
+      `Public ESI ${stage} request failed with status ${response.status}.`,
+      stage,
+      response.status
+    );
   }
 
   return await response.json() as T;
@@ -595,11 +675,37 @@ async function fetchEsiJson<T>(
 
 async function fetchOptionalEsiJson<T>(
   path: string,
-  config: ReturnType<typeof getEveSsoServerConfig>
+  config: ReturnType<typeof getEveSsoServerConfig>,
+  stage: EveEnrichmentStage,
+  characterId: bigint
 ) {
-  const response = await fetchEsi(path, config);
+  let response;
+
+  try {
+    response = await fetchEsi(path, config, stage);
+  } catch (error) {
+    logEveEnrichmentWarning({
+      characterId,
+      stage,
+      httpStatus:
+        error instanceof EveEnrichmentError ? error.httpStatus : undefined,
+      message:
+        error instanceof Error
+          ? error.message
+          : `Optional public ESI ${stage} lookup failed.`
+    });
+
+    return null;
+  }
 
   if (!response.ok) {
+    logEveEnrichmentWarning({
+      characterId,
+      stage,
+      httpStatus: response.status,
+      message: `Optional public ESI ${stage} lookup failed.`
+    });
+
     return null;
   }
 
@@ -608,11 +714,18 @@ async function fetchOptionalEsiJson<T>(
 
 async function fetchEsi(
   path: string,
-  config: ReturnType<typeof getEveSsoServerConfig>
+  config: ReturnType<typeof getEveSsoServerConfig>,
+  stage: EveEnrichmentStage
 ) {
   const baseUrl = config.esiBaseUrl.replace(/\/$/, "");
   const url = new URL(path, `${baseUrl}/`);
   url.searchParams.set("datasource", "tranquility");
+  url.searchParams.set("language", "en");
+
+  if (config.esiCompatibilityDate) {
+    url.searchParams.set("compatibility_date", config.esiCompatibilityDate);
+  }
+
   const headers: Record<string, string> = {
     Accept: "application/json",
     "User-Agent": "VyrajCommandConsoleV2 EVE SSO identity enrichment"
@@ -631,9 +744,28 @@ async function fetchEsi(
       headers,
       signal: controller.signal
     });
+  } catch (error) {
+    throw new EveEnrichmentError(
+      error instanceof Error ? error.message : "Public ESI request failed.",
+      stage
+    );
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function logEveEnrichmentWarning(input: {
+  characterId: bigint;
+  stage: EveEnrichmentStage;
+  httpStatus?: number;
+  message: string;
+}) {
+  console.warn("[eve-sso] identity enrichment warning", {
+    characterId: input.characterId.toString(),
+    stage: input.stage,
+    httpStatus: input.httpStatus ?? null,
+    message: input.message
+  });
 }
 
 async function logEveIdentityEnrichmentIfChanged(input: {

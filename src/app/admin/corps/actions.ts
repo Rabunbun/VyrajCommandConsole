@@ -360,6 +360,97 @@ export async function updateCorpAction(formData: FormData) {
   redirectWithMessage("success", successMessage);
 }
 
+export async function deleteCorpAction(formData: FormData) {
+  const admin = await requireSuperAdminForCorpMutation();
+  let successMessage = "Corp deleted.";
+
+  try {
+    const corpId = cleanText(formData.get("corpId"));
+    const confirmation = cleanText(formData.get("deleteConfirmation"));
+
+    if (!corpId) {
+      throw new Error("Corp ID is required.");
+    }
+
+    const existing = await getDb().corp.findUnique({
+      where: { id: corpId },
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        ticker: true,
+        status: true,
+        eveIdentityConfig: {
+          select: {
+            eveCorporationId: true,
+            eveCorporationName: true,
+            eveAllianceId: true,
+            eveAllianceName: true,
+            syncEnabled: true,
+            lastVerifiedAt: true
+          }
+        }
+      }
+    });
+
+    if (!existing) {
+      throw new Error("Corp record not found.");
+    }
+
+    if (confirmation !== existing.slug) {
+      throw new Error(`Type ${existing.slug} to confirm deletion.`);
+    }
+
+    const blockers = await getCorpDeleteBlockers(existing.id);
+
+    if (blockers.length) {
+      throw new Error(
+        `Corp deletion blocked by related records: ${blockers.join(", ")}. Archive or clear related data first.`
+      );
+    }
+
+    const eveConfigBefore = serializeEveConfig(existing.eveIdentityConfig);
+
+    await getDb().corp.delete({
+      where: { id: existing.id }
+    });
+
+    await logOfficerAudit({
+      officerId: admin.officer.id,
+      officerName: admin.officer.officerName,
+      officerRole: admin.officer.role,
+      module: "Corp Management",
+      action: "Corp Deleted",
+      targetType: "Corp",
+      targetId: existing.id,
+      targetName: existing.name,
+      summary: `Deleted corp ${existing.name} [${existing.ticker}].`,
+      details: {
+        actor: {
+          officerId: admin.officer.id,
+          officerName: admin.officer.officerName
+        },
+        deletedCorp: {
+          id: existing.id,
+          name: existing.name,
+          slug: existing.slug,
+          ticker: existing.ticker,
+          status: existing.status
+        },
+        hadEveConfig: hasMeaningfulSerializedEveConfig(eveConfigBefore),
+        eveConfig: eveConfigBefore
+      }
+    });
+
+    revalidateCorpPaths(existing.slug);
+    successMessage = `Corp ${existing.name} deleted.`;
+  } catch (error) {
+    redirectWithMessage("error", getErrorMessage(error));
+  }
+
+  redirectWithMessage("success", successMessage);
+}
+
 async function requireSuperAdminForCorpMutation() {
   const session = await getCurrentOfficerSession();
 
@@ -610,6 +701,61 @@ function eveConfigsMatch(
   return JSON.stringify(first) === JSON.stringify(second);
 }
 
+async function getCorpDeleteBlockers(corpId: string) {
+  const [
+    officerAssignments,
+    officerPermissions,
+    operations,
+    operationAttendance,
+    srpRequests,
+    doctrineFits,
+    doctrineFitReadiness,
+    doctrinePilots,
+    recruitmentApplicants,
+    lootSplits,
+    eveMemberIdentities
+  ] = await Promise.all([
+    getDb().officerCorpAssignment.count({ where: { corpId } }),
+    getDb().officerPermission.count({ where: { corpId } }),
+    getDb().operation.count({ where: { corpId } }),
+    getDb().operationAttendance.count({ where: { corpId } }),
+    getDb().srpRequest.count({ where: { corpId } }),
+    getDb().doctrineFit.count({ where: { corpId } }),
+    getDb().doctrineFitReadiness.count({ where: { corpId } }),
+    getDb().doctrinePilot.count({ where: { corpId } }),
+    getDb().recruitmentApplicant.count({ where: { corpId } }),
+    getDb().lootSplit.count({ where: { corpId } }),
+    getDb().eveIdentity.count({ where: { memberCorpId: corpId } })
+  ]);
+  const blockers = [
+    ["officer assignments", officerAssignments],
+    ["officer permissions", officerPermissions],
+    ["operations", operations],
+    ["operation attendance", operationAttendance],
+    ["SRP requests", srpRequests],
+    ["doctrine fits", doctrineFits],
+    ["doctrine readiness", doctrineFitReadiness],
+    ["doctrine pilots", doctrinePilots],
+    ["recruitment applicants", recruitmentApplicants],
+    ["loot splits", lootSplits],
+    ["matched EVE identities", eveMemberIdentities]
+  ];
+
+  return blockers
+    .filter(([, count]) => Number(count) > 0)
+    .map(([label, count]) => `${label} (${count})`);
+}
+
+function hasMeaningfulSerializedEveConfig(config: ReturnType<typeof serializeEveConfig>) {
+  return Boolean(
+    config.eveCorporationId ||
+      config.eveCorporationName ||
+      config.eveAllianceId ||
+      config.eveAllianceName ||
+      config.syncEnabled
+  );
+}
+
 function revalidateCorpPaths(slug: string) {
   revalidatePath(corpManagementPath);
   revalidatePath("/");
@@ -635,6 +781,13 @@ function getErrorMessage(error: unknown) {
     }
 
     return "A corp with that slug already exists.";
+  }
+
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2003"
+  ) {
+    return "Corp deletion was blocked by related records. Archive or clear related data first.";
   }
 
   return error instanceof Error ? error.message : "Corp Management action failed.";

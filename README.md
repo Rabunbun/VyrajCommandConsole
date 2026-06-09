@@ -217,6 +217,13 @@ Phase 2B does not store EVE access tokens, store refresh tokens, request new
 scopes, run background sync, auto-link officers, auto-route members, or grant
 permissions from EVE corporation/alliance membership.
 
+## Corp Deletion Guardrails
+
+Super Admins can delete empty/test corps from Corp Management by typing the corp
+slug to confirm. Deletion is blocked when related officer assignments,
+permissions, operations, attendance, SRP, doctrine, recruitment, loot split, or
+matched EVE identity records exist. Audit logs are preserved.
+
 ## Deployment Checklist
 
 Before deployment:
