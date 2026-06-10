@@ -394,8 +394,16 @@ function getSrpAuditAction(beforeStatus: string, afterStatus: string) {
     return "SRP Denied";
   }
 
+  if (afterStatus === "NEEDS_INFO") {
+    return "SRP Marked Needs Info";
+  }
+
   if (afterStatus === "PAID") {
     return "SRP Marked Paid";
+  }
+
+  if (afterStatus === "CANCELLED") {
+    return "SRP Cancelled";
   }
 
   return "SRP Status Changed";

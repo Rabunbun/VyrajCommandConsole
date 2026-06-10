@@ -862,6 +862,138 @@ select.text-input {
   color: #ffe1a6;
 }
 
+.srp-queue-section {
+  gap: 16px;
+  max-width: none;
+}
+
+.srp-queue-summary {
+  align-items: center;
+  border-bottom: 1px solid rgba(192, 154, 85, 0.16);
+  color: #fff8ed;
+  cursor: pointer;
+  display: flex;
+  font-family: var(--font-command);
+  font-size: 0.76rem;
+  font-weight: 900;
+  gap: 14px;
+  justify-content: space-between;
+  letter-spacing: 0.08em;
+  list-style: none;
+  padding-bottom: 12px;
+  text-transform: uppercase;
+}
+
+.srp-queue-summary::-webkit-details-marker {
+  display: none;
+}
+
+.srp-queue-summary::after {
+  border: 1px solid rgba(192, 154, 85, 0.42);
+  color: var(--color-brass);
+  content: "+";
+  display: inline-grid;
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  inline-size: 24px;
+  min-block-size: 24px;
+  place-items: center;
+}
+
+.srp-queue-section[open] > .srp-queue-summary::after {
+  content: "-";
+}
+
+.srp-queue-summary small {
+  color: var(--color-muted);
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.25;
+  text-transform: none;
+}
+
+.srp-card-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.srp-request-card[data-status="action"] {
+  border-color: rgba(255, 90, 86, 0.66);
+}
+
+.srp-request-card[data-status="payment"] {
+  border-color: rgba(232, 182, 93, 0.72);
+}
+
+.srp-request-card[data-status="complete"] {
+  border-color: rgba(99, 198, 168, 0.58);
+  opacity: 0.88;
+}
+
+.srp-request-card[data-status="closed"] {
+  border-color: rgba(127, 147, 173, 0.42);
+  opacity: 0.82;
+}
+
+.srp-request-card[data-status="warning"] {
+  border-color: rgba(232, 182, 93, 0.82);
+}
+
+.status-badge,
+.assist-badge {
+  align-items: center;
+  border: 1px solid rgba(255, 90, 86, 0.44);
+  border-radius: 2px;
+  display: inline-flex;
+  font-family: var(--font-command);
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  line-height: 1.15;
+  min-height: 24px;
+  padding: 5px 9px;
+  text-transform: uppercase;
+}
+
+.status-badge[data-status="action"] {
+  background: rgba(100, 22, 23, 0.7);
+  color: #ffd0cd;
+}
+
+.status-badge[data-status="payment"],
+.status-badge[data-status="warning"],
+.assist-badge[data-assist="partial"] {
+  border-color: rgba(232, 182, 93, 0.72);
+  background: rgba(116, 82, 24, 0.58);
+  color: #ffe3a6;
+}
+
+.status-badge[data-status="complete"],
+.assist-badge[data-assist="success"] {
+  border-color: rgba(99, 198, 168, 0.72);
+  background: rgba(26, 96, 78, 0.58);
+  color: #d7fff4;
+}
+
+.status-badge[data-status="closed"],
+.assist-badge[data-assist="neutral"] {
+  border-color: rgba(174, 184, 203, 0.42);
+  background: rgba(53, 60, 75, 0.5);
+  color: #d7deec;
+}
+
+.assist-badge[data-assist="failed"] {
+  border-color: rgba(255, 107, 83, 0.78);
+  background: rgba(168, 47, 47, 0.42);
+  color: #ffe3dc;
+}
+
+.srp-killmail-link {
+  width: fit-content;
+}
+
 .action-grid {
   display: grid;
   gap: 14px;

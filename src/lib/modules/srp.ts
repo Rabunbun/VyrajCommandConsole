@@ -3,18 +3,15 @@ import { CorpStatus, OfficerRole, type Prisma } from "@prisma/client";
 import { getDb } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
 import { getSrpShipTypes } from "@/lib/srp-assist";
+import {
+  normalizeSrpStatus,
+  srpStatusOptions,
+  type SrpStatus
+} from "@/lib/srp-status";
 import type { CurrentOfficerSession } from "@/lib/session";
 
-export const srpStatusOptions = [
-  "SUBMITTED",
-  "UNDER_REVIEW",
-  "NEEDS_INFO",
-  "APPROVED",
-  "DENIED",
-  "PAID"
-] as const;
-
-export type SrpStatus = (typeof srpStatusOptions)[number];
+export { normalizeSrpStatus, srpStatusOptions };
+export type { SrpStatus };
 
 export type SrpCorpView = {
   id: string;
@@ -241,16 +238,6 @@ export function isSrpEnabled(value: unknown) {
   }
 
   return (value as Record<string, unknown>).srp === true;
-}
-
-export function normalizeSrpStatus(value: string) {
-  const normalized = value.trim().replace(/\s+/g, "_").toUpperCase();
-
-  if (normalized === "NEW") {
-    return "SUBMITTED";
-  }
-
-  return normalized || "SUBMITTED";
 }
 
 export function formatDecimal(value: Prisma.Decimal | null) {
