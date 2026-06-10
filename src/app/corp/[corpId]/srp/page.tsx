@@ -1,17 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  analyzeSrpRequestAssistAction,
-  submitSrpRequestAction,
   updateSrpRequestAction
 } from "@/app/corp/[corpId]/srp/actions";
-import { EveShipImage } from "@/components/eve-ship-image";
+import { SrpRequestForm } from "@/components/srp-request-form";
 import {
   getSrpPageData,
   srpStatusOptions,
   type SrpCorpView,
-  type SrpRequestView,
-  type SrpShipTypeOption
+  type SrpRequestView
 } from "@/lib/modules/srp";
 import { formatStatusLabel } from "@/lib/public-data";
 import { getCurrentOfficerSession } from "@/lib/session";
@@ -25,26 +22,6 @@ type SrpPageProps = {
   searchParams?: Promise<{
     success?: string;
     error?: string;
-    assistStatus?: string;
-    calculatedEligibleAmount?: string;
-    calculationSource?: string;
-    characterName?: string;
-    detectedShipName?: string;
-    detectedShipTypeId?: string;
-    doctrineName?: string;
-    insurancePayout?: string;
-    killmailId?: string;
-    killmailTotalValue?: string;
-    killmailUrl?: string;
-    lossDate?: string;
-    lossValue?: string;
-    notes?: string;
-    requestedAmount?: string;
-    selectedShipName?: string;
-    selectedShipTypeId?: string;
-    shipDetectionSource?: string;
-    srpAssistError?: string;
-    warnings?: string;
   }>;
 };
 
@@ -85,11 +62,7 @@ export default async function SrpPage({ params, searchParams }: SrpPageProps) {
       <SrpHeader corp={result.corp} accessMode={result.accessMode} />
       <MessageBanner success={paramsResult?.success} error={paramsResult?.error} />
 
-      <SrpSubmissionPanel
-        assistPreview={getAssistPreview(paramsResult)}
-        corp={result.corp}
-        shipTypes={result.shipTypes}
-      />
+      <SrpRequestForm corp={result.corp} shipTypes={result.shipTypes} />
 
       {result.canReviewSrp ? (
         <OfficerSrpQueue corp={result.corp} requests={result.requests} />
@@ -160,314 +133,46 @@ function MessageBanner({
   success?: string;
   error?: string;
 }) {
-  if (!success && !error) {
+  const sanitizedError = sanitizeQueryMessage(error, "error");
+  const sanitizedSuccess = sanitizeQueryMessage(success, "success");
+
+  if (!sanitizedSuccess && !sanitizedError) {
     return null;
   }
 
   return (
-    <div className={error ? "error-state" : "success-state"} role="status">
-      {error || success}
+    <div className={sanitizedError ? "error-state" : "success-state"} role="status">
+      {sanitizedError || sanitizedSuccess}
     </div>
   );
 }
 
-type SrpAssistPreview = {
-  assistStatus: string;
-  calculatedEligibleAmount: string;
-  calculationSource: string;
-  characterName: string;
-  detectedShipName: string;
-  detectedShipTypeId: string;
-  doctrineName: string;
-  insurancePayout: string;
-  killmailId: string;
-  killmailTotalValue: string;
-  killmailUrl: string;
-  lossDate: string;
-  lossValue: string;
-  notes: string;
-  requestedAmount: string;
-  selectedShipName: string;
-  selectedShipTypeId: string;
-  shipDetectionSource: string;
-  srpAssistError: string;
-  warnings: string;
-};
-
-function SrpSubmissionPanel({
-  assistPreview,
-  corp,
-  shipTypes
-}: {
-  assistPreview: SrpAssistPreview;
-  corp: SrpCorpView;
-  shipTypes: SrpShipTypeOption[];
-}) {
-  const previewShipTypeId =
-    parseOptionalNumber(assistPreview.selectedShipTypeId) ||
-    parseOptionalNumber(assistPreview.detectedShipTypeId);
-  const previewShipName =
-    assistPreview.selectedShipName || assistPreview.detectedShipName;
-  const previewShip = previewShipTypeId
-    ? shipTypes.find((shipType) => shipType.typeId === previewShipTypeId)
-    : shipTypes.find(
-        (shipType) =>
-          previewShipName &&
-          shipType.typeName.toLocaleLowerCase("en-US") ===
-            previewShipName.toLocaleLowerCase("en-US")
-      );
-
-  return (
-    <details className="create-disclosure form-panel form-panel-wide" aria-label="Submit SRP request">
-      <summary className="create-summary">
-        <span className="command-button">Create SRP Request</span>
-      </summary>
-      <div className="card-heading">
-        <h2 className="section-title">Submit SRP Request</h2>
-        <p className="card-copy">
-          Smart SRP recommends an eligible amount from public killmail and
-          insurance data when available. Officers still control final review.
-        </p>
-      </div>
-
-      <form action={submitSrpRequestAction} className="section-stack">
-        <ShipTypeDatalist shipTypes={shipTypes} />
-        <input name="corpSlug" type="hidden" value={corp.slug} />
-        <div className="form-grid">
-          <label className="field-stack">
-            <span className="field-label">Character / Pilot Name</span>
-            <input
-              className="text-input"
-              defaultValue={assistPreview.characterName}
-              name="characterName"
-              required
-            />
-          </label>
-
-          <label className="field-stack">
-            <span className="field-label">Manual Ship Selector</span>
-            <input
-              className="text-input"
-              defaultValue={previewShip?.typeName || previewShipName}
-              list={shipTypes.length ? "srp-ship-type-options" : undefined}
-              name="selectedShipName"
-              placeholder={shipTypes.length ? "Search cached EVE ship types" : ""}
-            />
-          </label>
-
-          <label className="field-stack">
-            <span className="field-label">Selected Ship Type ID</span>
-            <input
-              className="text-input"
-              defaultValue={previewShip?.typeId || previewShipTypeId || ""}
-              min={1}
-              name="selectedShipTypeId"
-              type="number"
-            />
-          </label>
-
-          <label className="field-stack">
-            <span className="field-label">Loss Value</span>
-            <input
-              className="text-input"
-              defaultValue={
-                assistPreview.lossValue ||
-                assistPreview.killmailTotalValue ||
-                assistPreview.requestedAmount
-              }
-              min={0}
-              name="lossValue"
-              step="0.01"
-              type="number"
-            />
-          </label>
-
-          <label className="field-stack">
-            <span className="field-label">Requested ISK Amount</span>
-            <input
-              className="text-input"
-              defaultValue={
-                assistPreview.calculatedEligibleAmount ||
-                assistPreview.requestedAmount
-              }
-              min={0}
-              name="requestedAmount"
-              required
-              step="0.01"
-              type="number"
-            />
-          </label>
-
-          <label className="field-stack">
-            <span className="field-label">Loss Date</span>
-            <input
-              className="text-input"
-              defaultValue={assistPreview.lossDate}
-              name="lossDate"
-              type="date"
-            />
-          </label>
-
-          <label className="field-stack">
-            <span className="field-label">Killmail URL</span>
-            <input
-              className="text-input"
-              defaultValue={assistPreview.killmailUrl}
-              name="killmailUrl"
-              placeholder="zKillboard or official ESI killmail URL"
-            />
-          </label>
-
-          <label className="field-stack">
-            <span className="field-label">Doctrine / Fleet Context</span>
-            <input
-              className="text-input"
-              defaultValue={assistPreview.doctrineName}
-              name="doctrineName"
-            />
-          </label>
-        </div>
-
-        <input name="shipType" type="hidden" value={previewShip?.typeName || previewShipName} />
-
-        <SrpAssistPreviewPanel
-          assistPreview={assistPreview}
-          previewShip={previewShip}
-          previewShipName={previewShipName}
-          previewShipTypeId={previewShipTypeId}
-        />
-
-        <label className="field-stack">
-          <span className="field-label">Notes</span>
-          <textarea
-            className="text-input"
-            defaultValue={assistPreview.notes}
-            name="notes"
-            rows={4}
-            placeholder="Fleet, FC, reimbursement context, or anything officers need."
-          />
-        </label>
-
-        <div className="badge-row">
-          <button
-            className="secondary-button"
-            formAction={analyzeSrpRequestAssistAction}
-            type="submit"
-          >
-            Analyze / Recalculate SRP
-          </button>
-          <button className="command-button" type="submit">
-            Submit SRP Request
-          </button>
-        </div>
-      </form>
-    </details>
-  );
-}
-
-function ShipTypeDatalist({ shipTypes }: { shipTypes: SrpShipTypeOption[] }) {
-  if (!shipTypes.length) {
-    return null;
+function sanitizeQueryMessage(
+  message: string | undefined,
+  type: "success" | "error"
+) {
+  if (!message) {
+    return "";
   }
 
-  return (
-    <datalist id="srp-ship-type-options">
-      {shipTypes.map((shipType) => (
-        <option
-          key={shipType.typeId}
-          label={[shipType.groupName, `Type ${shipType.typeId}`]
-            .filter(Boolean)
-            .join(" / ")}
-          value={shipType.typeName}
-        />
-      ))}
-    </datalist>
-  );
-}
+  const trimmed = message.trim();
 
-function SrpAssistPreviewPanel({
-  assistPreview,
-  previewShip,
-  previewShipName,
-  previewShipTypeId
-}: {
-  assistPreview: SrpAssistPreview;
-  previewShip?: SrpShipTypeOption;
-  previewShipName: string;
-  previewShipTypeId: number | null;
-}) {
-  if (!assistPreview.assistStatus && !previewShipName && !previewShipTypeId) {
-    return (
-      <div className="empty-state">
-        Optional: paste a killmail URL or select a ship, then analyze to estimate
-        Platinum insurance deduction and recommended SRP.
-      </div>
-    );
+  if (!trimmed) {
+    return "";
   }
 
-  return (
-    <section className="data-card" aria-label="SRP assist preview">
-      <div className="section-heading">
-        <div className="doctrine-card-heading">
-          {previewShip?.renderUrl ? (
-            <EveShipImage
-              alt={`${previewShip.typeName} ship render`}
-              className="doctrine-ship-image"
-              fallbackLabel={previewShip.typeName}
-              iconUrl={previewShip.iconUrl}
-              renderUrl={previewShip.renderUrl}
-            />
-          ) : (
-            <div className="doctrine-ship-placeholder" aria-hidden="true">
-              {previewShipName ? previewShipName.slice(0, 2).toUpperCase() : "?"}
-            </div>
-          )}
-          <div className="card-heading">
-            <h3 className="card-title">Smart SRP Assist</h3>
-            <div className="card-subtitle">
-              {previewShip?.typeName || previewShipName || "No ship selected"}
-            </div>
-            {previewShip?.groupName || previewShipTypeId ? (
-              <p className="card-copy">
-                {[previewShip?.groupName, previewShipTypeId ? `Type ${previewShipTypeId}` : ""]
-                  .filter(Boolean)
-                  .join(" / ")}
-              </p>
-            ) : null}
-          </div>
-        </div>
-        {assistPreview.assistStatus ? (
-          <span className="badge">{formatStatusLabel(assistPreview.assistStatus)}</span>
-        ) : null}
-      </div>
+  if (isTechnicalFrameworkMessage(trimmed)) {
+    return type === "error"
+      ? "Action could not be completed. Please try again."
+      : "";
+  }
 
-      <div className="metric-grid">
-        <Metric
-          label="Killmail ID"
-          value={assistPreview.killmailId || "Not detected"}
-        />
-        <Metric
-          label="Loss Value"
-          value={formatIsk(assistPreview.killmailTotalValue || assistPreview.lossValue)}
-        />
-        <Metric
-          label="Platinum Deduction"
-          value={formatIsk(assistPreview.insurancePayout)}
-        />
-        <Metric
-          label="Recommended SRP"
-          value={formatIsk(assistPreview.calculatedEligibleAmount)}
-        />
-      </div>
+  return trimmed;
+}
 
-      {assistPreview.warnings ? (
-        <div className="empty-state">{assistPreview.warnings}</div>
-      ) : null}
-      {assistPreview.srpAssistError ? (
-        <div className="error-state">{assistPreview.srpAssistError}</div>
-      ) : null}
-    </section>
-  );
+function isTechnicalFrameworkMessage(message: string) {
+  return /NEXT_(REDIRECT|NOT_FOUND|HTTP_ERROR_FALLBACK)/i.test(message) ||
+    /digest:/i.test(message);
 }
 
 function OfficerSrpQueue({
@@ -631,39 +336,6 @@ function SrpReviewCard({
       </details>
     </article>
   );
-}
-
-function getAssistPreview(
-  params?: Awaited<SrpPageProps["searchParams"]>
-): SrpAssistPreview {
-  return {
-    assistStatus: params?.assistStatus || "",
-    calculatedEligibleAmount: params?.calculatedEligibleAmount || "",
-    calculationSource: params?.calculationSource || "",
-    characterName: params?.characterName || "",
-    detectedShipName: params?.detectedShipName || "",
-    detectedShipTypeId: params?.detectedShipTypeId || "",
-    doctrineName: params?.doctrineName || "",
-    insurancePayout: params?.insurancePayout || "",
-    killmailId: params?.killmailId || "",
-    killmailTotalValue: params?.killmailTotalValue || "",
-    killmailUrl: params?.killmailUrl || "",
-    lossDate: params?.lossDate || "",
-    lossValue: params?.lossValue || "",
-    notes: params?.notes || "",
-    requestedAmount: params?.requestedAmount || "",
-    selectedShipName: params?.selectedShipName || "",
-    selectedShipTypeId: params?.selectedShipTypeId || "",
-    shipDetectionSource: params?.shipDetectionSource || "",
-    srpAssistError: params?.srpAssistError || "",
-    warnings: params?.warnings || ""
-  };
-}
-
-function parseOptionalNumber(value: string) {
-  const parsed = Number(value);
-
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

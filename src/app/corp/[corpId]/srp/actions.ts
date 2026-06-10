@@ -12,13 +12,21 @@ import {
   srpStatusOptions
 } from "@/lib/modules/srp";
 import { analyzeSrpAssist } from "@/lib/srp-assist";
+import {
+  initialSrpAssistActionState,
+  type SrpAssistActionState
+} from "@/lib/srp-assist-state";
 import { getCurrentOfficerSession } from "@/lib/session";
 
 const publicCorpStatuses: CorpStatus[] = [CorpStatus.ACTIVE, CorpStatus.TRIAL];
 
-export async function analyzeSrpRequestAssistAction(formData: FormData) {
+export async function analyzeSrpRequestAssistAction(
+  _previousState: SrpAssistActionState,
+  formData: FormData
+): Promise<SrpAssistActionState> {
   const session = await getCurrentOfficerSession();
   const corpSlug = cleanText(formData.get("corpSlug"));
+  const fields = getSrpAssistFields(formData);
 
   try {
     const corp = await getPublicSrpCorp(corpSlug);
@@ -56,15 +64,23 @@ export async function analyzeSrpRequestAssistAction(formData: FormData) {
       details: formatSrpAssistForAudit(assist)
     });
 
-    redirectWithAssistPreview(corp.slug, formData, assist);
+    return buildSrpAssistActionState(fields, assist);
   } catch (error) {
-    redirectWithMessage(corpSlug || "", "error", getErrorMessage(error));
+    rethrowIfNextRedirectError(error);
+
+    return {
+      ...initialSrpAssistActionState,
+      fields,
+      message: getSafeAssistErrorMessage(error),
+      status: "error"
+    };
   }
 }
 
 export async function submitSrpRequestAction(formData: FormData) {
   const corpSlug = cleanText(formData.get("corpSlug"));
   let successMessage = "SRP request submitted.";
+  let redirectTo = buildSrpMessageUrl(corpSlug, "success", successMessage);
 
   try {
     const corp = await getPublicSrpCorp(corpSlug);
@@ -156,17 +172,24 @@ export async function submitSrpRequestAction(formData: FormData) {
 
     revalidatePath(`/corp/${corp.slug}/srp`);
     successMessage = "SRP request submitted for review.";
+    redirectTo = buildSrpMessageUrl(corp.slug, "success", successMessage);
   } catch (error) {
-    redirectWithMessage(corpSlug || "", "error", getErrorMessage(error));
+    rethrowIfNextRedirectError(error);
+    redirectTo = buildSrpMessageUrl(
+      corpSlug,
+      "error",
+      getSafeMutationErrorMessage(error)
+    );
   }
 
-  redirectWithMessage(corpSlug, "success", successMessage);
+  redirect(redirectTo);
 }
 
 export async function updateSrpRequestAction(formData: FormData) {
   const session = await getCurrentOfficerSession();
   const corpSlug = cleanText(formData.get("corpSlug"));
   let successMessage = "SRP request updated.";
+  let redirectTo = buildSrpMessageUrl(corpSlug, "success", successMessage);
 
   try {
     const corp = await getPublicSrpCorp(corpSlug);
@@ -262,11 +285,17 @@ export async function updateSrpRequestAction(formData: FormData) {
 
     revalidatePath(`/corp/${corp.slug}/srp`);
     successMessage = `SRP request for ${updated.characterName} updated.`;
+    redirectTo = buildSrpMessageUrl(corp.slug, "success", successMessage);
   } catch (error) {
-    redirectWithMessage(corpSlug || "", "error", getErrorMessage(error));
+    rethrowIfNextRedirectError(error);
+    redirectTo = buildSrpMessageUrl(
+      corpSlug,
+      "error",
+      getSafeMutationErrorMessage(error)
+    );
   }
 
-  redirectWithMessage(corpSlug, "success", successMessage);
+  redirect(redirectTo);
 }
 
 async function getPublicSrpCorp(corpSlug: string) {
@@ -510,61 +539,126 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "SRP action failed.";
 }
 
-function redirectWithMessage(
+function getSafeAssistErrorMessage(error: unknown) {
+  const message = getErrorMessage(error);
+
+  if (message.includes("NEXT_REDIRECT")) {
+    return "Unable to analyze killmail. Select the ship manually or paste an ESI killmail URL.";
+  }
+
+  if (message.includes("Killmail") || message.includes("killmail")) {
+    return message;
+  }
+
+  if (message.includes("Ship Type ID") || message.includes("Loss value") || message.includes("Requested amount")) {
+    return message;
+  }
+
+  return "Unable to analyze killmail. Select the ship manually or paste an ESI killmail URL.";
+}
+
+function getSafeMutationErrorMessage(error: unknown) {
+  const message = getErrorMessage(error);
+
+  if (isTechnicalFrameworkMessage(message)) {
+    return "Action could not be completed. Please try again.";
+  }
+
+  return message;
+}
+
+function isNextRedirectError(error: unknown) {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+
+  if (!("digest" in error) || typeof error.digest !== "string") {
+    return false;
+  }
+
+  return error.digest.startsWith("NEXT_REDIRECT;");
+}
+
+function rethrowIfNextRedirectError(error: unknown): asserts error is never {
+  if (isNextRedirectError(error)) {
+    throw error;
+  }
+}
+
+function isTechnicalFrameworkMessage(message: string) {
+  return /NEXT_(REDIRECT|NOT_FOUND|HTTP_ERROR_FALLBACK)/i.test(message) ||
+    /digest:/i.test(message);
+}
+
+function buildSrpMessageUrl(
   corpSlug: string,
   type: "success" | "error",
   message: string
-): never {
+): string {
   const slug = corpSlug || "unknown";
-  redirect(`/corp/${slug}/srp?${type}=${encodeURIComponent(message)}`);
+  return `/corp/${slug}/srp?${type}=${encodeURIComponent(message)}`;
 }
 
-function redirectWithAssistPreview(
-  corpSlug: string,
-  formData: FormData,
-  assist: Awaited<ReturnType<typeof analyzeSrpAssist>>
-): never {
-  const params = new URLSearchParams();
-  const passthroughFields = [
-    "characterName",
-    "doctrineName",
-    "killmailUrl",
-    "lossDate",
-    "lossValue",
-    "notes",
-    "requestedAmount"
-  ];
-
-  for (const field of passthroughFields) {
-    const value = cleanText(formData.get(field));
-
-    if (value) {
-      params.set(field, value);
-    }
-  }
-
-  const values: Record<string, string> = {
-    assistStatus: assist.assistStatus,
-    calculationSource: assist.calculationSource,
-    calculatedEligibleAmount: assist.calculatedEligibleAmount?.toString() || "",
-    detectedShipName: assist.detectedShipName,
-    detectedShipTypeId: assist.detectedShipTypeId ? String(assist.detectedShipTypeId) : "",
-    insurancePayout: assist.insurancePayout?.toString() || "",
-    killmailHash: assist.killmailHash,
-    killmailId: assist.killmailId,
-    killmailTotalValue: assist.killmailTotalValue?.toString() || "",
-    selectedShipName: assist.selectedShipName,
-    selectedShipTypeId: assist.selectedShipTypeId ? String(assist.selectedShipTypeId) : "",
-    shipDetectionSource: assist.shipDetectionSource,
-    srpAssistError: assist.error,
-    warnings: assist.warnings.join("\n")
+function getSrpAssistFields(formData: FormData): SrpAssistActionState["fields"] {
+  return {
+    characterName: normalizeDisplayName(formData.get("characterName")),
+    doctrineName: cleanText(formData.get("doctrineName")),
+    killmailUrl: cleanText(formData.get("killmailUrl")),
+    lossDate: cleanText(formData.get("lossDate")),
+    lossValue: cleanText(formData.get("lossValue")),
+    notes: cleanText(formData.get("notes")),
+    requestedAmount: cleanText(formData.get("requestedAmount")),
+    selectedShipName: normalizeDisplayName(formData.get("selectedShipName")) ||
+      cleanText(formData.get("shipType")),
+    selectedShipTypeId: cleanText(formData.get("selectedShipTypeId"))
   };
+}
 
-  for (const [key, value] of Object.entries(values)) {
-    if (value) {
-      params.set(key, value);
-    }
-  }
+function buildSrpAssistActionState(
+  fields: SrpAssistActionState["fields"],
+  assist: Awaited<ReturnType<typeof analyzeSrpAssist>>
+): SrpAssistActionState {
+  const hasWarnings = assist.warnings.length > 0 || Boolean(assist.error);
+  const status = assist.assistStatus === "failed"
+    ? "error"
+    : hasWarnings
+      ? "warning"
+      : "success";
 
-  redirect(`/corp/${corpSlug}/srp?${params.toString()}`);
+  return {
+    assist: {
+      assistStatus: assist.assistStatus,
+      calculatedEligibleAmount: assist.calculatedEligibleAmount?.toString() || "",
+      calculationSource: assist.calculationSource,
+      detectedShipName: assist.detectedShipName,
+      detectedShipTypeId: assist.detectedShipTypeId ? String(assist.detectedShipTypeId) : "",
+      insurancePayout: assist.insurancePayout?.toString() || "",
+      killmailId: assist.killmailId,
+      killmailTotalValue: assist.killmailTotalValue?.toString() || "",
+      selectedShipName: assist.selectedShipName,
+      selectedShipTypeId: assist.selectedShipTypeId ? String(assist.selectedShipTypeId) : "",
+      shipDetectionSource: assist.shipDetectionSource,
+      srpAssistError: assist.error,
+      warnings: assist.warnings.join("\n")
+    },
+    fields: {
+      ...fields,
+      requestedAmount: assist.calculatedEligibleAmount?.toString() ||
+        fields.requestedAmount,
+      selectedShipName: assist.selectedShipName ||
+        assist.detectedShipName ||
+        fields.selectedShipName,
+      selectedShipTypeId: assist.selectedShipTypeId
+        ? String(assist.selectedShipTypeId)
+        : assist.detectedShipTypeId
+          ? String(assist.detectedShipTypeId)
+          : fields.selectedShipTypeId
+    },
+    message: status === "success"
+      ? "Killmail analyzed successfully."
+      : status === "warning"
+        ? "SRP assist completed with warnings. Review before submitting."
+        : "Unable to analyze killmail. Select the ship manually or paste an ESI killmail URL.",
+    status
+  };
 }
