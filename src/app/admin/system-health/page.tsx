@@ -119,6 +119,8 @@ export default async function SystemHealthPage() {
 
       <EveShipTypeLookupSection counts={health.counts} />
 
+      <SrpAssistReadinessSection counts={health.counts} />
+
       <section className="section-stack" aria-labelledby="data-counts-title">
         <div className="section-heading">
           <div>
@@ -149,6 +151,63 @@ export default async function SystemHealthPage() {
       <WarningsSection warnings={health.warnings} />
       <RecentAuditSection entries={health.recentAudit} />
     </div>
+  );
+}
+
+function SrpAssistReadinessSection({
+  counts
+}: {
+  counts: SystemHealthCounts | null;
+}) {
+  const checks: HealthCheck[] = counts
+    ? [
+        {
+          label: "Cached ship types",
+          status: counts.publishedShipTypeLookupRows > 0 ? "OK" : "Warning",
+          detail: formatNumber(counts.publishedShipTypeLookupRows)
+        },
+        {
+          label: "Insurance payout cache",
+          status: counts.srpInsuranceCachedTypes > 0 ? "OK" : "Warning",
+          detail: `${formatNumber(counts.srpInsuranceCachedTypes)} ship type(s) with Platinum payout cached.`
+        },
+        {
+          label: "Last insurance fetch",
+          status: counts.srpInsuranceLastFetchedAt ? "OK" : "Warning",
+          detail: counts.srpInsuranceLastFetchedAt
+            ? formatDateTime(counts.srpInsuranceLastFetchedAt)
+            : "Never"
+        },
+        {
+          label: "Insurance fetch failures",
+          status: counts.srpInsuranceFailedTypes > 0 ? "Warning" : "OK",
+          detail: formatNumber(counts.srpInsuranceFailedTypes)
+        },
+        {
+          label: "Assist success / partial / failed",
+          status: counts.srpAssistFailedRequests > 0 ? "Warning" : "OK",
+          detail: `${formatNumber(counts.srpAssistSuccessfulRequests)} / ${formatNumber(counts.srpAssistPartialRequests)} / ${formatNumber(counts.srpAssistFailedRequests)}`
+        },
+        {
+          label: "Render-time external calls",
+          status: "OK",
+          detail: "SRP pages read cached DB rows; killmail and insurance calls run only from server actions."
+        }
+      ]
+    : [
+        {
+          label: "Smart SRP Assist",
+          status: "Error",
+          detail: "Database counts are unavailable."
+        }
+      ];
+
+  return (
+    <HealthSection
+      checks={checks}
+      description="SRP recommendation readiness from cached ship lookup rows, insurance cache, and assist outcomes."
+      title="Smart SRP Assist"
+    />
   );
 }
 

@@ -272,6 +272,30 @@ Doctrine pages read cached database rows only. They do not call ESI during
 normal render, do not request scopes, and do not store EVE access or refresh
 tokens.
 
+## Smart SRP Assist Foundation
+
+Phase 2D.1 adds Smart SRP assist as a recommendation layer. Pilots can paste a
+zKillboard or official ESI killmail URL, select a cached EVE ship type manually,
+enter a loss value, and calculate a recommended eligible SRP amount:
+
+```text
+recommended SRP = max(0, loss value - Platinum insurance payout)
+```
+
+Official ESI killmail lookup is used only when a killmail ID and hash are
+available. zKillboard URLs are parsed for killmail ID and may use zKillboard's
+public JSON API for hash, ship, and public total value when available. No HTML
+scraping is used.
+
+Insurance prices come from public unauthenticated ESI and are cached per ship
+type. The calculation subtracts the Platinum insurance payout, not the insurance
+policy purchase cost. Officers still review and approve/deny/pay SRP manually.
+
+Smart SRP does not store EVE access tokens, store refresh tokens, request new
+scopes, call authenticated corporation/director ESI, auto-approve SRP, or make
+payments. SRP pages do not call zKillboard or ESI during render; external calls
+run only from server actions such as Analyze / Recalculate SRP or final submit.
+
 ## Phase 2C.6 Production Readiness Checklist
 
 After deploying this phase:

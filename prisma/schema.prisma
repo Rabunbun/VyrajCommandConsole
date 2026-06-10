@@ -350,9 +350,26 @@ model SrpRequest {
   discordName      String    @default("")
   shipLost         String
   killmailLink     String    @default("")
+  killmailId       BigInt?
+  killmailHash     String    @default("")
+  detectedShipTypeId Int?
+  detectedShipName String    @default("")
+  selectedShipTypeId Int?
+  selectedShipName String    @default("")
+  shipDetectionSource String @default("none")
   doctrineFleet    String    @default("")
   lossType         String    @default("")
   estimatedValue   Decimal?  @db.Decimal(20, 2)
+  killmailTotalValue Decimal? @db.Decimal(20, 2)
+  lossValue        Decimal?  @db.Decimal(20, 2)
+  insuranceLevelUsed String  @default("Platinum")
+  insurancePayout Decimal?  @db.Decimal(20, 2)
+  calculatedEligibleAmount Decimal? @db.Decimal(20, 2)
+  calculationSource String  @default("none")
+  calculationWarnings String @default("")
+  srpAssistStatus String    @default("not_checked")
+  srpAssistError  String    @default("")
+  srpAssistCheckedAt DateTime?
   requestedPayout  Decimal?  @db.Decimal(20, 2)
   reviewer         String    @default("")
   status           String    @default("New")
@@ -366,7 +383,27 @@ model SrpRequest {
   corp Corp @relation(fields: [corpId], references: [id], onDelete: Cascade)
 
   @@index([corpId, status])
+  @@index([killmailId])
+  @@index([detectedShipTypeId])
+  @@index([selectedShipTypeId])
+  @@index([srpAssistStatus])
   @@index([legacySheetName, legacyRowNumber])
+}
+
+model SrpInsurancePrice {
+  id              String    @id @default(uuid()) @db.Uuid
+  typeId          Int       @unique
+  typeName        String    @default("")
+  platinumPayout  Decimal?  @db.Decimal(20, 2)
+  rawLevels       Json      @default("[]")
+  fetchStatus     String    @default("not_checked")
+  fetchError      String    @default("")
+  lastFetchedAt   DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([fetchStatus])
+  @@index([lastFetchedAt])
 }
 
 model DoctrineFit {

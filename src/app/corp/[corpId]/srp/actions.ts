@@ -11,9 +11,56 @@ import {
   normalizeSrpStatus,
   srpStatusOptions
 } from "@/lib/modules/srp";
+import { analyzeSrpAssist } from "@/lib/srp-assist";
 import { getCurrentOfficerSession } from "@/lib/session";
 
 const publicCorpStatuses: CorpStatus[] = [CorpStatus.ACTIVE, CorpStatus.TRIAL];
+
+export async function analyzeSrpRequestAssistAction(formData: FormData) {
+  const session = await getCurrentOfficerSession();
+  const corpSlug = cleanText(formData.get("corpSlug"));
+
+  try {
+    const corp = await getPublicSrpCorp(corpSlug);
+    const assist = await analyzeSrpAssist({
+      killmailUrl: cleanText(formData.get("killmailUrl")),
+      lossValue: parseIskAmount(formData.get("lossValue"), {
+        allowBlank: true,
+        label: "Loss value"
+      }),
+      requestedAmount: parseIskAmount(formData.get("requestedAmount"), {
+        allowBlank: true,
+        label: "Requested amount"
+      }),
+      selectedShipName: normalizeDisplayName(formData.get("selectedShipName")) ||
+        cleanText(formData.get("shipType")),
+      selectedShipTypeId: parseOptionalTypeId(formData.get("selectedShipTypeId"))
+    });
+
+    const action = assist.assistStatus === "failed"
+      ? "SRP Assist Failed"
+      : "SRP Killmail Analyzed";
+
+    await logOfficerAudit({
+      officerId: session?.officer.id,
+      officerName: session?.officer.officerName,
+      officerRole: session?.officer.role,
+      corpId: corp.id,
+      corpSlug: corp.slug,
+      corpName: corp.name,
+      module: "SRP Requests",
+      action,
+      targetType: "SrpAssist",
+      targetName: assist.selectedShipName || assist.detectedShipName || "SRP Assist",
+      summary: `SRP assist ${assist.assistStatus} for ${assist.selectedShipName || assist.detectedShipName || "manual request"}.`,
+      details: formatSrpAssistForAudit(assist)
+    });
+
+    redirectWithAssistPreview(corp.slug, formData, assist);
+  } catch (error) {
+    redirectWithMessage(corpSlug || "", "error", getErrorMessage(error));
+  }
+}
 
 export async function submitSrpRequestAction(formData: FormData) {
   const corpSlug = cleanText(formData.get("corpSlug"));
@@ -21,16 +68,30 @@ export async function submitSrpRequestAction(formData: FormData) {
 
   try {
     const corp = await getPublicSrpCorp(corpSlug);
+    const session = await getCurrentOfficerSession();
     const characterName = normalizeDisplayName(formData.get("characterName"));
-    const shipType = cleanText(formData.get("shipType"));
+    const manualShipName = normalizeDisplayName(formData.get("selectedShipName")) ||
+      cleanText(formData.get("shipType"));
     const killmailUrl = cleanText(formData.get("killmailUrl"));
     const lossDate = cleanText(formData.get("lossDate"));
     const requestedAmount = parseIskAmount(formData.get("requestedAmount"), {
       allowBlank: false,
       label: "Requested amount"
     });
+    const lossValue = parseIskAmount(formData.get("lossValue"), {
+      allowBlank: true,
+      label: "Loss value"
+    });
     const doctrineName = cleanText(formData.get("doctrineName"));
     const notes = cleanText(formData.get("notes"));
+    const assist = await analyzeSrpAssist({
+      killmailUrl,
+      lossValue,
+      requestedAmount,
+      selectedShipName: manualShipName,
+      selectedShipTypeId: parseOptionalTypeId(formData.get("selectedShipTypeId"))
+    });
+    const shipType = assist.selectedShipName || assist.detectedShipName || manualShipName;
 
     if (!characterName) {
       throw new Error("Character or pilot name is required.");
@@ -40,19 +101,56 @@ export async function submitSrpRequestAction(formData: FormData) {
       throw new Error("Ship type is required.");
     }
 
-    await getDb().srpRequest.create({
+    const created = await getDb().srpRequest.create({
       data: {
         corpId: corp.id,
         pilotName: characterName,
         characterName,
         shipLost: shipType,
         killmailLink: killmailUrl,
+        killmailId: assist.killmailId ? BigInt(assist.killmailId) : null,
+        killmailHash: assist.killmailHash,
+        detectedShipTypeId: assist.detectedShipTypeId,
+        detectedShipName: assist.detectedShipName,
+        selectedShipTypeId: assist.selectedShipTypeId,
+        selectedShipName: assist.selectedShipName,
+        shipDetectionSource: assist.shipDetectionSource,
         doctrineFleet: doctrineName,
         lossType: lossDate,
         estimatedValue: requestedAmount,
+        killmailTotalValue: assist.killmailTotalValue,
+        lossValue: assist.lossValue,
+        insuranceLevelUsed: assist.insuranceLevelUsed,
+        insurancePayout: assist.insurancePayout,
+        calculatedEligibleAmount: assist.calculatedEligibleAmount,
+        calculationSource: assist.calculationSource,
+        calculationWarnings: assist.warnings.join("\n"),
+        srpAssistStatus: assist.assistStatus,
+        srpAssistError: assist.error,
+        srpAssistCheckedAt: new Date(),
         requestedPayout: null,
         status: "SUBMITTED",
         notes
+      },
+      select: srpAuditSelect
+    });
+
+    await logOfficerAudit({
+      officerId: session?.officer.id,
+      officerName: session?.officer.officerName,
+      officerRole: session?.officer.role,
+      corpId: corp.id,
+      corpSlug: corp.slug,
+      corpName: corp.name,
+      module: "SRP Requests",
+      action: "SRP Calculation Updated",
+      targetType: "SrpRequest",
+      targetId: created.id,
+      targetName: `${created.characterName} / ${created.shipLost}`,
+      summary: `Stored SRP assist recommendation for ${created.characterName}.`,
+      details: {
+        request: formatSrpRequestForAudit(created),
+        assist: formatSrpAssistForAudit(assist)
       }
     });
 
@@ -238,6 +336,22 @@ function parseIskAmount(
   return new Prisma.Decimal(raw);
 }
 
+function parseOptionalTypeId(value: FormDataEntryValue | null) {
+  const raw = cleanText(value);
+
+  if (!raw) {
+    return null;
+  }
+
+  const numberValue = Number(raw);
+
+  if (!Number.isInteger(numberValue) || numberValue <= 0) {
+    throw new Error("Ship Type ID must be a positive whole number.");
+  }
+
+  return numberValue;
+}
+
 function getSrpAuditAction(beforeStatus: string, afterStatus: string) {
   if (beforeStatus === afterStatus) {
     return null;
@@ -267,32 +381,66 @@ function cleanText(value: FormDataEntryValue | null) {
 }
 
 const srpAuditSelect = {
+  calculatedEligibleAmount: true,
+  calculationSource: true,
+  calculationWarnings: true,
   id: true,
   characterName: true,
+  detectedShipName: true,
+  detectedShipTypeId: true,
+  insuranceLevelUsed: true,
+  insurancePayout: true,
+  killmailHash: true,
+  killmailId: true,
   shipLost: true,
   killmailLink: true,
+  killmailTotalValue: true,
+  lossValue: true,
   doctrineFleet: true,
   lossType: true,
   estimatedValue: true,
   requestedPayout: true,
   reviewer: true,
+  selectedShipName: true,
+  selectedShipTypeId: true,
+  shipDetectionSource: true,
   status: true,
+  srpAssistCheckedAt: true,
+  srpAssistError: true,
+  srpAssistStatus: true,
   notes: true,
   createdAt: true,
   updatedAt: true
 } as const;
 
 type SrpAuditRecord = {
+  calculatedEligibleAmount: Prisma.Decimal | null;
+  calculationSource: string;
+  calculationWarnings: string;
   id: string;
   characterName: string;
+  detectedShipName: string;
+  detectedShipTypeId: number | null;
+  insuranceLevelUsed: string;
+  insurancePayout: Prisma.Decimal | null;
+  killmailHash: string;
+  killmailId: bigint | null;
   shipLost: string;
   killmailLink: string;
+  killmailTotalValue: Prisma.Decimal | null;
+  lossValue: Prisma.Decimal | null;
   doctrineFleet: string;
   lossType: string;
   estimatedValue: Prisma.Decimal | null;
   requestedPayout: Prisma.Decimal | null;
   reviewer: string;
+  selectedShipName: string;
+  selectedShipTypeId: number | null;
+  shipDetectionSource: string;
   status: string;
+  srpAssistCheckedAt: Date | null;
+  srpAssistError: string;
+  srpAssistStatus: string;
   notes: string;
   createdAt: Date;
   updatedAt: Date;
@@ -301,9 +449,20 @@ type SrpAuditRecord = {
 function formatSrpRequestForAudit(request: SrpAuditRecord) {
   return {
     id: request.id,
+    calculatedEligibleAmount: request.calculatedEligibleAmount?.toString() ?? null,
+    calculationSource: request.calculationSource,
+    calculationWarnings: request.calculationWarnings,
     characterName: request.characterName,
+    detectedShipName: request.detectedShipName,
+    detectedShipTypeId: request.detectedShipTypeId,
+    insuranceLevelUsed: request.insuranceLevelUsed,
+    insurancePayout: request.insurancePayout?.toString() ?? null,
+    killmailHash: request.killmailHash ? "[redacted-safe-hash-present]" : "",
+    killmailId: request.killmailId?.toString() ?? "",
     shipType: request.shipLost,
     killmailUrl: request.killmailLink,
+    killmailTotalValue: request.killmailTotalValue?.toString() ?? null,
+    lossValue: request.lossValue?.toString() ?? null,
     doctrineName: request.doctrineFleet,
     lossDate: request.lossType,
     requestedAmount: request.estimatedValue
@@ -313,10 +472,37 @@ function formatSrpRequestForAudit(request: SrpAuditRecord) {
       ? request.requestedPayout.toString()
       : null,
     reviewerName: request.reviewer,
+    selectedShipName: request.selectedShipName,
+    selectedShipTypeId: request.selectedShipTypeId,
+    shipDetectionSource: request.shipDetectionSource,
     status: normalizeSrpStatus(request.status),
+    srpAssistCheckedAt: request.srpAssistCheckedAt?.toISOString() ?? null,
+    srpAssistError: request.srpAssistError,
+    srpAssistStatus: request.srpAssistStatus,
     notes: request.notes,
     createdAt: request.createdAt.toISOString(),
     updatedAt: request.updatedAt.toISOString()
+  };
+}
+
+function formatSrpAssistForAudit(assist: Awaited<ReturnType<typeof analyzeSrpAssist>>) {
+  return {
+    assistStatus: assist.assistStatus,
+    calculationSource: assist.calculationSource,
+    calculatedEligibleAmount: assist.calculatedEligibleAmount?.toString() ?? null,
+    detectedShipName: assist.detectedShipName,
+    detectedShipTypeId: assist.detectedShipTypeId,
+    error: assist.error,
+    insuranceLevelUsed: assist.insuranceLevelUsed,
+    insurancePayout: assist.insurancePayout?.toString() ?? null,
+    killmailHashPresent: Boolean(assist.killmailHash),
+    killmailId: assist.killmailId,
+    killmailTotalValue: assist.killmailTotalValue?.toString() ?? null,
+    lossValue: assist.lossValue?.toString() ?? null,
+    selectedShipName: assist.selectedShipName,
+    selectedShipTypeId: assist.selectedShipTypeId,
+    shipDetectionSource: assist.shipDetectionSource,
+    warnings: assist.warnings
   };
 }
 
@@ -331,4 +517,54 @@ function redirectWithMessage(
 ): never {
   const slug = corpSlug || "unknown";
   redirect(`/corp/${slug}/srp?${type}=${encodeURIComponent(message)}`);
+}
+
+function redirectWithAssistPreview(
+  corpSlug: string,
+  formData: FormData,
+  assist: Awaited<ReturnType<typeof analyzeSrpAssist>>
+): never {
+  const params = new URLSearchParams();
+  const passthroughFields = [
+    "characterName",
+    "doctrineName",
+    "killmailUrl",
+    "lossDate",
+    "lossValue",
+    "notes",
+    "requestedAmount"
+  ];
+
+  for (const field of passthroughFields) {
+    const value = cleanText(formData.get(field));
+
+    if (value) {
+      params.set(field, value);
+    }
+  }
+
+  const values: Record<string, string> = {
+    assistStatus: assist.assistStatus,
+    calculationSource: assist.calculationSource,
+    calculatedEligibleAmount: assist.calculatedEligibleAmount?.toString() || "",
+    detectedShipName: assist.detectedShipName,
+    detectedShipTypeId: assist.detectedShipTypeId ? String(assist.detectedShipTypeId) : "",
+    insurancePayout: assist.insurancePayout?.toString() || "",
+    killmailHash: assist.killmailHash,
+    killmailId: assist.killmailId,
+    killmailTotalValue: assist.killmailTotalValue?.toString() || "",
+    selectedShipName: assist.selectedShipName,
+    selectedShipTypeId: assist.selectedShipTypeId ? String(assist.selectedShipTypeId) : "",
+    shipDetectionSource: assist.shipDetectionSource,
+    srpAssistError: assist.error,
+    warnings: assist.warnings.join("\n")
+  };
+
+  for (const [key, value] of Object.entries(values)) {
+    if (value) {
+      params.set(key, value);
+    }
+  }
+
+  redirect(`/corp/${corpSlug}/srp?${params.toString()}`);
 }

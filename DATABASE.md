@@ -242,6 +242,28 @@ System Health should show cached ship type rows and a recent lookup refresh.
 Doctrine should allow cached ship selection without making ESI calls during page
 render.
 
+## Smart SRP Assist Data
+
+Phase 2D.1 adds recommendation-only Smart SRP fields to `SrpRequest` and a
+`SrpInsurancePrice` cache table for public Platinum insurance payout lookups.
+Existing SRP rows remain valid with `srpAssistStatus` defaulting to
+`not_checked`.
+
+Smart SRP stores detected/selected ship metadata, killmail ID/hash when provided
+or safely discovered, public killmail total value when available, manual loss
+value, Platinum insurance payout, recommended eligible amount, calculation
+warnings, and assist status/error fields.
+
+The formula is:
+
+```text
+recommended SRP = max(0, loss value - Platinum insurance payout)
+```
+
+The insurance cache is populated from public unauthenticated ESI during SRP
+analyze/recalculate or submit actions. Normal SRP page render reads only saved
+database rows and cached ship lookup data.
+
 See [EVE_SSO_SETUP.md](./EVE_SSO_SETUP.md) for the future EVE developer app,
 callback URL, and Vercel environment variable checklist.
 

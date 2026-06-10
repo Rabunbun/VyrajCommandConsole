@@ -45,6 +45,12 @@ export type SystemHealthCounts = {
   corpPublicEsiProfilesNeverSynced: number;
   recentFailedCorpPublicEsiProfileRefreshes: number;
   lastSuccessfulCorpPublicEsiSyncAt: string | null;
+  srpAssistFailedRequests: number;
+  srpAssistPartialRequests: number;
+  srpAssistSuccessfulRequests: number;
+  srpInsuranceCachedTypes: number;
+  srpInsuranceFailedTypes: number;
+  srpInsuranceLastFetchedAt: string | null;
 };
 
 export type RecentAuditHeartbeat = {
@@ -196,6 +202,12 @@ async function readDatabaseSummary() {
       corpPublicEsiProfilesNeverSynced,
       recentFailedCorpPublicEsiProfileRefreshes,
       lastSuccessfulPublicProfileSync,
+      srpAssistSuccessfulRequests,
+      srpAssistPartialRequests,
+      srpAssistFailedRequests,
+      srpInsuranceCachedTypes,
+      srpInsuranceFailedTypes,
+      srpInsuranceLastFetched,
       recentAuditRows
     ] = await Promise.all([
       getDb().corp.count(),
@@ -332,6 +344,46 @@ async function readDatabaseSummary() {
           lastPublicEsiSyncAt: true
         }
       }),
+      getDb().srpRequest.count({
+        where: {
+          srpAssistStatus: "success"
+        }
+      }),
+      getDb().srpRequest.count({
+        where: {
+          srpAssistStatus: "partial"
+        }
+      }),
+      getDb().srpRequest.count({
+        where: {
+          srpAssistStatus: "failed"
+        }
+      }),
+      getDb().srpInsurancePrice.count({
+        where: {
+          platinumPayout: {
+            not: null
+          }
+        }
+      }),
+      getDb().srpInsurancePrice.count({
+        where: {
+          fetchStatus: "failed"
+        }
+      }),
+      getDb().srpInsurancePrice.findFirst({
+        where: {
+          lastFetchedAt: {
+            not: null
+          }
+        },
+        orderBy: {
+          lastFetchedAt: "desc"
+        },
+        select: {
+          lastFetchedAt: true
+        }
+      }),
       getDb().officerAuditLog.findMany({
         orderBy: [{ createdAt: "desc" }],
         take: 5,
@@ -399,7 +451,14 @@ async function readDatabaseSummary() {
         corpPublicEsiProfilesNeverSynced,
         recentFailedCorpPublicEsiProfileRefreshes,
         lastSuccessfulCorpPublicEsiSyncAt:
-          lastSuccessfulPublicProfileSync?.lastPublicEsiSyncAt?.toISOString() ?? null
+          lastSuccessfulPublicProfileSync?.lastPublicEsiSyncAt?.toISOString() ?? null,
+        srpAssistFailedRequests,
+        srpAssistPartialRequests,
+        srpAssistSuccessfulRequests,
+        srpInsuranceCachedTypes,
+        srpInsuranceFailedTypes,
+        srpInsuranceLastFetchedAt:
+          srpInsuranceLastFetched?.lastFetchedAt?.toISOString() ?? null
       },
       recentAudit: recentAuditRows.map((entry) => ({
         ...entry,
