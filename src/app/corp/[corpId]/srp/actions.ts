@@ -85,43 +85,40 @@ export async function submitSrpRequestAction(formData: FormData) {
   try {
     const corp = await getPublicSrpCorp(corpSlug);
     const session = await getCurrentOfficerSession();
-    const characterName = normalizeDisplayName(formData.get("characterName"));
-    const manualShipName = normalizeDisplayName(formData.get("selectedShipName")) ||
-      cleanText(formData.get("shipType"));
     const killmailUrl = cleanText(formData.get("killmailUrl"));
-    const lossDate = cleanText(formData.get("lossDate"));
-    const requestedAmount = parseIskAmount(formData.get("requestedAmount"), {
-      allowBlank: false,
-      label: "Requested amount"
-    });
-    const lossValue = parseIskAmount(formData.get("lossValue"), {
-      allowBlank: true,
-      label: "Loss value"
-    });
-    const doctrineName = cleanText(formData.get("doctrineName"));
-    const notes = cleanText(formData.get("notes"));
+
+    if (!killmailUrl) {
+      throw new Error("Paste a zKillboard killmail URL or ESI killmail URL.");
+    }
+
     const assist = await analyzeSrpAssist({
       killmailUrl,
-      lossValue,
-      requestedAmount,
-      selectedShipName: manualShipName,
-      selectedShipTypeId: parseOptionalTypeId(formData.get("selectedShipTypeId"))
+      lossValue: null,
+      requestedAmount: null,
+      selectedShipName: "",
+      selectedShipTypeId: null
     });
-    const shipType = assist.selectedShipName || assist.detectedShipName || manualShipName;
 
-    if (!characterName) {
-      throw new Error("Character or pilot name is required.");
+    if (!assist.parseResult.isValid) {
+      throw new Error("Paste a zKillboard killmail URL or ESI killmail URL.");
     }
 
-    if (!shipType) {
-      throw new Error("Ship type is required.");
-    }
+    const pilotName = assist.killmailId
+      ? `Killmail ${assist.killmailId}`
+      : "Pending officer review";
+    const shipType = assist.selectedShipName ||
+      assist.detectedShipName ||
+      "Pending officer review";
+    const requestedAmount = assist.calculatedEligibleAmount ||
+      assist.killmailTotalValue ||
+      assist.lossValue ||
+      null;
 
     const created = await getDb().srpRequest.create({
       data: {
         corpId: corp.id,
-        pilotName: characterName,
-        characterName,
+        pilotName,
+        characterName: pilotName,
         shipLost: shipType,
         killmailLink: killmailUrl,
         killmailId: assist.killmailId ? BigInt(assist.killmailId) : null,
@@ -131,8 +128,8 @@ export async function submitSrpRequestAction(formData: FormData) {
         selectedShipTypeId: assist.selectedShipTypeId,
         selectedShipName: assist.selectedShipName,
         shipDetectionSource: assist.shipDetectionSource,
-        doctrineFleet: doctrineName,
-        lossType: lossDate,
+        doctrineFleet: "",
+        lossType: "",
         estimatedValue: requestedAmount,
         killmailTotalValue: assist.killmailTotalValue,
         lossValue: assist.lossValue,
@@ -146,7 +143,9 @@ export async function submitSrpRequestAction(formData: FormData) {
         srpAssistCheckedAt: new Date(),
         requestedPayout: null,
         status: "SUBMITTED",
-        notes
+        notes: assist.assistStatus === "success"
+          ? ""
+          : "This killmail could not be fully analyzed. Officer review required."
       },
       select: srpAuditSelect
     });
@@ -627,7 +626,9 @@ function buildSrpAssistActionState(
   assist: Awaited<ReturnType<typeof analyzeSrpAssist>>
 ): SrpAssistActionState {
   const hasWarnings = assist.warnings.length > 0 || Boolean(assist.error);
-  const status = assist.assistStatus === "failed"
+  const validKillmailForReview = assist.parseResult.isValid &&
+    assist.assistStatus === "failed";
+  const status = assist.assistStatus === "failed" && !validKillmailForReview
     ? "error"
     : hasWarnings
       ? "warning"
@@ -663,10 +664,10 @@ function buildSrpAssistActionState(
           : fields.selectedShipTypeId
     },
     message: status === "success"
-      ? "Killmail analyzed successfully."
+      ? "SRP estimate ready."
       : status === "warning"
-        ? "SRP assist completed with warnings. Review before submitting."
-        : "Unable to analyze killmail. Select the ship manually or paste an ESI killmail URL.",
+        ? "This killmail could not be fully analyzed. Please ask an officer to review manually."
+        : "Paste a zKillboard killmail URL or ESI killmail URL.",
     status
   };
 }

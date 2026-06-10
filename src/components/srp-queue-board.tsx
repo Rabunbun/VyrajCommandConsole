@@ -238,7 +238,6 @@ function SrpQueueSection({
               corp={corp}
               key={request.id}
               request={request}
-              reviewOpen={bucket.key === "action" || bucket.key === "payment"}
               ship={findShipType(request, shipTypes)}
             />
           ))}
@@ -253,12 +252,10 @@ function SrpQueueSection({
 function SrpReviewCard({
   corp,
   request,
-  reviewOpen,
   ship
 }: {
   corp: SrpCorpView;
   request: SrpRequestView;
-  reviewOpen: boolean;
   ship?: SrpShipTypeOption;
 }) {
   const shipName = request.selectedShipName ||
@@ -267,10 +264,15 @@ function SrpReviewCard({
     "Unknown ship";
   const statusTone = getStatusTone(request.status);
   const assistTone = getAssistTone(request.srpAssistStatus);
+  const headlineAmount = request.payoutAmount ||
+    request.calculatedEligibleAmount ||
+    request.requestedAmount;
+  const hasAttention = assistTone === "failed" || assistTone === "partial" ||
+    request.status === "NEEDS_INFO";
 
   return (
-    <article className="data-card srp-request-card" data-status={statusTone}>
-      <div className="section-heading">
+    <details className="data-card srp-request-card" data-status={statusTone}>
+      <summary className="srp-request-summary">
         <div className="doctrine-card-heading">
           {ship?.renderUrl ? (
             <EveShipImage
@@ -289,9 +291,17 @@ function SrpReviewCard({
             <h3 className="card-title">{request.characterName}</h3>
             <div className="card-subtitle">{shipName}</div>
             <p className="card-copy">
-              Submitted {formatDateTime(request.createdAt)} / Updated{" "}
-              {formatDateTime(request.updatedAt)}
+              Submitted {formatDate(request.createdAt)}
             </p>
+          </div>
+        </div>
+        <div className="srp-request-summary-meta">
+          <div className="srp-amount-readout">
+            {formatIsk(headlineAmount)}
+          </div>
+          <div className="badge-row">
+            {hasAttention ? <span className="assist-badge" data-assist="partial">Review</span> : null}
+            {request.killmailUrl ? <span className="badge">Killmail</span> : null}
           </div>
         </div>
         <div className="badge-row">
@@ -303,72 +313,73 @@ function SrpReviewCard({
           </span>
           <span className="badge">{corp.ticker}</span>
         </div>
-      </div>
+      </summary>
 
-      <div className="metric-grid">
-        <Metric label="Requested ISK" value={formatIsk(request.requestedAmount)} />
-        <Metric
-          label="Recommended SRP"
-          value={formatIsk(request.calculatedEligibleAmount)}
-        />
-        <Metric
-          label="Platinum Deduction"
-          value={formatIsk(request.insurancePayout)}
-        />
-        <Metric label="Officer Payout" value={formatIsk(request.payoutAmount)} />
-        <Metric
-          label="Loss Value"
-          value={formatIsk(request.killmailTotalValue || request.lossValue)}
-        />
-        <Metric label="Killmail ID" value={request.killmailId || "None"} />
-        <Metric label="Doctrine" value={request.doctrineName || "None"} />
-        <Metric label="Reviewer" value={request.reviewerName || "Unassigned"} />
-      </div>
-
-      {request.killmailUrl ? (
-        <a
-          className="secondary-button srp-killmail-link"
-          href={request.killmailUrl}
-          rel="noreferrer"
-          target="_blank"
-        >
-          Open Killmail
-        </a>
-      ) : null}
-
-      <div className="section-stack">
-        <h4 className="section-title">Smart SRP Assist</h4>
+      <div className="srp-request-expanded">
         <div className="metric-grid">
+          <Metric label="Requested ISK" value={formatIsk(request.requestedAmount)} />
           <Metric
-            label="Detected Ship"
-            value={request.detectedShipName || "Not detected"}
+            label="Recommended SRP"
+            value={formatIsk(request.calculatedEligibleAmount)}
           />
           <Metric
-            label="Selected Ship"
-            value={request.selectedShipName || "Manual review"}
+            label="Platinum Deduction"
+            value={formatIsk(request.insurancePayout)}
           />
+          <Metric label="Officer Payout" value={formatIsk(request.payoutAmount)} />
           <Metric
-            label="Source"
-            value={formatStatusLabel(request.calculationSource || "none")}
+            label="Loss Value"
+            value={formatIsk(request.killmailTotalValue || request.lossValue)}
           />
-          <Metric
-            label="Checked"
-            value={request.srpAssistCheckedAt ? formatDateTime(request.srpAssistCheckedAt) : "Not checked"}
-          />
+          <Metric label="Killmail ID" value={request.killmailId || "None"} />
+          <Metric label="Doctrine" value={request.doctrineName || "None"} />
+          <Metric label="Reviewer" value={request.reviewerName || "Unassigned"} />
         </div>
-        {request.calculationWarnings ? (
-          <div className="empty-state">{request.calculationWarnings}</div>
-        ) : null}
-        {request.srpAssistError ? (
-          <div className="error-state">{request.srpAssistError}</div>
-        ) : null}
-      </div>
 
-      {request.notes ? <p className="card-copy">{request.notes}</p> : null}
+        {request.killmailUrl ? (
+          <a
+            className="secondary-button srp-killmail-link"
+            href={request.killmailUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
+            Open Killmail
+          </a>
+        ) : null}
 
-      <details className="details-panel" open={reviewOpen}>
-        <summary className="details-summary">Review SRP Request</summary>
+        <div className="section-stack">
+          <h4 className="section-title">Smart SRP Assist</h4>
+          <div className="metric-grid">
+            <Metric
+              label="Detected Ship"
+              value={request.detectedShipName || "Not detected"}
+            />
+            <Metric
+              label="Selected Ship"
+              value={request.selectedShipName || "Manual review"}
+            />
+            <Metric
+              label="Source"
+              value={formatStatusLabel(request.calculationSource || "none")}
+            />
+            <Metric
+              label="Checked"
+              value={request.srpAssistCheckedAt ? formatDateTime(request.srpAssistCheckedAt) : "Not checked"}
+            />
+            <Metric label="Updated" value={formatDateTime(request.updatedAt)} />
+          </div>
+          {request.calculationWarnings ? (
+            <div className="empty-state">{request.calculationWarnings}</div>
+          ) : null}
+          {request.srpAssistError ? (
+            <div className="error-state">{request.srpAssistError}</div>
+          ) : null}
+        </div>
+
+        {request.notes ? <p className="card-copy">{request.notes}</p> : null}
+
         <form action={updateSrpRequestAction} className="section-stack">
+          <h4 className="section-title">Officer Review</h4>
           <input name="corpSlug" type="hidden" value={corp.slug} />
           <input name="requestId" type="hidden" value={request.id} />
           <div className="form-grid">
@@ -421,8 +432,8 @@ function SrpReviewCard({
             </button>
           </div>
         </form>
-      </details>
-    </article>
+      </div>
+    </details>
   );
 }
 
@@ -601,6 +612,22 @@ function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
     timeStyle: "short"
+  }).format(date);
+}
+
+function formatDate(value: string) {
+  if (!value) {
+    return "Unknown";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium"
   }).format(date);
 }
 

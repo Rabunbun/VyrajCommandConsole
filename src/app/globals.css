@@ -916,7 +916,7 @@ select.text-input {
 
 .srp-card-grid {
   display: grid;
-  gap: 16px;
+  gap: 10px;
 }
 
 .srp-request-card[data-status="action"] {
@@ -939,6 +939,86 @@ select.text-input {
 
 .srp-request-card[data-status="warning"] {
   border-color: rgba(232, 182, 93, 0.82);
+}
+
+.srp-request-card {
+  padding: 12px 14px;
+}
+
+.srp-request-card[open] {
+  gap: 14px;
+  padding: 18px;
+}
+
+.srp-request-summary {
+  align-items: center;
+  cursor: pointer;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(260px, 1fr) auto minmax(180px, auto) 26px;
+  list-style: none;
+}
+
+.srp-request-summary::-webkit-details-marker {
+  display: none;
+}
+
+.srp-request-summary::after {
+  border: 1px solid rgba(192, 154, 85, 0.42);
+  color: var(--color-brass);
+  content: "+";
+  display: inline-grid;
+  font-family: var(--font-command);
+  font-size: 0.72rem;
+  font-weight: 900;
+  inline-size: 24px;
+  min-block-size: 24px;
+  place-items: center;
+}
+
+.srp-request-card[open] > .srp-request-summary::after {
+  content: "-";
+}
+
+.srp-request-summary .doctrine-ship-image,
+.srp-request-summary .doctrine-ship-placeholder {
+  block-size: 48px;
+  inline-size: 48px;
+}
+
+.srp-request-summary .card-title {
+  font-size: 0.94rem;
+}
+
+.srp-request-summary .card-subtitle {
+  font-size: 0.56rem;
+}
+
+.srp-request-summary-meta {
+  align-items: flex-end;
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+
+.srp-amount-readout {
+  color: #fff8ed;
+  font-family: var(--font-command);
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.srp-request-expanded {
+  border-top: 1px solid rgba(192, 154, 85, 0.16);
+  display: grid;
+  gap: 14px;
+  padding-top: 14px;
+}
+
+.srp-assist-preview {
+  padding: 16px;
 }
 
 .status-badge,
@@ -1219,6 +1299,16 @@ hr {
   .secondary-button,
   .danger-button {
     inline-size: 100%;
+  }
+
+  .srp-request-summary {
+    align-items: flex-start;
+    grid-template-columns: 1fr;
+  }
+
+  .srp-request-summary-meta {
+    align-items: flex-start;
+    justify-items: start;
   }
 }
 
