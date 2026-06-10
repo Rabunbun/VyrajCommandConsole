@@ -174,6 +174,9 @@ export async function getDoctrinePageData(
   const shipTypeIds = corp.doctrineFits
     .map((fit) => fit.shipTypeId)
     .filter((typeId): typeId is number => Boolean(typeId));
+  const shipNamesWithoutTypeId = corp.doctrineFits
+    .filter((fit) => !fit.shipTypeId && fit.shipHull.trim())
+    .map((fit) => fit.shipHull.trim());
   const fitShipTypes = shipTypeIds.length
     ? await getDb().eveTypeLookup.findMany({
         where: {
@@ -192,15 +195,46 @@ export async function getDoctrinePageData(
         }
       })
     : [];
+  const fitShipTypesByName = shipNamesWithoutTypeId.length
+    ? await getDb().eveTypeLookup.findMany({
+        where: {
+          isPublished: true,
+          OR: Array.from(new Set(shipNamesWithoutTypeId)).map((shipName) => ({
+            typeName: {
+              equals: shipName,
+              mode: "insensitive" as const
+            }
+          }))
+        },
+        select: {
+          category: true,
+          categoryName: true,
+          groupName: true,
+          iconUrl: true,
+          renderUrl: true,
+          typeId: true,
+          typeName: true
+        }
+      })
+    : [];
   const shipTypeById = new Map(
     fitShipTypes
       .filter((type) => type.typeId)
       .map((type) => [type.typeId as number, type])
   );
+  const shipTypeByName = new Map(
+    fitShipTypesByName.map((type) => [
+      normalizeDoctrinePilotName(type.typeName),
+      type
+    ])
+  );
   const fits = corp.doctrineFits
     .filter((fit) => canManage || normalizeOptionValue(fit.status, "ACTIVE") === "ACTIVE")
     .map((fit) => {
-      const shipType = fit.shipTypeId ? shipTypeById.get(fit.shipTypeId) : null;
+      const shipType = fit.shipTypeId
+        ? shipTypeById.get(fit.shipTypeId)
+        : shipTypeByName.get(normalizeDoctrinePilotName(fit.shipHull));
+      const resolvedTypeId = fit.shipTypeId || shipType?.typeId || null;
       const readiness = fit.readiness.map((entry) => ({
         id: entry.id,
         pilotName: entry.pilotName,
@@ -217,16 +251,16 @@ export async function getDoctrinePageData(
         fit.manualImageUrl ||
         fit.imageUrl ||
         shipType?.renderUrl ||
-        buildEveTypeImageUrl(fit.shipTypeId);
+        buildEveTypeImageUrl(resolvedTypeId);
 
       return {
         id: fit.id,
         doctrineName: fit.doctrineName,
         shipName: shipType?.typeName || fit.shipHull,
-        shipTypeId: fit.shipTypeId,
+        shipTypeId: resolvedTypeId,
         shipGroupName: shipType?.groupName || "",
         shipCategoryName: shipType?.categoryName || shipType?.category || "",
-        iconUrl: shipType?.iconUrl || buildEveTypeIconUrl(fit.shipTypeId),
+        iconUrl: shipType?.iconUrl || buildEveTypeIconUrl(resolvedTypeId),
         imageUrl,
         fitText: fit.fitText,
         status: normalizeOptionValue(fit.status, "ACTIVE"),

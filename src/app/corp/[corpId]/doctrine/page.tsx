@@ -333,8 +333,13 @@ function DoctrineFitList({
               <div className="doctrine-card-heading">
                 {fit.imageUrl ? (
                   <EveShipImage
-                    alt=""
+                    alt={
+                      fit.shipName
+                        ? `${fit.shipName} ship render`
+                        : "EVE ship render"
+                    }
                     className="doctrine-ship-image"
+                    fallbackLabel={fit.shipName || "?"}
                     iconUrl={fit.iconUrl}
                     renderUrl={fit.imageUrl}
                   />

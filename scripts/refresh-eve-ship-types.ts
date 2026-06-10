@@ -8,6 +8,22 @@ const esiBaseUrl = normalizeBaseUrl(
 const datasource = "tranquility";
 const shipCategoryId = 6;
 const requestConcurrency = 8;
+const smokeTestShipNames = [
+  "Merlin",
+  "Caracal Navy Issue",
+  "Gila",
+  "Kikimora",
+  "Drekavac",
+  "Vedmak",
+  "Ikitursa",
+  "Skybreaker",
+  "Stormbringer",
+  "Thunderchild",
+  "Panther",
+  "Marshal",
+  "Bowhead",
+  "Orca"
+];
 
 type EveCategoryResponse = {
   category_id: number;
@@ -45,7 +61,12 @@ async function main() {
   console.log("Refreshing EVE ship type lookup from public ESI.");
   console.log(`ESI base: ${esiBaseUrl}`);
 
+  if (!process.env.DATABASE_URL?.trim()) {
+    throw new Error("DATABASE_URL is required to refresh the local EVE ship type cache.");
+  }
+
   const refreshedAt = new Date();
+  let skippedTypeFailures = 0;
   const category = await fetchEsi<EveCategoryResponse>(
     `/latest/universe/categories/${shipCategoryId}/`,
     "ship category"
@@ -71,10 +92,22 @@ async function main() {
     typeJobs,
     requestConcurrency,
     async ({ group, typeId }) => {
-      const type = await fetchEsi<EveTypeResponse>(
-        `/latest/universe/types/${typeId}/`,
-        `ship type ${typeId}`
-      );
+      let type: EveTypeResponse;
+
+      try {
+        type = await fetchEsi<EveTypeResponse>(
+          `/latest/universe/types/${typeId}/`,
+          `ship type ${typeId}`
+        );
+      } catch (error) {
+        skippedTypeFailures += 1;
+        console.warn(
+          error instanceof Error
+            ? error.message
+            : `Public ESI request failed for ship type ${typeId}.`
+        );
+        return null;
+      }
 
       if (type.published === false) {
         return null;
@@ -93,10 +126,56 @@ async function main() {
   );
 
   const shipTypes = types.filter((type): type is ShipTypeRecord => Boolean(type));
+  const publishedTypeIds = shipTypes.map((shipType) => shipType.typeId);
+  const missingSmokeTestShips = smokeTestShipNames.filter(
+    (shipName) =>
+      !shipTypes.some(
+        (shipType) =>
+          shipType.typeName.toLocaleLowerCase("en-US") ===
+          shipName.toLocaleLowerCase("en-US")
+      )
+  );
   const result = {
     created: 0,
+    unpublished: 0,
     updated: 0
   };
+
+  if (publishedTypeIds.length) {
+    const unpublished = await prisma.eveTypeLookup.updateMany({
+      where: {
+        typeId: {
+          not: null,
+          notIn: publishedTypeIds
+        },
+        OR: [
+          {
+            categoryName: {
+              equals: "Ship",
+              mode: "insensitive"
+            }
+          },
+          {
+            category: {
+              equals: "Ship",
+              mode: "insensitive"
+            }
+          },
+          {
+            category: {
+              equals: "Ships",
+              mode: "insensitive"
+            }
+          }
+        ]
+      },
+      data: {
+        isPublished: false,
+        lastRefreshedAt: refreshedAt
+      }
+    });
+    result.unpublished = unpublished.count;
+  }
 
   for (const shipType of shipTypes) {
     const existingByTypeId = await prisma.eveTypeLookup.findUnique({
@@ -146,8 +225,20 @@ async function main() {
   }
 
   console.log(
-    `Imported ${shipTypes.length} published ship types (${result.created} created, ${result.updated} updated).`
+    `Imported ${shipTypes.length} published ship types (${result.created} created, ${result.updated} updated, ${result.unpublished} marked unpublished).`
   );
+
+  if (skippedTypeFailures > 0) {
+    console.warn(
+      `Skipped ${skippedTypeFailures} ship type detail request(s) because public ESI did not respond successfully. Re-run the command to fill gaps.`
+    );
+  }
+
+  if (missingSmokeTestShips.length) {
+    console.warn(
+      `Ship lookup smoke list missing: ${missingSmokeTestShips.join(", ")}. If these are currently published in EVE, re-run the refresh or inspect ESI availability.`
+    );
+  }
 }
 
 async function fetchEsi<T>(path: string, stage: string): Promise<T> {

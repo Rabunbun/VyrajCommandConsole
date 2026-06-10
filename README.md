@@ -272,6 +272,26 @@ Doctrine pages read cached database rows only. They do not call ESI during
 normal render, do not request scopes, and do not store EVE access or refresh
 tokens.
 
+## Phase 2C.6 Production Readiness Checklist
+
+After deploying this phase:
+
+```bash
+npm.cmd run prisma:deploy
+npm.cmd run eve:refresh-ship-types
+```
+
+Then verify:
+
+- `/admin/system-health` shows cached ship type rows and a recent refresh time.
+- `/corp/[corpId]/doctrine` can search/select common hulls such as Merlin,
+  Caracal Navy Issue, Gila, Kikimora, Skybreaker, Panther, Marshal, Bowhead,
+  and Orca.
+- `/admin/officers` create/delete guardrails work for disposable test officers.
+- `/admin/corps`, `/admin/alliance-hub`, and module create forms are collapsed
+  behind tactical create controls.
+- `/` still renders public corp cards from stored database values only.
+
 ## Deployment Checklist
 
 Before deployment:

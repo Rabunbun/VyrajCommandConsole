@@ -178,7 +178,7 @@ function CreateApplicantPanel({ corp }: { corp: RecruitmentCorpView }) {
   return (
     <details className="create-disclosure form-panel form-panel-wide" aria-label="Create applicant">
       <summary className="create-summary">
-        <span className="command-button">Create Applicant</span>
+        <span className="command-button">Create Recruitment Entry</span>
       </summary>
       <div className="card-heading">
         <h2 className="section-title">Create Applicant</h2>

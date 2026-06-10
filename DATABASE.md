@@ -220,6 +220,28 @@ EVE identity. Allowed deletion removes only the officer plus officer-owned
 sessions, permissions, and corp assignments; corps, `EveIdentity` rows, and
 audit logs are preserved.
 
+## Phase 2C.6 Operational Checklist
+
+After applying migrations in an environment:
+
+```bash
+npm.cmd run prisma:deploy
+npm.cmd run eve:refresh-ship-types
+```
+
+Confirm these routes before moving on to Smart SRP or identity-aware member
+landing:
+
+- `/admin/system-health`
+- `/admin/officers`
+- `/admin/corps`
+- `/corp/[corpId]/doctrine`
+- `/`
+
+System Health should show cached ship type rows and a recent lookup refresh.
+Doctrine should allow cached ship selection without making ESI calls during page
+render.
+
 See [EVE_SSO_SETUP.md](./EVE_SSO_SETUP.md) for the future EVE developer app,
 callback URL, and Vercel environment variable checklist.
 

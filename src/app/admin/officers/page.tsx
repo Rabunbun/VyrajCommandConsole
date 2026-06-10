@@ -483,7 +483,11 @@ function OfficerCard({
                 required
               />
             </label>
-            <button className="danger-button" type="submit">
+            <button
+              className="danger-button"
+              disabled={isCurrentOfficer || officer.eveIdentities.length > 0}
+              type="submit"
+            >
               Delete Officer
             </button>
           </form>

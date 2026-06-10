@@ -177,6 +177,19 @@ function EveShipTypeLookupSection({
             : "Never"
         },
         {
+          label: "Lookup freshness",
+          status:
+            counts.lastEveTypeLookupRefreshAt &&
+            isDateWithinDays(counts.lastEveTypeLookupRefreshAt, 30)
+              ? "OK"
+              : "Warning",
+          detail:
+            counts.lastEveTypeLookupRefreshAt &&
+            isDateWithinDays(counts.lastEveTypeLookupRefreshAt, 30)
+              ? "Refreshed within the last 30 days."
+              : "Empty or older than 30 days. Run npm.cmd run eve:refresh-ship-types."
+        },
+        {
           label: "Normal page ESI calls",
           status: "OK",
           detail: "Doctrine pages read cached database rows only."
@@ -617,6 +630,16 @@ function formatDateTime(value: string) {
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("en-US").format(value);
+}
+
+function isDateWithinDays(value: string, days: number) {
+  const time = new Date(value).getTime();
+
+  if (!Number.isFinite(time)) {
+    return false;
+  }
+
+  return Date.now() - time <= days * 24 * 60 * 60 * 1000;
 }
 
 function slugify(value: string) {

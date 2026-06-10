@@ -7,6 +7,7 @@ import { useState } from "react";
 type EveShipImageProps = {
   alt?: string;
   className?: string;
+  fallbackLabel?: string;
   iconUrl?: string;
   renderUrl: string;
 };
@@ -14,11 +15,21 @@ type EveShipImageProps = {
 export function EveShipImage({
   alt = "",
   className,
+  fallbackLabel = "?",
   iconUrl,
   renderUrl
 }: EveShipImageProps) {
   const [src, setSrc] = useState(renderUrl);
   const [didFallback, setDidFallback] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return (
+      <div className="doctrine-ship-placeholder" aria-label={alt} role="img">
+        {fallbackLabel.slice(0, 2).toUpperCase()}
+      </div>
+    );
+  }
 
   return (
     <img
@@ -28,6 +39,8 @@ export function EveShipImage({
         if (iconUrl && !didFallback) {
           setSrc(iconUrl);
           setDidFallback(true);
+        } else {
+          setFailed(true);
         }
       }}
       src={src}
