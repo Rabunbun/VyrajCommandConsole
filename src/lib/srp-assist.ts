@@ -414,6 +414,8 @@ async function getPlatinumInsurancePayout(input: {
   typeId: number;
   typeName: string;
 }) {
+  let zkillboardWarning = "";
+
   if (input.killmailId) {
     const zkillboardPayout = await fetchZkillboardInsurancePayout(input.killmailId);
 
@@ -424,6 +426,8 @@ async function getPlatinumInsurancePayout(input: {
         warning: ""
       };
     }
+
+    zkillboardWarning = zkillboardPayout.message;
   }
 
   const cached = await getDb().srpInsurancePrice.findUnique({
@@ -441,7 +445,9 @@ async function getPlatinumInsurancePayout(input: {
     return {
       payout: cached.platinumPayout,
       source: "esi_cache",
-      warning: cached.platinumPayout ? "" : "Cached Platinum insurance payout is unavailable."
+      warning: cached.platinumPayout
+        ? buildInsuranceFallbackWarning(zkillboardWarning, "cached ESI")
+        : "Cached Platinum insurance payout is unavailable."
     };
   }
 
@@ -470,7 +476,12 @@ async function getPlatinumInsurancePayout(input: {
       return {
         payout: cached?.platinumPayout || null,
         source: cached?.platinumPayout ? "esi_cache" : "unknown",
-        warning: "Public ESI insurance lookup failed. Officer review required."
+        warning: cached?.platinumPayout
+          ? buildInsuranceFallbackWarning(zkillboardWarning, "cached ESI")
+          : joinWarnings([
+              zkillboardWarning,
+              "Public ESI insurance lookup failed. Officer review required."
+            ])
       };
     }
 
@@ -495,7 +506,12 @@ async function getPlatinumInsurancePayout(input: {
     return {
       payout,
       source: payout ? "esi" : "unknown",
-      warning: payout ? "" : "Platinum insurance payout was not found for this ship."
+      warning: payout
+        ? buildInsuranceFallbackWarning(zkillboardWarning, "public ESI")
+        : joinWarnings([
+            zkillboardWarning,
+            "Platinum insurance payout was not found for this ship."
+          ])
     };
   } catch {
     await upsertInsurancePrice({
@@ -510,9 +526,27 @@ async function getPlatinumInsurancePayout(input: {
     return {
       payout: cached?.platinumPayout || null,
       source: cached?.platinumPayout ? "esi_cache" : "unknown",
-      warning: "Public ESI insurance lookup failed. Officer review required."
+      warning: cached?.platinumPayout
+        ? buildInsuranceFallbackWarning(zkillboardWarning, "cached ESI")
+        : joinWarnings([
+            zkillboardWarning,
+            "Public ESI insurance lookup failed. Officer review required."
+          ])
     };
   }
+}
+
+function buildInsuranceFallbackWarning(
+  primaryWarning: string,
+  fallbackSource: "cached ESI" | "public ESI"
+) {
+  return primaryWarning
+    ? `${primaryWarning} Used ${fallbackSource} Platinum insurance fallback.`
+    : "";
+}
+
+function joinWarnings(warnings: string[]) {
+  return warnings.filter(Boolean).join(" ");
 }
 
 async function fetchZkillboardInsurancePayout(killmailId: string) {
@@ -557,26 +591,40 @@ async function fetchZkillboardInsurancePayout(killmailId: string) {
 
 function parseZkillboardPlatinumPayout(html: string) {
   const tableStart = html.search(/Insurance\s+Possible\s+payouts/i);
+  const tableSlice = tableStart >= 0
+    ? html.slice(tableStart, tableStart + 30000)
+    : html;
+  const tableMatches = tableSlice.match(/<table[\s\S]*?<\/table>/gi) || [tableSlice];
 
-  if (tableStart < 0) {
-    return null;
-  }
+  for (const tableHtml of tableMatches) {
+    const rowMatches = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) || [];
 
-  const tableSlice = html.slice(tableStart, tableStart + 12000);
-  const tableMatch = tableSlice.match(/<table[\s\S]*?<\/table>/i);
-  const tableHtml = tableMatch?.[0] || tableSlice;
-  const rowMatches = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) || [];
+    for (const rowHtml of rowMatches) {
+      const cells = [...rowHtml.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)]
+        .map((cellMatch) => normalizeHtmlCell(cellMatch[1]));
+      const firstCell = cells[0]?.toLocaleLowerCase("en-US") || "";
 
-  for (const rowHtml of rowMatches) {
-    const cells = [...rowHtml.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)]
-      .map((cellMatch) => normalizeHtmlCell(cellMatch[1]));
+      if (cells.length >= 3 && firstCell === "platinum") {
+        return parseIskDecimal(cells[2]);
+      }
 
-    if (cells.length >= 3 && cells[0].toLocaleLowerCase("en-US") === "platinum") {
-      return parseIskDecimal(cells[2]);
+      const rowText = normalizeHtmlCell(rowHtml);
+
+      if (/\bplatinum\b/i.test(rowText)) {
+        const numericValues = rowText
+          .match(/\d[\d,]*(?:\.\d+)?/g)
+          ?.map((value) => parseIskDecimal(value))
+          .filter((value): value is Prisma.Decimal => Boolean(value)) || [];
+
+        if (numericValues.length > 0) {
+          return numericValues[numericValues.length - 1];
+        }
+      }
     }
   }
 
-  const fallbackMatch = tableHtml.match(/Platinum[\s\S]{0,200}?([\d,.]+)\s*<\/t[dh]>/i);
+  const plainText = normalizeHtmlCell(tableSlice);
+  const fallbackMatch = plainText.match(/Platinum\s+\d[\d,.]*\s+(\d[\d,.]*)/i);
 
   return fallbackMatch ? parseIskDecimal(fallbackMatch[1]) : null;
 }
