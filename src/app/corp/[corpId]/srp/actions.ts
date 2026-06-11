@@ -135,6 +135,7 @@ export async function submitSrpRequestAction(formData: FormData) {
         lossValue: assist.lossValue,
         insuranceLevelUsed: assist.insuranceLevelUsed,
         insurancePayout: assist.insurancePayout,
+        insurancePayoutSource: assist.insurancePayoutSource,
         calculatedEligibleAmount: assist.calculatedEligibleAmount,
         calculationSource: assist.calculationSource,
         calculationWarnings: assist.warnings.join("\n"),
@@ -426,6 +427,7 @@ const srpAuditSelect = {
   detectedShipTypeId: true,
   insuranceLevelUsed: true,
   insurancePayout: true,
+  insurancePayoutSource: true,
   killmailHash: true,
   killmailId: true,
   shipLost: true,
@@ -459,6 +461,7 @@ type SrpAuditRecord = {
   detectedShipTypeId: number | null;
   insuranceLevelUsed: string;
   insurancePayout: Prisma.Decimal | null;
+  insurancePayoutSource: string;
   killmailHash: string;
   killmailId: bigint | null;
   shipLost: string;
@@ -493,6 +496,7 @@ function formatSrpRequestForAudit(request: SrpAuditRecord) {
     detectedShipTypeId: request.detectedShipTypeId,
     insuranceLevelUsed: request.insuranceLevelUsed,
     insurancePayout: request.insurancePayout?.toString() ?? null,
+    insurancePayoutSource: request.insurancePayoutSource,
     killmailHash: request.killmailHash ? "[redacted-safe-hash-present]" : "",
     killmailId: request.killmailId?.toString() ?? "",
     shipType: request.shipLost,
@@ -531,6 +535,7 @@ function formatSrpAssistForAudit(assist: Awaited<ReturnType<typeof analyzeSrpAss
     error: assist.error,
     insuranceLevelUsed: assist.insuranceLevelUsed,
     insurancePayout: assist.insurancePayout?.toString() ?? null,
+    insurancePayoutSource: assist.insurancePayoutSource,
     killmailHashPresent: Boolean(assist.killmailHash),
     killmailId: assist.killmailId,
     killmailTotalValue: assist.killmailTotalValue?.toString() ?? null,
@@ -642,6 +647,7 @@ function buildSrpAssistActionState(
       detectedShipName: assist.detectedShipName,
       detectedShipTypeId: assist.detectedShipTypeId ? String(assist.detectedShipTypeId) : "",
       insurancePayout: assist.insurancePayout?.toString() || "",
+      insurancePayoutSource: assist.insurancePayoutSource,
       killmailId: assist.killmailId,
       killmailTotalValue: assist.killmailTotalValue?.toString() || "",
       selectedShipName: assist.selectedShipName,

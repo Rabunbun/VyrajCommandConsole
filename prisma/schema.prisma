@@ -364,6 +364,7 @@ model SrpRequest {
   lossValue        Decimal?  @db.Decimal(20, 2)
   insuranceLevelUsed String  @default("Platinum")
   insurancePayout Decimal?  @db.Decimal(20, 2)
+  insurancePayoutSource String @default("unknown")
   calculatedEligibleAmount Decimal? @db.Decimal(20, 2)
   calculationSource String  @default("none")
   calculationWarnings String @default("")

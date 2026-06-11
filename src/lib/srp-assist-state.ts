@@ -6,6 +6,7 @@ export type SrpAssistActionState = {
     detectedShipName: string;
     detectedShipTypeId: string;
     insurancePayout: string;
+    insurancePayoutSource: string;
     killmailId: string;
     killmailTotalValue: string;
     selectedShipName: string;
@@ -37,6 +38,7 @@ export const initialSrpAssistActionState: SrpAssistActionState = {
     detectedShipName: "",
     detectedShipTypeId: "",
     insurancePayout: "",
+    insurancePayoutSource: "",
     killmailId: "",
     killmailTotalValue: "",
     selectedShipName: "",

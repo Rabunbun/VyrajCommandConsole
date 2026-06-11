@@ -32,6 +32,7 @@ export type SrpAssistResult = {
   detectedShipTypeId: number | null;
   insuranceLevelUsed: "Platinum";
   insurancePayout: Prisma.Decimal | null;
+  insurancePayoutSource: string;
   killmailHash: string;
   killmailId: string;
   killmailTotalValue: Prisma.Decimal | null;
@@ -224,9 +225,14 @@ export async function analyzeSrpAssist(input: SrpAssistInput): Promise<SrpAssist
   }
 
   const insurancePayout = effectiveShipTypeId
-    ? await getPlatinumInsurancePayout(effectiveShipTypeId, effectiveShipName)
+    ? await getPlatinumInsurancePayout({
+        killmailId,
+        typeId: effectiveShipTypeId,
+        typeName: effectiveShipName
+      })
     : {
         payout: null,
+        source: "unknown",
         warning: "No ship Type ID available for Platinum insurance lookup."
       };
 
@@ -267,6 +273,7 @@ export async function analyzeSrpAssist(input: SrpAssistInput): Promise<SrpAssist
     detectedShipTypeId,
     insuranceLevelUsed: "Platinum",
     insurancePayout: insurancePayout.payout,
+    insurancePayoutSource: insurancePayout.source,
     killmailHash,
     killmailId,
     killmailTotalValue,
@@ -402,9 +409,25 @@ async function fetchZkillboardKillmail(killmailId: string) {
   }
 }
 
-async function getPlatinumInsurancePayout(typeId: number, typeName: string) {
+async function getPlatinumInsurancePayout(input: {
+  killmailId: string;
+  typeId: number;
+  typeName: string;
+}) {
+  if (input.killmailId) {
+    const zkillboardPayout = await fetchZkillboardInsurancePayout(input.killmailId);
+
+    if (zkillboardPayout.ok) {
+      return {
+        payout: zkillboardPayout.payout,
+        source: "zkillboard",
+        warning: ""
+      };
+    }
+  }
+
   const cached = await getDb().srpInsurancePrice.findUnique({
-    where: { typeId },
+    where: { typeId: input.typeId },
     select: {
       lastFetchedAt: true,
       platinumPayout: true
@@ -417,6 +440,7 @@ async function getPlatinumInsurancePayout(typeId: number, typeName: string) {
   ) {
     return {
       payout: cached.platinumPayout,
+      source: "esi_cache",
       warning: cached.platinumPayout ? "" : "Cached Platinum insurance payout is unavailable."
     };
   }
@@ -439,18 +463,19 @@ async function getPlatinumInsurancePayout(typeId: number, typeName: string) {
         levels: [],
         payout: null,
         status: "failed",
-        typeId,
-        typeName
+        typeId: input.typeId,
+        typeName: input.typeName
       });
 
       return {
         payout: cached?.platinumPayout || null,
+        source: cached?.platinumPayout ? "esi_cache" : "unknown",
         warning: "Public ESI insurance lookup failed. Officer review required."
       };
     }
 
     const prices = await response.json() as InsurancePriceResponse;
-    const entry = prices.find((price) => price.type_id === typeId);
+    const entry = prices.find((price) => price.type_id === input.typeId);
     const platinum = entry?.levels?.find(
       (level) => level.name?.toLocaleLowerCase("en-US") === platinumInsuranceLevel
     );
@@ -463,12 +488,13 @@ async function getPlatinumInsurancePayout(typeId: number, typeName: string) {
       levels: entry?.levels || [],
       payout,
       status: payout ? "success" : "partial",
-      typeId,
-      typeName
+      typeId: input.typeId,
+      typeName: input.typeName
     });
 
     return {
       payout,
+      source: payout ? "esi" : "unknown",
       warning: payout ? "" : "Platinum insurance payout was not found for this ship."
     };
   } catch {
@@ -477,15 +503,110 @@ async function getPlatinumInsurancePayout(typeId: number, typeName: string) {
       levels: [],
       payout: null,
       status: "failed",
-      typeId,
-      typeName
+      typeId: input.typeId,
+      typeName: input.typeName
     });
 
     return {
       payout: cached?.platinumPayout || null,
+      source: cached?.platinumPayout ? "esi_cache" : "unknown",
       warning: "Public ESI insurance lookup failed. Officer review required."
     };
   }
+}
+
+async function fetchZkillboardInsurancePayout(killmailId: string) {
+  const url = new URL(`https://zkillboard.com/kill/${killmailId}/`);
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        accept: "text/html",
+        "user-agent": "VyrajCommandConsoleV2/srp-assist"
+      }
+    });
+
+    if (!response.ok) {
+      return {
+        ok: false as const,
+        message: `zKillboard insurance table lookup failed with HTTP ${response.status}.`
+      };
+    }
+
+    const html = await response.text();
+    const payout = parseZkillboardPlatinumPayout(html);
+
+    if (!payout) {
+      return {
+        ok: false as const,
+        message: "zKillboard insurance table did not include a Platinum payout."
+      };
+    }
+
+    return {
+      ok: true as const,
+      payout
+    };
+  } catch {
+    return {
+      ok: false as const,
+      message: "zKillboard insurance table lookup failed due to a network or parsing issue."
+    };
+  }
+}
+
+function parseZkillboardPlatinumPayout(html: string) {
+  const tableStart = html.search(/Insurance\s+Possible\s+payouts/i);
+
+  if (tableStart < 0) {
+    return null;
+  }
+
+  const tableSlice = html.slice(tableStart, tableStart + 12000);
+  const tableMatch = tableSlice.match(/<table[\s\S]*?<\/table>/i);
+  const tableHtml = tableMatch?.[0] || tableSlice;
+  const rowMatches = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) || [];
+
+  for (const rowHtml of rowMatches) {
+    const cells = [...rowHtml.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)]
+      .map((cellMatch) => normalizeHtmlCell(cellMatch[1]));
+
+    if (cells.length >= 3 && cells[0].toLocaleLowerCase("en-US") === "platinum") {
+      return parseIskDecimal(cells[2]);
+    }
+  }
+
+  const fallbackMatch = tableHtml.match(/Platinum[\s\S]{0,200}?([\d,.]+)\s*<\/t[dh]>/i);
+
+  return fallbackMatch ? parseIskDecimal(fallbackMatch[1]) : null;
+}
+
+function normalizeHtmlCell(value: string) {
+  return decodeHtmlEntities(value)
+    .replace(/<[^>]*>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function decodeHtmlEntities(value: string) {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&#160;/g, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'");
+}
+
+function parseIskDecimal(value: string) {
+  const normalized = value.replace(/,/g, "").trim();
+
+  if (!normalized || !/^\d+(\.\d+)?$/.test(normalized)) {
+    return null;
+  }
+
+  return new Prisma.Decimal(normalized);
 }
 
 async function upsertInsurancePrice(input: {

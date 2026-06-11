@@ -188,6 +188,10 @@ function SrpAssistPreviewPanel({
           value={formatIsk(state.assist.insurancePayout)}
         />
         <Metric
+          label="Insurance Source"
+          value={formatInsuranceSource(state.assist.insurancePayoutSource)}
+        />
+        <Metric
           label="Recommended SRP"
           value={formatIsk(state.assist.calculatedEligibleAmount)}
         />
@@ -248,4 +252,20 @@ function formatIsk(value: string) {
   return new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 2
   }).format(numericValue);
+}
+
+function formatInsuranceSource(value: string) {
+  if (value === "zkillboard") {
+    return "zKillboard table";
+  }
+
+  if (value === "esi") {
+    return "Public ESI";
+  }
+
+  if (value === "esi_cache") {
+    return "Cached ESI";
+  }
+
+  return "Officer review";
 }

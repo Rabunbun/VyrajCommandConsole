@@ -22,6 +22,7 @@ type SrpRequestView = {
   detectedShipTypeId: number | null;
   doctrineName: string;
   insurancePayout: string;
+  insurancePayoutSource: string;
   killmailId: string;
   killmailTotalValue: string;
   killmailUrl: string;
@@ -323,10 +324,14 @@ function SrpReviewCard({
             value={formatIsk(request.calculatedEligibleAmount)}
           />
           <Metric
-            label="Platinum Deduction"
-            value={formatIsk(request.insurancePayout)}
-          />
-          <Metric label="Officer Payout" value={formatIsk(request.payoutAmount)} />
+          label="Platinum Deduction"
+          value={formatIsk(request.insurancePayout)}
+        />
+        <Metric
+          label="Insurance Source"
+          value={formatInsuranceSource(request.insurancePayoutSource)}
+        />
+        <Metric label="Officer Payout" value={formatIsk(request.payoutAmount)} />
           <Metric
             label="Loss Value"
             value={formatIsk(request.killmailTotalValue || request.lossValue)}
@@ -380,6 +385,10 @@ function SrpReviewCard({
 
         <form action={updateSrpRequestAction} className="section-stack">
           <h4 className="section-title">Officer Review</h4>
+          <p className="card-copy">
+            Smart SRP is advisory. Confirm the insurance source and set the final
+            officer-approved payout before approving or marking paid.
+          </p>
           <input name="corpSlug" type="hidden" value={corp.slug} />
           <input name="requestId" type="hidden" value={request.id} />
           <div className="form-grid">
@@ -645,4 +654,20 @@ function formatIsk(value: string) {
   return new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 2
   }).format(numericValue);
+}
+
+function formatInsuranceSource(value: string) {
+  if (value === "zkillboard") {
+    return "zKillboard table";
+  }
+
+  if (value === "esi") {
+    return "Public ESI";
+  }
+
+  if (value === "esi_cache") {
+    return "Cached ESI";
+  }
+
+  return "Officer review";
 }

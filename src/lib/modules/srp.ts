@@ -29,6 +29,7 @@ export type SrpRequestView = {
   detectedShipTypeId: number | null;
   insuranceLevelUsed: string;
   insurancePayout: string;
+  insurancePayoutSource: string;
   shipType: string;
   killmailHash: string;
   killmailId: string;
@@ -142,6 +143,7 @@ export async function getSrpPageData(
             id: true,
             insuranceLevelUsed: true,
             insurancePayout: true,
+            insurancePayoutSource: true,
             killmailHash: true,
             killmailId: true,
             killmailLink: true,
@@ -185,6 +187,7 @@ export async function getSrpPageData(
       detectedShipTypeId: request.detectedShipTypeId,
       insuranceLevelUsed: request.insuranceLevelUsed,
       insurancePayout: formatDecimal(request.insurancePayout),
+      insurancePayoutSource: request.insurancePayoutSource,
       killmailHash: request.killmailHash,
       killmailId: request.killmailId?.toString() || "",
       shipType: request.shipLost,
