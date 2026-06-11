@@ -324,14 +324,14 @@ function SrpReviewCard({
             value={formatIsk(request.calculatedEligibleAmount)}
           />
           <Metric
-          label="Platinum Deduction"
-          value={formatIsk(request.insurancePayout)}
-        />
-        <Metric
-          label="Insurance Source"
-          value={formatInsuranceSource(request.insurancePayoutSource)}
-        />
-        <Metric label="Officer Payout" value={formatIsk(request.payoutAmount)} />
+            label="Platinum Deduction"
+            value={formatIsk(request.insurancePayout)}
+          />
+          <Metric
+            label="Insurance Source"
+            value={formatInsuranceSource(request.insurancePayoutSource)}
+          />
+          <Metric label="Officer Payout" value={formatIsk(request.payoutAmount)} />
           <Metric
             label="Loss Value"
             value={formatIsk(request.killmailTotalValue || request.lossValue)}
@@ -620,7 +620,8 @@ function formatDateTime(value: string) {
 
   return new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
-    timeStyle: "short"
+    timeStyle: "short",
+    timeZone: "UTC"
   }).format(date);
 }
 
@@ -636,7 +637,8 @@ function formatDate(value: string) {
   }
 
   return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium"
+    dateStyle: "medium",
+    timeZone: "UTC"
   }).format(date);
 }
 
