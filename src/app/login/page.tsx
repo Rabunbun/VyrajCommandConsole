@@ -73,8 +73,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             EVE SSO
           </h2>
           <p className="card-copy">
-            EVE SSO will verify character identity. Internal Vyraj permissions
-            still control access.
+            Use EVE SSO for member portal access or linked officer login.
+            Internal Vyraj permissions still control command access.
           </p>
         </div>
         {eveSso.eveLoginEnabled ? (
@@ -88,7 +88,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         )}
         <div className="empty-state">
           {eveSso.eveLoginEnabled
-            ? "EVE SSO is configured. Character identity verification is enabled, and internal Vyraj permissions still control access."
+            ? "EVE SSO is configured. Verified members land at the identity checkpoint; linked officers unlock their normal Vyraj session."
             : `EVE SSO not configured. Missing: ${eveSso.missingVariables.join(", ")}.`}
         </div>
       </section>

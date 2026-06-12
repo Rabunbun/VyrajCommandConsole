@@ -113,6 +113,8 @@ export default async function SystemHealthPage() {
 
       <EveIdentityEnrichmentSection counts={health.counts} />
 
+      <MemberLandingReadinessSection counts={health.counts} />
+
       <CorpEveMappingSection counts={health.counts} />
 
       <CorpPublicEsiProfileSection counts={health.counts} />
@@ -371,6 +373,59 @@ function EveIdentityEnrichmentSection({
       checks={checks}
       description="Best-effort character corp/alliance enrichment from EVE login. No tokens are stored."
       title="EVE Identity Enrichment"
+    />
+  );
+}
+
+function MemberLandingReadinessSection({
+  counts
+}: {
+  counts: SystemHealthCounts | null;
+}) {
+  const checks: HealthCheck[] = counts
+    ? [
+        {
+          label: "Verified EVE identities",
+          status: counts.eveIdentities > 0 ? "OK" : "Warning",
+          detail: formatNumber(counts.eveIdentities)
+        },
+        {
+          label: "Identities with corporation ID",
+          status:
+            counts.eveIdentitiesWithCorporationId > 0 ? "OK" : "Warning",
+          detail: formatNumber(counts.eveIdentitiesWithCorporationId)
+        },
+        {
+          label: "Configured corp portals",
+          status:
+            counts.corpEveCorporationIdsConfigured > 0 ? "OK" : "Warning",
+          detail: formatNumber(counts.corpEveCorporationIdsConfigured)
+        },
+        {
+          label: "Identities matched to portals",
+          status:
+            counts.eveIdentitiesMatchedToConfiguredCorp > 0 ? "OK" : "Warning",
+          detail: formatNumber(counts.eveIdentitiesMatchedToConfiguredCorp)
+        },
+        {
+          label: "Landing enforcement",
+          status: "OK",
+          detail: "UX routing only. Public pages and corp portals are not locked down in this phase."
+        }
+      ]
+    : [
+        {
+          label: "Member landing readiness",
+          status: "Error",
+          detail: "Database counts are unavailable."
+        }
+      ];
+
+  return (
+    <HealthSection
+      checks={checks}
+      description="Identity-aware member checkpoint readiness. EVE membership does not grant officer or admin powers."
+      title="Member Landing Readiness"
     />
   );
 }

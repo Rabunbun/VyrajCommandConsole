@@ -542,6 +542,25 @@ function buildWarnings(input: {
           "One or more corps have future sync enabled without an EVE corporation ID."
       });
     }
+
+    if (input.counts.corpEveCorporationIdsConfigured === 0) {
+      warnings.push({
+        label: "No configured EVE corp portal matches",
+        detail:
+          "Identity-aware member landing needs Corp Management EVE corporation IDs to match verified characters to corp portals."
+      });
+    }
+
+    if (
+      input.counts.eveIdentities > 0 &&
+      input.counts.eveIdentitiesMatchedToConfiguredCorp === 0
+    ) {
+      warnings.push({
+        label: "EVE identities are not matching corp portals",
+        detail:
+          "Verified identities exist, but none currently match configured Corp EVE corporation IDs."
+      });
+    }
   }
 
   for (const check of input.checks) {

@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
       summary: `EVE identity ${identity.characterName} verified without linked active officer access.`
     });
 
-    return NextResponse.redirect(new URL("/eve-sso/unlinked", origin));
+    return NextResponse.redirect(new URL("/member", origin));
   } catch (error) {
     await logEveSsoResult({
       action: "EVE SSO Callback Failed",

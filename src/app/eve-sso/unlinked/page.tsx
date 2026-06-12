@@ -17,6 +17,9 @@ export default async function UnlinkedEveIdentityPage() {
           still control officer and admin access.
         </p>
         <div className="badge-row">
+          <Link className="command-button" href="/member">
+            Member Checkpoint
+          </Link>
           <Link className="command-button" href="/">
             Alliance Hub
           </Link>
@@ -88,7 +91,7 @@ export default async function UnlinkedEveIdentityPage() {
         <div className="empty-state">
           {hasInactiveOfficerLink
             ? "This EVE character is not linked to an active Vyraj officer account. Ask a Super Admin to review the officer link if access is required."
-            : "No Vyraj officer account is linked to this EVE character yet. Ask a Super Admin to link this character if officer access is required."}
+            : "No Vyraj officer account is linked to this EVE character yet. Use the Member Checkpoint for corp portal guidance, or ask a Super Admin to link this character if officer access is required."}
         </div>
       </section>
     </div>
@@ -106,6 +109,7 @@ function formatNamedId(name: string, id: string | null) {
 function formatDateTime(value: Date) {
   return new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
-    timeStyle: "short"
+    timeStyle: "short",
+    timeZone: "UTC"
   }).format(value);
 }
