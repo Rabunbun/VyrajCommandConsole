@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { logoutAction } from "@/app/auth-actions";
 import {
   getMemberLandingContext,
   getOfficerDestination,
@@ -38,6 +39,11 @@ export default async function MemberLandingPage() {
               Command Access
             </Link>
           ) : null}
+          <form action={logoutAction}>
+            <button className="secondary-button" type="submit">
+              Log Out
+            </button>
+          </form>
         </div>
       </header>
 

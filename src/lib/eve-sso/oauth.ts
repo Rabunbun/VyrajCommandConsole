@@ -139,6 +139,17 @@ export async function clearOAuthStateCookie() {
   cookieStore.delete(oauthStateCookieName);
 }
 
+export async function clearEveSsoLocalCookies() {
+  const cookieStore = await cookies();
+
+  // Local EVE SSO cookies:
+  // - vyraj_eve_oauth_state protects the in-flight OAuth redirect.
+  // - vyraj_eve_unlinked_identity stores the verified member checkpoint identity.
+  // App logout should clear both. Neither cookie stores EVE tokens.
+  cookieStore.delete(oauthStateCookieName);
+  cookieStore.delete(unlinkedIdentityCookieName);
+}
+
 export async function exchangeCodeForEveTokens(code: string) {
   const config = getEveSsoServerConfig();
 

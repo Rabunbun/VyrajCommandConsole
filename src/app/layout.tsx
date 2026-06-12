@@ -149,9 +149,16 @@ function AllianceAccessPanel({
           </button>
         </form>
       ) : identity ? (
-        <Link className="secondary-button access-button" href="/member">
-          Checkpoint
-        </Link>
+        <div className="access-action-stack">
+          <Link className="secondary-button access-button" href="/member">
+            Checkpoint
+          </Link>
+          <form action={logoutAction}>
+            <button className="secondary-button access-button" type="submit">
+              Log Out
+            </button>
+          </form>
+        </div>
       ) : (
         <Link className="command-button access-button" href="/login">
           Unlock

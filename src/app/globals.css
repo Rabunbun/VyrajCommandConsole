@@ -311,6 +311,16 @@ select:disabled {
   margin-top: 9px;
 }
 
+.access-action-stack {
+  display: grid;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+.access-action-stack .access-button {
+  margin-top: 0;
+}
+
 .console-brand,
 .console-nav,
 .alliance-access-panel,

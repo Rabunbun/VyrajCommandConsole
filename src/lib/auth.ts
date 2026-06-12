@@ -11,6 +11,7 @@ import {
   revokeCurrentOfficerSession,
   type CurrentOfficerSession
 } from "@/lib/session";
+import { clearEveSsoLocalCookies } from "@/lib/eve-sso/oauth";
 
 const genericLoginError = "Officer name or password is incorrect.";
 
@@ -62,6 +63,7 @@ export async function loginOfficer(officerName: string, password: string) {
   }
 
   const session = await createOfficerSession(officer.id);
+  await clearEveSsoLocalCookies();
 
   debugAuth("session_created", {
     officerFound: true,
@@ -105,6 +107,7 @@ export async function logoutOfficer() {
   const session = await getCurrentOfficerSession();
 
   await revokeCurrentOfficerSession();
+  await clearEveSsoLocalCookies();
 
   if (session) {
     await logOfficerAudit({
