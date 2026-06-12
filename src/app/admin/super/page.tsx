@@ -44,6 +44,13 @@ const adminCards = [
     summary: "Link verified EVE characters to internal officer accounts."
   },
   {
+    code: "LOCK",
+    title: "Access Policy Preview",
+    href: "/admin/access-policy",
+    status: "Preview",
+    summary: "Dry-run future member lockdown decisions before enforcement is enabled."
+  },
+  {
     code: "SYS",
     title: "System Health",
     href: "/admin/system-health",
