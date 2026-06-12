@@ -3,6 +3,7 @@ import Link from "next/link";
 import "./globals.css";
 import { logoutAction } from "@/app/auth-actions";
 import { consoleRoutes, routeGroups, type ConsoleRoute } from "@/lib/navigation";
+import { getAllianceAccessIdentityContext } from "@/lib/member-landing";
 import { hasPermission } from "@/lib/permissions";
 import { getCurrentOfficerSession, isSuperAdminSession } from "@/lib/session";
 
@@ -23,6 +24,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const session = await getCurrentOfficerSession();
+  const accessIdentity = await getAllianceAccessIdentityContext(session);
   const visibleRoutes = getVisibleConsoleRoutes(session);
 
   return (
@@ -63,7 +65,10 @@ export default async function RootLayout({
                   })}
                 </nav>
               </div>
-              <AllianceAccessPanel session={session} />
+              <AllianceAccessPanel
+                identity={accessIdentity}
+                session={session}
+              />
             </div>
           </header>
           <main className="console-main">{children}</main>
@@ -103,34 +108,50 @@ function getVisibleConsoleRoutes(
 }
 
 function AllianceAccessPanel({
+  identity,
   session
 }: {
+  identity: Awaited<ReturnType<typeof getAllianceAccessIdentityContext>>;
   session: Awaited<ReturnType<typeof getCurrentOfficerSession>>;
 }) {
-  const unlocked = Boolean(session);
-  const roleLabel = session
-    ? isSuperAdminSession(session)
-      ? "Alliance Admin / Super Admin"
-      : "Alliance Officer"
-    : "No role active";
+  const unlocked = Boolean(session || identity);
+  const displayName = identity?.characterName || session?.officer.officerName || "Member Access";
+  const roleLabel = identity?.statusLabel ||
+    (session
+      ? isSuperAdminSession(session)
+        ? "Alliance Admin / Super Admin"
+        : "Alliance Officer"
+      : "No role active");
+  const detailLabel = identity?.detailLabel ||
+    (session ? "Command controls unlocked" : "Command controls locked");
+  const portraitUrl = identity?.characterId
+    ? `https://images.evetech.net/characters/${identity.characterId}/portrait?size=64`
+    : "";
 
   return (
     <aside className="alliance-access-panel" aria-label="Alliance access">
       <div className="access-indicator" aria-hidden="true" data-unlocked={unlocked} />
+      <div
+        aria-label={identity ? `${identity.characterName} EVE portrait` : "Alliance access fallback avatar"}
+        className="access-avatar"
+        style={portraitUrl ? { backgroundImage: `url("${portraitUrl}")` } : undefined}
+      >
+        {displayName.slice(0, 1).toUpperCase()}
+      </div>
       <div className="access-label">Alliance Access</div>
-      <div className="access-name">
-        {session ? session.officer.officerName : "Member Access"}
-      </div>
+      <div className="access-name">{displayName}</div>
       <div className="access-detail">{roleLabel}</div>
-      <div className="access-detail">
-        {session ? "Command controls unlocked" : "Command controls locked"}
-      </div>
+      <div className="access-detail">{detailLabel}</div>
       {session ? (
         <form action={logoutAction}>
           <button className="secondary-button access-button" type="submit">
             Lock
           </button>
         </form>
+      ) : identity ? (
+        <Link className="secondary-button access-button" href="/member">
+          Checkpoint
+        </Link>
       ) : (
         <Link className="command-button access-button" href="/login">
           Unlock

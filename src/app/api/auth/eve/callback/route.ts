@@ -87,6 +87,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL(getPostLoginRedirectForOfficer(officer), origin));
     }
 
+    const shouldShowMemberLanding = !identity.memberLandingSeenAt;
+
     await setUnlinkedIdentityCookie(identity.id);
     await logEveSsoResult({
       action: "EVE SSO Identity Verified",
@@ -95,7 +97,7 @@ export async function GET(request: NextRequest) {
       summary: `EVE identity ${identity.characterName} verified without linked active officer access.`
     });
 
-    return NextResponse.redirect(new URL("/member", origin));
+    return NextResponse.redirect(new URL(shouldShowMemberLanding ? "/member" : "/", origin));
   } catch (error) {
     await logEveSsoResult({
       action: "EVE SSO Callback Failed",

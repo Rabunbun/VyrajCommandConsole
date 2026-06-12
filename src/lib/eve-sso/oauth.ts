@@ -4,13 +4,13 @@ import { cookies } from "next/headers";
 import { LoginProvider, OfficerRole, OfficerStatus, Prisma } from "@prisma/client";
 import { logOfficerAudit } from "@/lib/audit";
 import { getDb } from "@/lib/db";
-import { createOfficerSession } from "@/lib/session";
+import { createOfficerSession, getSessionDurationHours } from "@/lib/session";
 import { getEveSsoServerConfig } from "@/lib/eve-sso/config";
 
 const oauthStateCookieName = "vyraj_eve_oauth_state";
 const unlinkedIdentityCookieName = "vyraj_eve_unlinked_identity";
 const oauthStateMaxAgeSeconds = 10 * 60;
-const unlinkedIdentityMaxAgeSeconds = 10 * 60;
+const unlinkedIdentityMaxAgeSeconds = Math.round(getSessionDurationHours() * 60 * 60);
 const acceptedIssuers = new Set([
   "login.eveonline.com",
   "https://login.eveonline.com",
@@ -248,7 +248,8 @@ export async function upsertEveIdentity(input: {
       corporationName: true,
       allianceId: true,
       allianceName: true,
-      memberCorpId: true
+      memberCorpId: true,
+      memberLandingSeenAt: true
     }
   });
   const enriched = input.enrichment ?? null;
@@ -369,6 +370,7 @@ export async function getUnlinkedIdentityFromCookie() {
   const identity = await getDb().eveIdentity.findUnique({
     where: { id: identityId },
     select: {
+      id: true,
       characterName: true,
       characterId: true,
       corporationId: true,
@@ -383,6 +385,7 @@ export async function getUnlinkedIdentityFromCookie() {
           ticker: true
         }
       },
+      memberLandingSeenAt: true,
       lastEveLoginAt: true,
       lastIdentityRefreshAt: true,
       officer: {

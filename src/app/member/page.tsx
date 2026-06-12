@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import {
   getMemberLandingContext,
   getOfficerDestination,
-  type MemberLandingContext
+  markMemberLandingSeen
 } from "@/lib/member-landing";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +13,14 @@ export default async function MemberLandingPage() {
 
   if (context.accessMode === "missing_identity") {
     redirect("/login");
+  }
+
+  if (
+    context.accessMode === "verified_member" &&
+    context.identity &&
+    !context.identity.memberLandingSeenAt
+  ) {
+    await markMemberLandingSeen(context.identity.id);
   }
 
   return (
@@ -25,14 +33,6 @@ export default async function MemberLandingPage() {
           admin, and module permissions are still controlled internally.
         </p>
         <div className="badge-row">
-          <Link className="secondary-button" href="/">
-            Alliance Hub
-          </Link>
-          {context.matchedCorp ? (
-            <Link className="command-button" href={`/corp/${context.matchedCorp.slug}`}>
-              Enter {context.matchedCorp.name}
-            </Link>
-          ) : null}
           {context.session ? (
             <Link className="command-button" href={getOfficerDestination(context.session)}>
               Command Access
@@ -113,7 +113,10 @@ export default async function MemberLandingPage() {
                 Matched by {formatMatchReason(context.matchedBy)}. This is a
                 member navigation match, not an officer permission grant.
               </p>
-              <Link className="command-button" href={`/corp/${context.matchedCorp.slug}`}>
+              <Link
+                className="command-button member-portal-action"
+                href={`/corp/${context.matchedCorp.slug}`}
+              >
                 Enter Corp Portal
               </Link>
             </div>
@@ -121,47 +124,42 @@ export default async function MemberLandingPage() {
         ) : (
           <div className="empty-state">
             No configured Vyraj corp portal matched this character&apos;s current
-            EVE corporation. Use the Alliance Hub for public navigation or
-            contact leadership if this corp should be mapped.
+            EVE corporation. Use the Alliance Hub navigation above for public
+            routes, or contact leadership if this corp should be mapped.
           </div>
         )}
       </section>
 
-      <AccessExplanation context={context} />
+      {context.session ? (
+        <section className="section-stack" aria-labelledby="officer-status-title">
+          <div className="section-heading">
+            <div>
+              <h2 className="section-title" id="officer-status-title">
+                Officer Session
+              </h2>
+              <p className="card-copy">
+                This EVE identity is linked to an active Vyraj officer record.
+              </p>
+            </div>
+            <span className="badge badge-verified">Command Access</span>
+          </div>
+          <div className="badge-row">
+            <Link className="command-button" href={getOfficerDestination(context.session)}>
+              Open Command Destination
+            </Link>
+            {context.session.assignedCorps.map((corp) => (
+              <Link
+                className="secondary-button"
+                href={`/corp/${corp.corpSlug}`}
+                key={corp.corpId}
+              >
+                {corp.corpName}
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </div>
-  );
-}
-
-function AccessExplanation({ context }: { context: MemberLandingContext }) {
-  const officer = context.session?.officer;
-
-  return (
-    <section className="form-panel" aria-labelledby="access-explanation-title">
-      <div className="card-heading">
-        <h2 className="section-title" id="access-explanation-title">
-          Access Boundary
-        </h2>
-        <p className="card-copy">{context.explanation}</p>
-      </div>
-      <div className="status-grid">
-        <StatusPanel
-          label="Officer Session"
-          value={officer ? `${officer.officerName} (${formatRole(officer.role)})` : "Not active"}
-        />
-        <StatusPanel
-          label="Officer/Admin Access"
-          value={officer ? "Controlled by Vyraj officer record" : "Not granted"}
-        />
-        <StatusPanel
-          label="Corp Membership"
-          value={context.matchedCorp ? "Member navigation only" : "No portal match"}
-        />
-      </div>
-      <div className="empty-state">
-        EVE SSO verifies who the character is. It does not auto-link officers,
-        auto-create accounts, assign permissions, or unlock admin tools.
-      </div>
-    </section>
   );
 }
 
@@ -194,15 +192,7 @@ function formatDateTime(value?: string) {
   }).format(new Date(value));
 }
 
-function formatRole(role: string) {
-  return role
-    .toLocaleLowerCase("en-US")
-    .split("_")
-    .map((part) => part.charAt(0).toLocaleUpperCase("en-US") + part.slice(1))
-    .join(" ");
-}
-
-function formatMatchReason(reason: MemberLandingContext["matchedBy"]) {
+function formatMatchReason(reason: "corporation_id" | "member_corp_id" | "none") {
   if (reason === "member_corp_id") {
     return "saved member corp match";
   }

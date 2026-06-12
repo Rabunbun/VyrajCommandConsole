@@ -69,7 +69,11 @@ export default async function DoctrinePage({
       <DoctrineHeader corp={result.corp} accessMode={result.accessMode} />
       <MessageBanner success={paramsResult?.success} error={paramsResult?.error} />
 
-      <ReadinessSubmissionPanel corp={result.corp} fits={result.fits} />
+      <DoctrineFitList
+        canManageDoctrine={result.canManageDoctrine}
+        corp={result.corp}
+        fits={result.fits}
+      />
 
       {result.canManageDoctrine ? (
         <OfficerDoctrinePanel
@@ -78,12 +82,6 @@ export default async function DoctrinePage({
           shipTypes={result.shipTypes}
         />
       ) : null}
-
-      <DoctrineFitList
-        canManageDoctrine={result.canManageDoctrine}
-        corp={result.corp}
-        fits={result.fits}
-      />
     </div>
   );
 }
@@ -163,94 +161,87 @@ function MessageBanner({
   );
 }
 
-function ReadinessSubmissionPanel({
+function ReadinessSubmissionForm({
   corp,
-  fits
+  fit
 }: {
   corp: DoctrineCorpView;
-  fits: DoctrineFitView[];
+  fit: DoctrineFitView;
 }) {
-  const activeFits = fits.filter((fit) => fit.status === "ACTIVE");
-
   return (
-    <section className="form-panel form-panel-wide" aria-label="Submit readiness">
+    <div className="form-panel form-panel-wide" aria-label={`Submit readiness for ${fit.doctrineName}`}>
       <div className="card-heading">
         <h2 className="section-title">Submit Readiness</h2>
         <p className="card-copy">
-          Submitting again for the same doctrine and character updates the
-          existing readiness record.
+          Submit or update readiness for this selected doctrine. Re-submitting
+          with the same character name updates the existing readiness record.
         </p>
       </div>
 
-      {activeFits.length ? (
-        <form action={submitDoctrineReadinessAction} className="section-stack">
-          <input name="corpSlug" type="hidden" value={corp.slug} />
-          <div className="form-grid">
-            <label className="field-stack">
-              <span className="field-label">Doctrine Fit</span>
-              <select className="text-input" name="doctrineFitId" required>
-                {activeFits.map((fit) => (
-                  <option key={fit.id} value={fit.id}>
-                    {fit.doctrineName} / {fit.shipName || "Unknown hull"}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="field-stack">
-              <span className="field-label">Pilot / Character Name</span>
-              <input className="text-input" name="characterName" required />
-            </label>
-
-            <label className="field-stack">
-              <span className="field-label">Readiness Status</span>
-              <select
-                className="text-input"
-                defaultValue="READY"
-                name="readiness"
-              >
-                {doctrineReadinessStatusOptions.map((status) => (
-                  <option key={status} value={status}>
-                    {formatStatusLabel(status)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <fieldset className="fieldset-panel">
-            <legend className="field-label">Readiness Checks</legend>
-            <div className="checkbox-grid">
-              <label className="checkbox-row">
-                <input name="hullReady" type="checkbox" value="READY" />
-                <span>Hull ready</span>
-              </label>
-              <label className="checkbox-row">
-                <input name="skillsReady" type="checkbox" value="READY" />
-                <span>Skills ready</span>
-              </label>
-              <label className="checkbox-row">
-                <input name="fitReady" type="checkbox" value="READY" />
-                <span>Fit ready</span>
-              </label>
-            </div>
-          </fieldset>
-
+      <form action={submitDoctrineReadinessAction} className="section-stack">
+        <input name="corpSlug" type="hidden" value={corp.slug} />
+        <input name="doctrineFitId" type="hidden" value={fit.id} />
+        <div className="form-grid">
           <label className="field-stack">
-            <span className="field-label">Notes</span>
-            <textarea className="text-input" name="notes" rows={3} />
+            <span className="field-label">Selected Doctrine</span>
+            <input
+              className="text-input"
+              readOnly
+              value={`${fit.doctrineName} / ${fit.shipName || "Unknown hull"}`}
+            />
           </label>
 
-          <div className="badge-row">
-            <button className="command-button" type="submit">
-              Submit Readiness
-            </button>
+          <label className="field-stack">
+            <span className="field-label">Pilot / Character Name</span>
+            <input className="text-input" name="characterName" required />
+          </label>
+
+          <label className="field-stack">
+            <span className="field-label">Readiness Status</span>
+            <select
+              className="text-input"
+              defaultValue="READY"
+              name="readiness"
+            >
+              {doctrineReadinessStatusOptions.map((status) => (
+                <option key={status} value={status}>
+                  {formatStatusLabel(status)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <fieldset className="fieldset-panel">
+          <legend className="field-label">Readiness Checks</legend>
+          <div className="checkbox-grid">
+            <label className="checkbox-row">
+              <input name="hullReady" type="checkbox" value="READY" />
+              <span>Hull ready</span>
+            </label>
+            <label className="checkbox-row">
+              <input name="skillsReady" type="checkbox" value="READY" />
+              <span>Skills ready</span>
+            </label>
+            <label className="checkbox-row">
+              <input name="fitReady" type="checkbox" value="READY" />
+              <span>Fit ready</span>
+            </label>
           </div>
-        </form>
-      ) : (
-        <div className="empty-state">No doctrine fits available.</div>
-      )}
-    </section>
+        </fieldset>
+
+        <label className="field-stack">
+          <span className="field-label">Notes</span>
+          <textarea className="text-input" name="notes" rows={3} />
+        </label>
+
+        <div className="badge-row">
+          <button className="command-button" type="submit">
+            Submit Readiness
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -371,6 +362,17 @@ function DoctrineFitList({
             {fit.notes ? <p className="card-copy">{fit.notes}</p> : null}
 
             <ReadinessSummary fit={fit} />
+
+            {fit.status === "ACTIVE" ? (
+              <details className="details-panel">
+                <summary className="details-summary">Submit Readiness</summary>
+                <ReadinessSubmissionForm corp={corp} fit={fit} />
+              </details>
+            ) : (
+              <div className="empty-state">
+                Readiness submissions are closed for this doctrine status.
+              </div>
+            )}
 
             {fit.fitText ? (
               <details className="details-panel">

@@ -40,6 +40,7 @@ export type SystemHealthCounts = {
   eveIdentities: number;
   eveIdentitiesWithCorporationId: number;
   eveIdentitiesWithAllianceId: number;
+  eveIdentitiesWithMemberLandingSeen: number;
   eveIdentitiesMatchedToConfiguredCorp: number;
   corpPublicEsiProfilesSynced: number;
   corpPublicEsiProfilesNeverSynced: number;
@@ -198,6 +199,7 @@ async function readDatabaseSummary() {
       eveIdentities,
       eveIdentitiesWithCorporationId,
       eveIdentitiesWithAllianceId,
+      eveIdentitiesWithMemberLandingSeen,
       corpPublicEsiProfilesSynced,
       corpPublicEsiProfilesNeverSynced,
       recentFailedCorpPublicEsiProfileRefreshes,
@@ -301,6 +303,13 @@ async function readDatabaseSummary() {
       getDb().eveIdentity.count({
         where: {
           allianceId: {
+            not: null
+          }
+        }
+      }),
+      getDb().eveIdentity.count({
+        where: {
+          memberLandingSeenAt: {
             not: null
           }
         }
@@ -446,6 +455,7 @@ async function readDatabaseSummary() {
         eveIdentities,
         eveIdentitiesWithCorporationId,
         eveIdentitiesWithAllianceId,
+        eveIdentitiesWithMemberLandingSeen,
         eveIdentitiesMatchedToConfiguredCorp,
         corpPublicEsiProfilesSynced,
         corpPublicEsiProfilesNeverSynced,

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import {
   getAuthenticatedAllianceHubSummary,
-  type AllianceAuditPreviewItem,
   type AllianceCorpSummary,
   type AllianceDashboardData,
   type AllianceQueueItem,
@@ -34,13 +33,6 @@ export default async function AllianceHubPage() {
             readiness, SRP, recruitment, and payouts.
           </p>
         </header>
-
-        {allianceSummary ? (
-          <AllianceDashboardSection
-            data={allianceSummary}
-            showAdminLinks={isSuperAdminSession(session)}
-          />
-        ) : null}
 
         <section className="section-stack" aria-labelledby="hub-content-title">
           <div className="section-heading">
@@ -94,6 +86,13 @@ export default async function AllianceHubPage() {
             <div className="empty-state">No active corps available.</div>
           )}
         </section>
+
+        {allianceSummary ? (
+          <AllianceDashboardSection
+            data={allianceSummary}
+            showAdminLinks={isSuperAdminSession(session)}
+          />
+        ) : null}
       </div>
     );
   } catch (error) {
@@ -148,6 +147,24 @@ function AllianceDashboardSection({
         </div>
       ) : null}
 
+      <section className="section-stack" aria-labelledby="corp-summaries-title">
+        <div className="section-heading">
+          <h3 className="section-title" id="corp-summaries-title">
+            Corp Summaries
+          </h3>
+          <span className="badge">{data.corpSummaries.length}</span>
+        </div>
+        {data.corpSummaries.length ? (
+          <div className="data-grid">
+            {data.corpSummaries.map((corp) => (
+              <AllianceCorpSummaryCard corp={corp} key={corp.id} />
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state">No active corps available.</div>
+        )}
+      </section>
+
       <div className="status-grid" aria-label="Alliance totals">
         {data.summaries.map((summary) => (
           <AllianceSummaryPanel key={summary.label} summary={summary} />
@@ -171,35 +188,11 @@ function AllianceDashboardSection({
           title="Recruitment Pipeline"
         />
         <AllianceQueue
-          emptyText="No doctrine readiness data."
-          items={data.doctrineReadiness}
-          title="Doctrine Readiness Watchlist"
-        />
-        <AllianceQueue
           emptyText="No loot payouts waiting."
           items={data.lootPayouts}
           title="Loot Payouts Waiting"
         />
-        {showAdminLinks ? <AuditPreview items={data.auditPreview} /> : null}
       </div>
-
-      <section className="section-stack" aria-labelledby="corp-summaries-title">
-        <div className="section-heading">
-          <h3 className="section-title" id="corp-summaries-title">
-            Corp Summaries
-          </h3>
-          <span className="badge">{data.corpSummaries.length}</span>
-        </div>
-        {data.corpSummaries.length ? (
-          <div className="data-grid">
-            {data.corpSummaries.map((corp) => (
-              <AllianceCorpSummaryCard corp={corp} key={corp.id} />
-            ))}
-          </div>
-        ) : (
-          <div className="empty-state">No active corps available.</div>
-        )}
-      </section>
     </section>
   );
 }
@@ -282,36 +275,6 @@ function AllianceCorpSummaryCard({ corp }: { corp: AllianceCorpSummary }) {
         ) : null}
       </div>
     </article>
-  );
-}
-
-function AuditPreview({ items }: { items: AllianceAuditPreviewItem[] }) {
-  return (
-    <section className="section-stack" aria-labelledby="audit-preview-title">
-      <div className="section-heading">
-        <h3 className="section-title" id="audit-preview-title">
-          Recent Admin Activity
-        </h3>
-        <span className="badge">{items.length}</span>
-      </div>
-      {items.length ? (
-        <div className="module-list">
-          {items.map((item) => (
-            <article className="data-card" key={item.id}>
-              <div className="card-heading">
-                <h4 className="card-title">{item.title}</h4>
-                <div className="card-subtitle">{formatSubtitle(item.subtitle)}</div>
-              </div>
-              <div className="badge-row">
-                <span className="badge">{formatStatusLabel(item.badge)}</span>
-              </div>
-            </article>
-          ))}
-        </div>
-      ) : (
-        <div className="empty-state">No recent admin activity.</div>
-      )}
-    </section>
   );
 }
 

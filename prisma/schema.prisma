@@ -187,6 +187,7 @@ model EveIdentity {
   linkedAt              DateTime?
   lastEveLoginAt        DateTime?
   lastIdentityRefreshAt DateTime?
+  memberLandingSeenAt   DateTime?
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
 

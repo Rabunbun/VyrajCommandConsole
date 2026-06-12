@@ -408,6 +408,12 @@ function MemberLandingReadinessSection({
           detail: formatNumber(counts.eveIdentitiesMatchedToConfiguredCorp)
         },
         {
+          label: "Member landing seen",
+          status:
+            counts.eveIdentitiesWithMemberLandingSeen > 0 ? "OK" : "Warning",
+          detail: formatNumber(counts.eveIdentitiesWithMemberLandingSeen)
+        },
+        {
           label: "Landing enforcement",
           status: "OK",
           detail: "UX routing only. Public pages and corp portals are not locked down in this phase."

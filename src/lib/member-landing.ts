@@ -12,6 +12,7 @@ export type MemberLandingCorp = {
 };
 
 export type MemberLandingIdentity = {
+  id: string;
   characterId: string;
   characterName: string;
   corporationId: string;
@@ -20,6 +21,7 @@ export type MemberLandingIdentity = {
   allianceName: string;
   lastEveLoginAt: string;
   lastIdentityRefreshAt: string;
+  memberLandingSeenAt: string;
 };
 
 export type MemberLandingContext = {
@@ -30,6 +32,13 @@ export type MemberLandingContext = {
   matchedBy: "corporation_id" | "member_corp_id" | "none";
   explanation: string;
 };
+
+export type AllianceAccessIdentityContext = {
+  characterId: string;
+  characterName: string;
+  statusLabel: string;
+  detailLabel: string;
+} | null;
 
 export async function getMemberLandingContext(): Promise<MemberLandingContext> {
   const session = await getCurrentOfficerSession();
@@ -83,6 +92,55 @@ export async function getMemberLandingContext(): Promise<MemberLandingContext> {
   };
 }
 
+export async function markMemberLandingSeen(identityId: string) {
+  await getDb().eveIdentity.updateMany({
+    where: {
+      id: identityId,
+      memberLandingSeenAt: null
+    },
+    data: {
+      memberLandingSeenAt: new Date()
+    }
+  });
+}
+
+export async function getAllianceAccessIdentityContext(
+  session: CurrentOfficerSession | null
+): Promise<AllianceAccessIdentityContext> {
+  if (session) {
+    const identity = await getLatestLinkedIdentityForOfficer(session.officer.id);
+
+    if (identity) {
+      return {
+        characterId: identity.characterId.toString(),
+        characterName: identity.characterName,
+        statusLabel:
+          session.officer.role === OfficerRole.SUPER_ADMIN
+            ? "Alliance Admin / Super Admin"
+            : "Alliance Officer",
+        detailLabel: "Linked EVE SSO identity"
+      };
+    }
+
+    return null;
+  }
+
+  const identity = await getUnlinkedIdentityFromCookie();
+
+  if (!identity) {
+    return null;
+  }
+
+  return {
+    characterId: identity.characterId.toString(),
+    characterName: identity.characterName,
+    statusLabel: "Verified EVE Member",
+    detailLabel: identity.memberCorp
+      ? `${identity.memberCorp.name} portal match`
+      : "No matched Vyraj corp"
+  };
+}
+
 async function getLatestLinkedIdentityForOfficer(officerId: string) {
   return await getDb().eveIdentity.findFirst({
     where: {
@@ -116,6 +174,7 @@ async function getCorpMatchByCorporationId(corporationId: bigint) {
 
 function identitySelect() {
   return {
+    id: true,
     characterId: true,
     characterName: true,
     corporationId: true,
@@ -124,6 +183,7 @@ function identitySelect() {
     allianceName: true,
     lastEveLoginAt: true,
     lastIdentityRefreshAt: true,
+    memberLandingSeenAt: true,
     memberCorp: {
       select: corpSelect()
     }
@@ -140,6 +200,7 @@ function corpSelect() {
 }
 
 function formatIdentity(identity: {
+  id: string;
   characterId: bigint;
   characterName: string;
   corporationId: bigint | null;
@@ -148,8 +209,10 @@ function formatIdentity(identity: {
   allianceName: string;
   lastEveLoginAt: Date | null;
   lastIdentityRefreshAt: Date | null;
+  memberLandingSeenAt: Date | null;
 }) {
   return {
+    id: identity.id,
     characterId: identity.characterId.toString(),
     characterName: identity.characterName,
     corporationId: identity.corporationId?.toString() || "",
@@ -157,7 +220,8 @@ function formatIdentity(identity: {
     allianceId: identity.allianceId?.toString() || "",
     allianceName: identity.allianceName,
     lastEveLoginAt: identity.lastEveLoginAt?.toISOString() || "",
-    lastIdentityRefreshAt: identity.lastIdentityRefreshAt?.toISOString() || ""
+    lastIdentityRefreshAt: identity.lastIdentityRefreshAt?.toISOString() || "",
+    memberLandingSeenAt: identity.memberLandingSeenAt?.toISOString() || ""
   };
 }
 
