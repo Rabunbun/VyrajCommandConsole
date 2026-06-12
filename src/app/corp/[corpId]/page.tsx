@@ -159,13 +159,6 @@ async function CorpPortalContent({
         </div>
       </header>
 
-      <section className="status-grid" aria-label={`${corp.name} metrics`}>
-        <Metric label="Active Members" value={corp.activeMembers} />
-        <Metric label="Recent Ops" value={corp.recentOps} />
-        <Metric label="Pending SRP" value={corp.pendingSrp} />
-        <Metric label="Doctrine Readiness" value={`${corp.doctrineReadinessPercent}%`} />
-      </section>
-
       <section className="section-stack" aria-labelledby="eve-identity-title">
         <div className="section-heading">
           <div>

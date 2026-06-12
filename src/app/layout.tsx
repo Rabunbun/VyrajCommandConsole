@@ -11,7 +11,10 @@ export const metadata: Metadata = {
     default: "Vyraj Alliance Command Console",
     template: "%s | Vyraj Alliance Command Console"
   },
-  description: "Vercel v2 foundation for the Vyraj Alliance Command Console."
+  description: "Vercel v2 foundation for the Vyraj Alliance Command Console.",
+  icons: {
+    icon: "/favicon.ico"
+  }
 };
 
 export default async function RootLayout({
