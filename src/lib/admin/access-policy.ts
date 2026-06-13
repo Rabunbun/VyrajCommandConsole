@@ -1,5 +1,6 @@
 import "server-only";
 import { CorpStatus, OfficerRole, OfficerStatus } from "@prisma/client";
+import { evaluateMemberCorpPortalAccess } from "@/lib/corp-portal-access";
 import { getDb } from "@/lib/db";
 
 export type AccessPolicyFilter =
@@ -106,7 +107,9 @@ export async function getAccessPolicyPreviewData(): Promise<AccessPolicyPreviewD
         eveIdentityConfig: {
           select: {
             eveCorporationId: true,
-            eveCorporationName: true
+            eveCorporationName: true,
+            eveAllianceId: true,
+            eveAllianceName: true
           }
         }
       }
@@ -137,7 +140,9 @@ export async function getAccessPolicyPreviewData(): Promise<AccessPolicyPreviewD
           id: corp.id,
           name: corp.name,
           slug: corp.slug,
-          ticker: corp.ticker
+          ticker: corp.ticker,
+          status: corp.status,
+          eveIdentityConfig: corp.eveIdentityConfig
         }
       ])
   );
@@ -155,8 +160,12 @@ export async function getAccessPolicyPreviewData(): Promise<AccessPolicyPreviewD
     );
   }
 
-  const evaluatedIdentities = identities.map((identity) =>
-    evaluateIdentityAccess({
+  const evaluatedIdentities = identities.map((identity) => {
+    const matchedCorp = identity.corporationId
+      ? corpByEveCorporationId.get(identity.corporationId.toString()) || null
+      : null;
+
+    return evaluateIdentityAccess({
       id: identity.id,
       characterId: identity.characterId.toString(),
       characterName: identity.characterName,
@@ -165,11 +174,17 @@ export async function getAccessPolicyPreviewData(): Promise<AccessPolicyPreviewD
       allianceId: identity.allianceId?.toString() || "",
       allianceName: identity.allianceName,
       linkedOfficer: identity.officer,
-      matchedCorp: identity.corporationId
-        ? corpByEveCorporationId.get(identity.corporationId.toString()) || null
-        : null
-    })
-  );
+      matchedCorp: matchedCorp
+        ? {
+            id: matchedCorp.id,
+            name: matchedCorp.name,
+            slug: matchedCorp.slug,
+            ticker: matchedCorp.ticker
+          }
+        : null,
+      matchedPortal: matchedCorp
+    });
+  });
   const corpReadiness = corps.map((corp) => {
     const eveCorporationId = corp.eveIdentityConfig?.eveCorporationId?.toString() || "";
     const matchedIdentityCount = eveCorporationId
@@ -290,17 +305,50 @@ export function parseAccessPolicyFilter(value?: string): AccessPolicyFilter {
 function evaluateIdentityAccess(input: Omit<
   AccessPolicyIdentityEvaluation,
   "destination" | "reason" | "wouldAllowMemberPortal" | "wouldAllowOfficerTools"
->): AccessPolicyIdentityEvaluation {
+> & {
+  matchedPortal: {
+    id: string;
+    name: string;
+    slug: string;
+    ticker: string;
+    status: CorpStatus;
+    eveIdentityConfig: {
+      eveCorporationId: bigint | null;
+      eveCorporationName: string;
+      eveAllianceId: bigint | null;
+      eveAllianceName: string;
+    } | null;
+  } | null;
+}): AccessPolicyIdentityEvaluation {
   const linkedActiveOfficer = input.linkedOfficer?.status === OfficerStatus.ACTIVE;
-  const wouldAllowMemberPortal = Boolean(input.matchedCorp);
+  const memberEvaluation = input.matchedPortal
+    ? evaluateMemberCorpPortalAccess({
+        corp: input.matchedPortal,
+        identity: {
+          id: input.id,
+          characterId: BigInt(input.characterId),
+          characterName: input.characterName,
+          corporationId: input.corporationId ? BigInt(input.corporationId) : null,
+          corporationName: input.corporationName,
+          allianceId: input.allianceId ? BigInt(input.allianceId) : null,
+          allianceName: input.allianceName,
+          memberCorp: input.matchedCorp
+        }
+      })
+    : null;
+  const wouldAllowMemberPortal = Boolean(memberEvaluation?.allowed);
   const wouldAllowOfficerTools = Boolean(linkedActiveOfficer);
-  const destination = input.matchedCorp ? `/corp/${input.matchedCorp.slug}` : "";
+  const destination = wouldAllowMemberPortal && input.matchedCorp
+    ? `/corp/${input.matchedCorp.slug}`
+    : "";
   let reason = "";
 
   if (!input.corporationId) {
     reason = "Identity has no current corporation ID.";
-  } else if (input.matchedCorp) {
+  } else if (memberEvaluation?.allowed && input.matchedCorp) {
     reason = `Corporation ID matches ${input.matchedCorp.name}.`;
+  } else if (memberEvaluation) {
+    reason = memberEvaluation.reason;
   } else {
     reason = "No configured corp match.";
   }
@@ -312,7 +360,15 @@ function evaluateIdentityAccess(input: Omit<
   }
 
   return {
-    ...input,
+    id: input.id,
+    characterId: input.characterId,
+    characterName: input.characterName,
+    corporationId: input.corporationId,
+    corporationName: input.corporationName,
+    allianceId: input.allianceId,
+    allianceName: input.allianceName,
+    linkedOfficer: input.linkedOfficer,
+    matchedCorp: input.matchedCorp,
     destination,
     reason,
     wouldAllowMemberPortal,

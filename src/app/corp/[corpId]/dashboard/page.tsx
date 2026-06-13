@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { CorpAccessDenied } from "@/components/corp-access-denied";
+import { getOfficerOnlyDeniedContext } from "@/lib/corp-portal-access";
 import {
   getCorpDashboardPageData,
   type DashboardCorpView,
@@ -23,6 +25,18 @@ export default async function CorpDashboardPage({ params }: DashboardPageProps) 
   const session = await getCurrentOfficerSession();
 
   if (!session) {
+    const deniedAccess = await getOfficerOnlyDeniedContext(corpSlug);
+
+    if (!deniedAccess.corp) {
+      notFound();
+    }
+
+    if (!deniedAccess.loginRequired) {
+      return (
+        <CorpAccessDenied access={deniedAccess} moduleName="Corp Dashboard" />
+      );
+    }
+
     redirect("/login");
   }
 

@@ -4,6 +4,7 @@ import { CorpStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logOfficerAudit } from "@/lib/audit";
+import { getCorpPortalAccessContext } from "@/lib/corp-portal-access";
 import { getDb } from "@/lib/db";
 import {
   buildEveTypeImageUrl,
@@ -23,6 +24,7 @@ export async function submitDoctrineReadinessAction(formData: FormData) {
 
   try {
     const corp = await getPublicDoctrineCorp(corpSlug);
+    await requireSoftLockdownMemberAccess(corpSlug);
     const doctrineFitId = cleanText(formData.get("doctrineFitId"));
     const characterName = normalizeDisplayName(formData.get("characterName"));
     const readiness = parseReadinessStatus(formData.get("readiness"));
@@ -111,6 +113,18 @@ export async function submitDoctrineReadinessAction(formData: FormData) {
   }
 
   redirectWithMessage(corpSlug, "success", successMessage);
+}
+
+async function requireSoftLockdownMemberAccess(corpSlug: string) {
+  const access = await getCorpPortalAccessContext(corpSlug);
+
+  if (!access.allowed) {
+    throw new Error(
+      access.loginRequired
+        ? "Login with EVE or an officer account is required for this module."
+        : access.reason
+    );
+  }
 }
 
 export async function createDoctrineFitAction(formData: FormData) {

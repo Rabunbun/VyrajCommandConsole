@@ -78,8 +78,9 @@ export default async function AccessPolicyPage({
         <div className="eyebrow">Super Admin</div>
         <h1 className="page-title">Access Policy Preview</h1>
         <p className="page-copy">
-          Dry-run future member lockdown decisions before enforcement is
-          enabled. This page does not grant or deny live access.
+          Soft Lockdown is active for corp portals. This page shows the same
+          member matching rules without exposing secrets or changing officer
+          permissions.
         </p>
         <div className="badge-row">
           <Link className="secondary-button" href="/admin/super">
@@ -109,7 +110,7 @@ export default async function AccessPolicyPage({
               and internal permissions.
             </p>
           </div>
-          <span className="badge">Dry Run Only</span>
+          <span className="badge">Soft Lockdown Active</span>
         </div>
       </section>
 
@@ -306,8 +307,8 @@ function CorpReadinessSection({
             Corp Readiness
           </h2>
           <p className="card-copy">
-            Corp registry EVE corporation IDs that future member lockdown would
-            use for portal matching.
+            Corp registry EVE corporation IDs used by active Soft Lockdown for
+            portal matching.
           </p>
         </div>
         <span className="badge">{corps.length}</span>

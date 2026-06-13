@@ -1,7 +1,9 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { CorpAccessDenied } from "@/components/corp-access-denied";
 import { SrpQueueBoard } from "@/components/srp-queue-board";
 import { SrpRequestForm } from "@/components/srp-request-form";
+import { getCorpPortalAccessContext } from "@/lib/corp-portal-access";
 import {
   getSrpPageData,
   type SrpCorpView
@@ -25,6 +27,20 @@ export default async function SrpPage({ params, searchParams }: SrpPageProps) {
   const paramsResult = await searchParams;
   const corpSlug = decodeURIComponent(corpId);
   const session = await getCurrentOfficerSession();
+  const access = await getCorpPortalAccessContext(corpSlug, { session });
+
+  if (!access.corp) {
+    notFound();
+  }
+
+  if (!access.allowed) {
+    if (access.loginRequired) {
+      redirect("/login");
+    }
+
+    return <CorpAccessDenied access={access} moduleName="SRP Requests" />;
+  }
+
   const result = await getSrpPageData(corpSlug, session);
 
   if (result.status === "not_found") {

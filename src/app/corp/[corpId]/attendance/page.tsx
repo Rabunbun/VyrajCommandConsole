@@ -1,10 +1,12 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import {
   createOperationAction,
   submitAttendanceAction,
   updateOperationAction
 } from "@/app/corp/[corpId]/attendance/actions";
+import { CorpAccessDenied } from "@/components/corp-access-denied";
+import { getCorpPortalAccessContext } from "@/lib/corp-portal-access";
 import {
   attendanceStatusOptions,
   getAttendancePageData,
@@ -36,6 +38,20 @@ export default async function AttendancePage({
   const paramsResult = await searchParams;
   const corpSlug = decodeURIComponent(corpId);
   const session = await getCurrentOfficerSession();
+  const access = await getCorpPortalAccessContext(corpSlug, { session });
+
+  if (!access.corp) {
+    notFound();
+  }
+
+  if (!access.allowed) {
+    if (access.loginRequired) {
+      redirect("/login");
+    }
+
+    return <CorpAccessDenied access={access} moduleName="Op Attendance" />;
+  }
+
   const result = await getAttendancePageData(corpSlug, session);
 
   if (result.status === "not_found") {

@@ -4,6 +4,8 @@ import {
   createRecruitmentApplicantAction,
   updateRecruitmentApplicantAction
 } from "@/app/corp/[corpId]/recruitment/actions";
+import { CorpAccessDenied } from "@/components/corp-access-denied";
+import { getOfficerOnlyDeniedContext } from "@/lib/corp-portal-access";
 import {
   getRecruitmentPageData,
   recruitmentStatusOptions,
@@ -52,6 +54,21 @@ export default async function RecruitmentPage({
   const session = await getCurrentOfficerSession();
 
   if (!session) {
+    const deniedAccess = await getOfficerOnlyDeniedContext(corpSlug);
+
+    if (!deniedAccess.corp) {
+      notFound();
+    }
+
+    if (!deniedAccess.loginRequired) {
+      return (
+        <CorpAccessDenied
+          access={deniedAccess}
+          moduleName="Recruitment Review"
+        />
+      );
+    }
+
     redirect("/login");
   }
 

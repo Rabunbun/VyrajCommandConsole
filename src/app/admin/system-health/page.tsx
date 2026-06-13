@@ -115,6 +115,8 @@ export default async function SystemHealthPage() {
 
       <MemberLandingReadinessSection counts={health.counts} />
 
+      <SoftLockdownSection counts={health.counts} />
+
       <CorpEveMappingSection counts={health.counts} />
 
       <CorpPublicEsiProfileSection counts={health.counts} />
@@ -416,7 +418,7 @@ function MemberLandingReadinessSection({
         {
           label: "Landing enforcement",
           status: "OK",
-          detail: "UX routing only. Public pages and corp portals are not locked down in this phase."
+          detail: "First-login checkpoint remains available. Corp portal access is now handled by Soft Lockdown."
         }
       ]
     : [
@@ -432,6 +434,64 @@ function MemberLandingReadinessSection({
       checks={checks}
       description="Identity-aware member checkpoint readiness. EVE membership does not grant officer or admin powers."
       title="Member Landing Readiness"
+    />
+  );
+}
+
+function SoftLockdownSection({
+  counts
+}: {
+  counts: SystemHealthCounts | null;
+}) {
+  const checks: HealthCheck[] = counts
+    ? [
+        {
+          label: "Soft Lockdown",
+          status: "OK",
+          detail: "Enabled for Corp Portal and member module routes."
+        },
+        {
+          label: "Corp portals require member match",
+          status: "OK",
+          detail: "Verified member access requires current EVE corporation ID to match the target corp configuration."
+        },
+        {
+          label: "Configured corp portals",
+          status:
+            counts.corpEveCorporationIdsConfigured > 0 ? "OK" : "Warning",
+          detail: formatNumber(counts.corpEveCorporationIdsConfigured)
+        },
+        {
+          label: "Corps missing EVE corporation IDs",
+          status:
+            counts.corpMissingEveCorporationId > 0 ? "Warning" : "OK",
+          detail: formatNumber(counts.corpMissingEveCorporationId)
+        },
+        {
+          label: "Matched verified identities",
+          status:
+            counts.eveIdentitiesMatchedToConfiguredCorp > 0 ? "OK" : "Warning",
+          detail: formatNumber(counts.eveIdentitiesMatchedToConfiguredCorp)
+        },
+        {
+          label: "Manual officer fallback",
+          status: "OK",
+          detail: "Enabled. Manual officers still use internal sessions and permissions."
+        }
+      ]
+    : [
+        {
+          label: "Soft Lockdown",
+          status: "Error",
+          detail: "Database counts are unavailable."
+        }
+      ];
+
+  return (
+    <HealthSection
+      checks={checks}
+      description="Active member gate for corp portals. EVE membership grants member-level portal access only."
+      title="Soft Lockdown"
     />
   );
 }

@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import {
   createDoctrineFitAction,
   submitDoctrineReadinessAction,
   updateDoctrineFitAction
 } from "@/app/corp/[corpId]/doctrine/actions";
+import { CorpAccessDenied } from "@/components/corp-access-denied";
 import {
   doctrineFitStatusOptions,
   doctrineReadinessStatusOptions,
@@ -14,6 +15,7 @@ import {
   type DoctrineShipTypeOption
 } from "@/lib/modules/doctrine";
 import { EveShipImage } from "@/components/eve-ship-image";
+import { getCorpPortalAccessContext } from "@/lib/corp-portal-access";
 import { formatStatusLabel } from "@/lib/public-data";
 import { getCurrentOfficerSession } from "@/lib/session";
 
@@ -37,6 +39,20 @@ export default async function DoctrinePage({
   const paramsResult = await searchParams;
   const corpSlug = decodeURIComponent(corpId);
   const session = await getCurrentOfficerSession();
+  const access = await getCorpPortalAccessContext(corpSlug, { session });
+
+  if (!access.corp) {
+    notFound();
+  }
+
+  if (!access.allowed) {
+    if (access.loginRequired) {
+      redirect("/login");
+    }
+
+    return <CorpAccessDenied access={access} moduleName="Doctrine Readiness" />;
+  }
+
   const result = await getDoctrinePageData(corpSlug, session);
 
   if (result.status === "not_found") {

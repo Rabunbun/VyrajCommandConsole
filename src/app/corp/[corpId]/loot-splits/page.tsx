@@ -4,6 +4,8 @@ import {
   createLootSplitAction,
   updateLootSplitStatusAction
 } from "@/app/corp/[corpId]/loot-splits/actions";
+import { CorpAccessDenied } from "@/components/corp-access-denied";
+import { getOfficerOnlyDeniedContext } from "@/lib/corp-portal-access";
 import {
   getLootSplitPageData,
   lootSplitStatusOptions,
@@ -35,6 +37,21 @@ export default async function LootSplitsPage({
   const session = await getCurrentOfficerSession();
 
   if (!session) {
+    const deniedAccess = await getOfficerOnlyDeniedContext(corpSlug);
+
+    if (!deniedAccess.corp) {
+      notFound();
+    }
+
+    if (!deniedAccess.loginRequired) {
+      return (
+        <CorpAccessDenied
+          access={deniedAccess}
+          moduleName="Loot Split Calculation"
+        />
+      );
+    }
+
     redirect("/login");
   }
 

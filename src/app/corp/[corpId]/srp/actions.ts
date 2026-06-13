@@ -4,6 +4,7 @@ import { CorpStatus, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logOfficerAudit } from "@/lib/audit";
+import { getCorpPortalAccessContext } from "@/lib/corp-portal-access";
 import { getDb } from "@/lib/db";
 import {
   canReviewSrp,
@@ -30,6 +31,7 @@ export async function analyzeSrpRequestAssistAction(
 
   try {
     const corp = await getPublicSrpCorp(corpSlug);
+    await requireSoftLockdownMemberAccess(corpSlug);
     const assist = await analyzeSrpAssist({
       killmailUrl: cleanText(formData.get("killmailUrl")),
       lossValue: parseIskAmount(formData.get("lossValue"), {
@@ -84,6 +86,7 @@ export async function submitSrpRequestAction(formData: FormData) {
 
   try {
     const corp = await getPublicSrpCorp(corpSlug);
+    await requireSoftLockdownMemberAccess(corpSlug);
     const session = await getCurrentOfficerSession();
     const killmailUrl = cleanText(formData.get("killmailUrl"));
 
@@ -183,6 +186,18 @@ export async function submitSrpRequestAction(formData: FormData) {
   }
 
   redirect(redirectTo);
+}
+
+async function requireSoftLockdownMemberAccess(corpSlug: string) {
+  const access = await getCorpPortalAccessContext(corpSlug);
+
+  if (!access.allowed) {
+    throw new Error(
+      access.loginRequired
+        ? "Login with EVE or an officer account is required for this module."
+        : access.reason
+    );
+  }
 }
 
 export async function updateSrpRequestAction(formData: FormData) {

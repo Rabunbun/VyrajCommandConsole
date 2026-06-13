@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { CorpAccessDenied } from "@/components/corp-access-denied";
+import { getCorpPortalAccessContext } from "@/lib/corp-portal-access";
 import { canViewCorpDashboard } from "@/lib/modules/dashboard";
 import { canManageLootSplits } from "@/lib/modules/loot-splits";
 import { canReviewRecruitment } from "@/lib/modules/recruitment";
@@ -54,7 +56,18 @@ export default async function CorpPortalPage({ params }: CorpPortalPageProps) {
     );
   }
 
-  return <CorpPortal corp={result.corp} />;
+  const session = await getCurrentOfficerSession();
+  const access = await getCorpPortalAccessContext(corpSlug, { session });
+
+  if (!access.allowed) {
+    if (access.loginRequired) {
+      redirect("/login");
+    }
+
+    return <CorpAccessDenied access={access} />;
+  }
+
+  return <CorpPortal corp={result.corp} session={session} />;
 }
 
 async function loadCorpPortal(corpSlug: string) {
@@ -92,25 +105,35 @@ const memberModules = [
   }
 ] as const;
 
-function CorpPortal({ corp }: { corp: PublicCorpPortal }) {
-  const sessionPromise = getCurrentOfficerSession();
+function CorpPortal({
+  corp,
+  session
+}: {
+  corp: PublicCorpPortal;
+  session: Awaited<ReturnType<typeof getCurrentOfficerSession>>;
+}) {
   const enabledMemberModules = memberModules.filter(
     (module) => corp.enabledModules[module.key]
   );
 
-  return <CorpPortalContent corp={corp} enabledMemberModules={enabledMemberModules} sessionPromise={sessionPromise} />;
+  return (
+    <CorpPortalContent
+      corp={corp}
+      enabledMemberModules={enabledMemberModules}
+      session={session}
+    />
+  );
 }
 
-async function CorpPortalContent({
+function CorpPortalContent({
   corp,
   enabledMemberModules,
-  sessionPromise
+  session
 }: {
   corp: PublicCorpPortal;
   enabledMemberModules: typeof memberModules[number][];
-  sessionPromise: ReturnType<typeof getCurrentOfficerSession>;
+  session: Awaited<ReturnType<typeof getCurrentOfficerSession>>;
 }) {
-  const session = await sessionPromise;
   const showDashboard =
     corp.enabledModules.dashboard && canViewCorpDashboard(session, corp.id);
   const showRecruitment =

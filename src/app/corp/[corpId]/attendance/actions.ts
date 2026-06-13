@@ -4,6 +4,7 @@ import { CorpStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logOfficerAudit } from "@/lib/audit";
+import { getCorpPortalAccessContext } from "@/lib/corp-portal-access";
 import { getDb } from "@/lib/db";
 import {
   attendanceStatusOptions,
@@ -23,6 +24,7 @@ export async function submitAttendanceAction(formData: FormData) {
 
   try {
     const corp = await getPublicAttendanceCorp(corpSlug);
+    await requireSoftLockdownMemberAccess(corpSlug);
     const operationId = cleanText(formData.get("operationId"));
     const characterName = normalizeDisplayName(formData.get("characterName"));
     const attendanceStatus = parseAttendanceStatus(formData.get("attendanceStatus"));
@@ -106,6 +108,18 @@ export async function submitAttendanceAction(formData: FormData) {
   }
 
   redirectWithMessage(corpSlug, "success", successMessage);
+}
+
+async function requireSoftLockdownMemberAccess(corpSlug: string) {
+  const access = await getCorpPortalAccessContext(corpSlug);
+
+  if (!access.allowed) {
+    throw new Error(
+      access.loginRequired
+        ? "Login with EVE or an officer account is required for this module."
+        : access.reason
+    );
+  }
 }
 
 export async function createOperationAction(formData: FormData) {
