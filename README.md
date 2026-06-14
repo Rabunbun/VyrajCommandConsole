@@ -253,6 +253,24 @@ The public profile refresh uses unauthenticated public ESI only. It does not
 store EVE tokens, request new scopes, use director/corp-private ESI, auto-link
 officers, auto-route members, or grant permissions.
 
+## Public Join Applications
+
+The public Alliance Hub remains visible without login and now links to `/join`
+for non-member applications. The Join page stores a basic public application in
+the existing corp-scoped Recruitment Review queue for the selected corp:
+character name, areas of interest, SP estimate, desired corp, explanation, and
+optional Discord username.
+
+Submitting an application does not create an `EveIdentity`, create an Officer,
+grant corp portal access, or grant officer/admin permissions. Leadership reviews
+applications through Recruitment Review. Discord delivery is intentionally
+deferred; a future pass can send application summaries to a configured Discord
+recruitment channel.
+
+EVE SSO is the primary login path for members and linked officers. Manual
+officer login remains available as fallback access for authorized officers and
+Super Admin recovery.
+
 ## EVE Ship Type Lookup
 
 Doctrine ship selection uses cached public EVE ship type rows from

@@ -9,6 +9,7 @@ export type ConsoleRoute = {
 export const consoleRoutes: ConsoleRoute[] = [
   { label: "Alliance Hub", href: "/", group: "Public" },
   { label: "Corp Directory", href: "/#corp-directory", group: "Public" },
+  { label: "Join Us", href: "/join", group: "Public" },
   { label: "Login", href: "/login", group: "Public" },
   { label: "Super Admin", href: "/admin/super", group: "Admin", superAdminOnly: true },
   { label: "Officers", href: "/admin/officers", group: "Admin", superAdminOnly: true },

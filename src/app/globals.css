@@ -727,6 +727,8 @@ th {
     linear-gradient(135deg, rgba(99, 198, 168, 0.13), transparent 45%),
     rgba(74, 163, 145, 0.08);
   color: #d7fff4;
+  display: grid;
+  gap: 14px;
   padding: 18px;
 }
 
@@ -758,6 +760,20 @@ th {
 
 .form-panel-wide {
   max-width: none;
+}
+
+.primary-login-panel {
+  border-color: rgba(99, 198, 168, 0.58);
+  background:
+    linear-gradient(135deg, rgba(99, 198, 168, 0.1), transparent 42%),
+    linear-gradient(180deg, rgba(255, 248, 237, 0.035), transparent 44%),
+    rgba(22, 19, 22, 0.96);
+}
+
+.primary-login-panel .command-button {
+  font-size: 0.74rem;
+  min-height: 48px;
+  width: fit-content;
 }
 
 .create-disclosure {

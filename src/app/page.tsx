@@ -34,6 +34,8 @@ export default async function AllianceHubPage() {
           </p>
         </header>
 
+        {!session ? <JoinUsCta /> : null}
+
         <section className="section-stack" aria-labelledby="hub-content-title">
           <div className="section-heading">
             <h2 className="section-title" id="hub-content-title">
@@ -110,6 +112,34 @@ export default async function AllianceHubPage() {
       </div>
     );
   }
+}
+
+function JoinUsCta() {
+  return (
+    <section className="data-card" aria-labelledby="join-vyraj-title">
+      <div className="section-heading">
+        <div className="card-heading">
+          <h2 className="section-title" id="join-vyraj-title">
+            Interested in flying with Vyraj?
+          </h2>
+          <p className="card-copy">
+            View our corps publicly, choose the one that fits your playstyle,
+            and send leadership a short application. Corp portals stay protected
+            until your EVE identity matches membership or an officer grants
+            internal access.
+          </p>
+        </div>
+        <div className="badge-row">
+          <Link className="command-button" href="/join">
+            Join Us
+          </Link>
+          <Link className="secondary-button" href="/#corp-directory">
+            View Corps
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function AllianceDashboardSection({

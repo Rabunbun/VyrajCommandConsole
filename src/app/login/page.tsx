@@ -115,10 +115,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     <div className="page-stack">
       <header className="page-heading">
         <div className="eyebrow">Access</div>
-        <h1 className="page-title">Officer Login</h1>
+        <h1 className="page-title">Login</h1>
         <p className="page-copy">
-          Unlock officer-only v2 routes with a server-side session stored in an
-          HTTP-only cookie.
+          EVE SSO is the primary login path for verified members and linked
+          officers. Manual officer login remains available as fallback access.
         </p>
       </header>
 
@@ -127,40 +127,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <div className="empty-state">Session locked.</div>
       ) : null}
 
-      <form action={loginAction} className="form-panel">
-        <label className="field-stack">
-          <span className="field-label">Officer Name</span>
-          <input
-            autoComplete="username"
-            className="text-input"
-            name="officerName"
-            required
-            type="text"
-          />
-        </label>
-        <label className="field-stack">
-          <span className="field-label">Password</span>
-          <input
-            autoComplete="current-password"
-            className="text-input"
-            name="password"
-            required
-            type="password"
-          />
-        </label>
-        <button className="command-button" type="submit">
-          Login
-        </button>
-      </form>
-
-      <section className="form-panel" aria-labelledby="eve-sso-login-title">
+      <section className="form-panel form-panel-wide primary-login-panel" aria-labelledby="eve-sso-login-title">
         <div className="card-heading">
           <h2 className="section-title" id="eve-sso-login-title">
-            EVE SSO
+            Login with EVE Online
           </h2>
           <p className="card-copy">
-            Use EVE SSO for member portal access or linked officer login.
-            Internal Vyraj permissions still control command access.
+            Use EVE SSO for member portal access or linked officer access.
+            Internal Vyraj permissions still control command tools.
           </p>
         </div>
         {eveSso.eveLoginEnabled ? (
@@ -178,6 +152,48 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             : `EVE SSO not configured. Missing: ${eveSso.missingVariables.join(", ")}.`}
         </div>
       </section>
+
+      <details className="create-disclosure form-panel form-panel-wide">
+        <summary className="create-summary">
+          <span className="secondary-button">Manual Officer Login</span>
+        </summary>
+        <div className="card-heading">
+          <h2 className="section-title">Fallback Officer Login</h2>
+          <p className="card-copy">
+            Manual access is reserved for authorized officers when EVE SSO is
+            unavailable or a Super Admin needs fallback command access.
+          </p>
+        </div>
+        <form action={loginAction} className="section-stack">
+          <div className="form-grid">
+            <label className="field-stack">
+              <span className="field-label">Officer Name</span>
+              <input
+                autoComplete="username"
+                className="text-input"
+                name="officerName"
+                required
+                type="text"
+              />
+            </label>
+            <label className="field-stack">
+              <span className="field-label">Password</span>
+              <input
+                autoComplete="current-password"
+                className="text-input"
+                name="password"
+                required
+                type="password"
+              />
+            </label>
+          </div>
+          <div className="badge-row">
+            <button className="secondary-button" type="submit">
+              Manual Officer Login
+            </button>
+          </div>
+        </form>
+      </details>
     </div>
   );
 }

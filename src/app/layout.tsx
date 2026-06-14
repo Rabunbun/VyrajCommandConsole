@@ -136,7 +136,7 @@ function AllianceAccessPanel({
         className="access-avatar"
         style={portraitUrl ? { backgroundImage: `url("${portraitUrl}")` } : undefined}
       >
-        {displayName.slice(0, 1).toUpperCase()}
+        {portraitUrl ? null : displayName.slice(0, 1).toUpperCase()}
       </div>
       <div className="access-label">Alliance Access</div>
       <div className="access-name">{displayName}</div>

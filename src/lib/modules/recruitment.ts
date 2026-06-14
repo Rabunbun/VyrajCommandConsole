@@ -12,7 +12,8 @@ export const recruitmentStatusOptions = [
   "ON_HOLD",
   "ACCEPTED",
   "REJECTED",
-  "WITHDRAWN"
+  "WITHDRAWN",
+  "ARCHIVED"
 ] as const;
 
 export type RecruitmentStatus = (typeof recruitmentStatusOptions)[number];

@@ -24,7 +24,8 @@ const quickFilters = [
   { label: "Interview Scheduled", value: "INTERVIEW_SCHEDULED" },
   { label: "On Hold", value: "ON_HOLD" },
   { label: "Accepted", value: "ACCEPTED" },
-  { label: "Rejected", value: "REJECTED" }
+  { label: "Rejected", value: "REJECTED" },
+  { label: "Archived", value: "ARCHIVED" }
 ] as const;
 
 const attentionStatuses = new Set([
@@ -289,10 +290,15 @@ function ApplicantCard({
       </div>
 
       <div className="metric-grid">
+        <Metric label="Submitted" value={formatDate(applicant.createdAt)} />
         <Metric label="Timezone" value={applicant.timeZone || "Unknown"} />
         <Metric label="Roles" value={applicant.interestedRoles || "Unknown"} />
         <Metric label="Skill Points" value={applicant.skillPoints || "Unknown"} />
-        <Metric label="Referral" value={applicant.referral || "None"} />
+        <Metric label="Source" value={applicant.referral || "None"} />
+        <Metric
+          label="Channel"
+          value={applicant.recruitmentChannel || "Unknown"}
+        />
       </div>
 
       {applicant.applicantNotes ? (
@@ -434,4 +440,11 @@ function Metric({ label, value }: { label: string; value: string }) {
       <div className="metric-value audit-meta-value">{value}</div>
     </div>
   );
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(value));
 }

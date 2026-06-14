@@ -10,6 +10,7 @@ import { getDb } from "@/lib/db";
 const publicCorpStatuses: CorpStatus[] = [CorpStatus.ACTIVE, CorpStatus.TRIAL];
 
 export type PublicCorpCard = {
+  id: string;
   slug: string;
   name: string;
   ticker: string;

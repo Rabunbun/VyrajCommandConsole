@@ -202,6 +202,21 @@ Phase 2C still does not store EVE access tokens, store refresh tokens, request
 new scopes, call authenticated corporation/director ESI, auto-route members, or
 grant permissions from EVE profile data.
 
+## Public Join Applications
+
+Public `/join` submissions reuse `RecruitmentApplicant` records rather than
+creating access records. The selected desired corp becomes `corpId`,
+`mainCharacter` stores the submitted character, `preferredContent` stores the
+selected interest list, `skillPoints` stores the SP estimate, `source` is
+`Public Join Form`, and `recruitmentChannel` is `Public Join Page`. The
+explanation and optional Discord username are stored in the applicant notes.
+
+These records are visible through the existing corp Recruitment Review module to
+Super Admins and officers with the current `recruitmentReview` permission for
+that corp. Applications do not create `EveIdentity` rows, officers, sessions, or
+permissions. Discord notification/webhook integration is planned for a later
+phase and is not active.
+
 Phase 2C.5 extends `EveTypeLookup` for cached ship profile metadata used by
 Doctrine selection: EVE Type ID, type name, group name, category name, generated
 render/icon URLs, published status, and refresh timestamp. Populate or refresh

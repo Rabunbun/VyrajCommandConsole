@@ -76,6 +76,9 @@ export function CorpAccessDenied({
         <Link className="secondary-button" href="/member">
           Member Checkpoint
         </Link>
+        <Link className="secondary-button" href="/join">
+          Join Us
+        </Link>
         <Link className="secondary-button" href="/">
           Alliance Hub
         </Link>
