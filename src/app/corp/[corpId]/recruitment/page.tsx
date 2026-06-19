@@ -283,7 +283,9 @@ function ApplicantCard({
           <div className="card-subtitle">{applicant.discordName || "No Discord listed"}</div>
         </div>
         <div className="badge-row">
-          <span className="badge">{formatStatusLabel(applicant.status)}</span>
+          <span className="badge" data-state={applicant.status}>
+            {formatStatusLabel(applicant.status)}
+          </span>
           {attentionStatuses.has(applicant.status) ? (
             <span className="badge">Needs Attention</span>
           ) : null}

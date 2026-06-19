@@ -110,7 +110,9 @@ export default async function AccessPolicyPage({
               and internal permissions.
             </p>
           </div>
-          <span className="badge">Hard Lockdown Active</span>
+          <span className="badge" data-state="HARD_LOCKDOWN">
+            Hard Lockdown Active
+          </span>
         </div>
       </section>
 

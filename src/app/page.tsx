@@ -76,7 +76,7 @@ export default async function AllianceHubPage() {
             <h2 className="section-title" id="corps-title">
               Corp Directory
             </h2>
-            <span className="badge">Public Registry</span>
+            <span className="badge" data-state="PUBLIC">Public Registry</span>
           </div>
           {data.corps.length ? (
             <div className="data-grid">
@@ -326,8 +326,15 @@ function CorpCard({ corp }: { corp: PublicCorpCard }) {
             EVE-linked
           </span>
         ) : null}
-        <span className="badge">{formatStatusLabel(corp.status)}</span>
-        <span className="badge">{corp.recruitmentStatus}</span>
+        <span className="badge" data-state={corp.status}>
+          {formatStatusLabel(corp.status)}
+        </span>
+        <span
+          className="badge"
+          data-state={normalizeBadgeState(corp.recruitmentStatus)}
+        >
+          {corp.recruitmentStatus}
+        </span>
       </div>
       <div className="metric-grid">
         <Metric label="CEO" value={profile?.ceoName || "Unknown"} />
@@ -395,4 +402,8 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium"
   }).format(new Date(value));
+}
+
+function normalizeBadgeState(value: string) {
+  return value.trim().replace(/\s+/g, "_").toUpperCase();
 }

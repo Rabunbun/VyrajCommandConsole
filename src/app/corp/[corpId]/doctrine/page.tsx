@@ -377,7 +377,9 @@ function DoctrineFitList({
                 </div>
               </div>
               <div className="badge-row">
-                <span className="badge">{formatStatusLabel(fit.status)}</span>
+                <span className="badge" data-state={fit.status}>
+                  {formatStatusLabel(fit.status)}
+                </span>
                 <span className="badge">{corp.ticker}</span>
               </div>
             </div>

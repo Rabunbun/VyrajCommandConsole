@@ -178,8 +178,15 @@ function CorpPortalContent({
             Alliance Hub
           </Link>
           <span className="badge">{corp.ticker}</span>
-          <span className="badge">{formatStatusLabel(corp.status)}</span>
-          <span className="badge">Recruitment {corp.recruitmentStatus}</span>
+          <span className="badge" data-state={corp.status}>
+            {formatStatusLabel(corp.status)}
+          </span>
+          <span
+            className="badge"
+            data-state={normalizeBadgeState(corp.recruitmentStatus)}
+          >
+            Recruitment {corp.recruitmentStatus}
+          </span>
         </div>
       </header>
 
@@ -313,4 +320,8 @@ function formatNamedId(name: string, id: string | null) {
   }
 
   return name || id || "Unknown";
+}
+
+function normalizeBadgeState(value: string) {
+  return value.trim().replace(/\s+/g, "_").toUpperCase();
 }

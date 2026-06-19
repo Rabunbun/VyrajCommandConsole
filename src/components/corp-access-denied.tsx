@@ -36,7 +36,9 @@ export function CorpAccessDenied({
           <h2 className="card-title" id="access-denied-title">
             Access Check
           </h2>
-          <span className="badge">Denied</span>
+          <span className="badge" data-state="ACCESS_RESTRICTED">
+            Access Restricted
+          </span>
         </div>
         <p className="card-copy">{access.reason}</p>
         <div className="audit-meta-grid">

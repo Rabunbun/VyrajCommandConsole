@@ -114,8 +114,8 @@ export default async function SuperAdminPage() {
           <Link className="secondary-button" href="/">
             Back to Alliance Hub
           </Link>
-          <span className="badge">Root</span>
-          <span className="badge">Super Admin</span>
+          <span className="badge" data-state="SUPER_ADMIN">Root</span>
+          <span className="badge" data-state="SUPER_ADMIN">Super Admin</span>
         </div>
       </header>
 
