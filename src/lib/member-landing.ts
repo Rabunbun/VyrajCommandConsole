@@ -38,6 +38,7 @@ export type AllianceAccessIdentityContext = {
   characterName: string;
   statusLabel: string;
   detailLabel: string;
+  portalHref: string;
 } | null;
 
 export async function getMemberLandingContext(): Promise<MemberLandingContext> {
@@ -118,7 +119,10 @@ export async function getAllianceAccessIdentityContext(
           session.officer.role === OfficerRole.SUPER_ADMIN
             ? "Alliance Admin / Super Admin"
             : "Alliance Officer",
-        detailLabel: "Linked EVE SSO identity"
+        detailLabel: "Linked EVE SSO identity",
+        portalHref: session.assignedCorps[0]
+          ? `/corp/${session.assignedCorps[0].corpSlug}`
+          : ""
       };
     }
 
@@ -137,7 +141,10 @@ export async function getAllianceAccessIdentityContext(
     statusLabel: "Verified EVE Member",
     detailLabel: identity.memberCorp
       ? `${identity.memberCorp.name} portal match`
-      : "No matched Vyraj corp"
+      : "No matched Vyraj corp",
+    portalHref: identity.memberCorp
+      ? `/corp/${identity.memberCorp.slug}`
+      : ""
   };
 }
 

@@ -24,7 +24,7 @@ export async function submitDoctrineReadinessAction(formData: FormData) {
 
   try {
     const corp = await getPublicDoctrineCorp(corpSlug);
-    await requireSoftLockdownMemberAccess(corpSlug);
+    await requireHardLockdownMemberAccess(corpSlug);
     const doctrineFitId = cleanText(formData.get("doctrineFitId"));
     const characterName = normalizeDisplayName(formData.get("characterName"));
     const readiness = parseReadinessStatus(formData.get("readiness"));
@@ -115,7 +115,7 @@ export async function submitDoctrineReadinessAction(formData: FormData) {
   redirectWithMessage(corpSlug, "success", successMessage);
 }
 
-async function requireSoftLockdownMemberAccess(corpSlug: string) {
+async function requireHardLockdownMemberAccess(corpSlug: string) {
   const access = await getCorpPortalAccessContext(corpSlug);
 
   if (!access.allowed) {

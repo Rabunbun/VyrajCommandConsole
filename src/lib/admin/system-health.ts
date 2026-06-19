@@ -28,6 +28,7 @@ export type SystemHealthCounts = {
   srpRequests: number;
   doctrineFits: number;
   recruitmentApplicants: number;
+  publicJoinApplications: number;
   lootSplits: number;
   auditLogEntries: number;
   eveTypeLookupRows: number;
@@ -188,6 +189,7 @@ async function readDatabaseSummary() {
       srpRequests,
       doctrineFits,
       recruitmentApplicants,
+      publicJoinApplications,
       lootSplits,
       auditLogEntries,
       eveTypeLookupRows,
@@ -230,6 +232,11 @@ async function readDatabaseSummary() {
       getDb().srpRequest.count(),
       getDb().doctrineFit.count(),
       getDb().recruitmentApplicant.count(),
+      getDb().recruitmentApplicant.count({
+        where: {
+          source: "Public Join Form"
+        }
+      }),
       getDb().lootSplit.count(),
       getDb().officerAuditLog.count(),
       getDb().eveTypeLookup.count(),
@@ -441,6 +448,7 @@ async function readDatabaseSummary() {
         srpRequests,
         doctrineFits,
         recruitmentApplicants,
+        publicJoinApplications,
         lootSplits,
         auditLogEntries,
         eveTypeLookupRows,

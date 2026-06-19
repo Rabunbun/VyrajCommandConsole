@@ -48,7 +48,7 @@ const adminCards = [
     title: "Access Policy Preview",
     href: "/admin/access-policy",
     status: "Active",
-    summary: "Review active Soft Lockdown member matching and corp readiness."
+    summary: "Review active Hard Lockdown member matching and corp readiness."
   },
   {
     code: "SYS",

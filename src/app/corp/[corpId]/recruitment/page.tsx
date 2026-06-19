@@ -80,11 +80,12 @@ export default async function RecruitmentPage({
   }
 
   if (result.status === "access_denied") {
+    const deniedAccess = await getOfficerOnlyDeniedContext(corpSlug);
+
     return (
-      <UnavailableState
-        eyebrow="Access"
-        message={result.message}
-        title="Recruitment Access Denied"
+      <CorpAccessDenied
+        access={deniedAccess}
+        moduleName="Recruitment Review"
       />
     );
   }

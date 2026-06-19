@@ -1,20 +1,29 @@
 import Link from "next/link";
+import { logoutAction } from "@/app/auth-actions";
 import type { CorpPortalAccessContext } from "@/lib/corp-portal-access";
+import { sanitizeProtectedReturnTo } from "@/lib/route-policy";
 
 export function CorpAccessDenied({
   access,
-  moduleName = "Corp Portal"
+  moduleName = "Corp Portal",
+  returnTo = ""
 }: {
   access: CorpPortalAccessContext;
   moduleName?: string;
+  returnTo?: string;
 }) {
   const identity = access.identity;
   const corp = access.corp;
+  const hasActiveContext = Boolean(identity || access.session);
+  const safeReturnTo = sanitizeProtectedReturnTo(returnTo);
+  const eveLoginHref = safeReturnTo
+    ? `/api/auth/eve/start?returnTo=${encodeURIComponent(safeReturnTo)}`
+    : "/api/auth/eve/start";
 
   return (
     <div className="page-stack">
       <header className="page-heading">
-        <div className="eyebrow">Soft Lockdown</div>
+        <div className="eyebrow">Hard Lockdown</div>
         <h1 className="page-title">Access Denied</h1>
         <p className="page-copy">
           {moduleName} access is evaluated server-side from officer permissions
@@ -31,6 +40,7 @@ export function CorpAccessDenied({
         </div>
         <p className="card-copy">{access.reason}</p>
         <div className="audit-meta-grid">
+          <Metric label="Target Module" value={moduleName} />
           <Metric label="Target Portal" value={corp?.name || "Unknown"} />
           <Metric
             label="Target EVE Corp"
@@ -68,9 +78,14 @@ export function CorpAccessDenied({
       </section>
 
       <div className="badge-row">
+        {!hasActiveContext ? (
+          <Link className="command-button" href={eveLoginHref}>
+            Login with EVE
+          </Link>
+        ) : null}
         {access.loginRequired ? (
-          <Link className="command-button" href="/login">
-            Login
+          <Link className="secondary-button" href="/login">
+            Login Options
           </Link>
         ) : null}
         <Link className="secondary-button" href="/member">
@@ -82,6 +97,13 @@ export function CorpAccessDenied({
         <Link className="secondary-button" href="/">
           Alliance Hub
         </Link>
+        {hasActiveContext ? (
+          <form action={logoutAction}>
+            <button className="secondary-button" type="submit">
+              {identity ? "Logout / Switch Character" : "Log Out"}
+            </button>
+          </form>
+        ) : null}
       </div>
     </div>
   );

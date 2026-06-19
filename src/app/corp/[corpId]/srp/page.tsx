@@ -8,6 +8,7 @@ import {
   getSrpPageData,
   type SrpCorpView
 } from "@/lib/modules/srp";
+import { buildLoginPath } from "@/lib/route-policy";
 import { getCurrentOfficerSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -35,10 +36,16 @@ export default async function SrpPage({ params, searchParams }: SrpPageProps) {
 
   if (!access.allowed) {
     if (access.loginRequired) {
-      redirect("/login");
+      redirect(buildLoginPath(`/corp/${corpSlug}/srp`));
     }
 
-    return <CorpAccessDenied access={access} moduleName="SRP Requests" />;
+    return (
+      <CorpAccessDenied
+        access={access}
+        moduleName="SRP Requests"
+        returnTo={`/corp/${corpSlug}/srp`}
+      />
+    );
   }
 
   const result = await getSrpPageData(corpSlug, session);

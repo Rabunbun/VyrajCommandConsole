@@ -47,12 +47,10 @@ export default async function CorpDashboardPage({ params }: DashboardPageProps) 
   }
 
   if (result.status === "access_denied") {
+    const deniedAccess = await getOfficerOnlyDeniedContext(corpSlug);
+
     return (
-      <UnavailableState
-        eyebrow="Access"
-        message={result.message}
-        title="Dashboard Access Denied"
-      />
+      <CorpAccessDenied access={deniedAccess} moduleName="Corp Dashboard" />
     );
   }
 

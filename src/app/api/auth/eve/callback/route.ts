@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   clearOAuthStateCookie,
+  consumeEveSsoReturnTo,
   createLinkedOfficerSession,
   enrichEveIdentityFromPublicEsi,
   exchangeCodeForEveTokens,
@@ -11,6 +12,7 @@ import {
   validateEveAccessToken,
   verifyAndConsumeOAuthState
 } from "@/lib/eve-sso/oauth";
+import { resolveVerifiedMemberReturnTo } from "@/lib/route-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +53,8 @@ export async function GET(request: NextRequest) {
 
     return redirectWithLoginError(origin, "EVE SSO state validation failed. Please try again.");
   }
+
+  const returnTo = await consumeEveSsoReturnTo();
 
   try {
     const tokenResponse = await exchangeCodeForEveTokens(code);
@@ -97,20 +101,38 @@ export async function GET(request: NextRequest) {
       summary: `EVE identity ${identity.characterName} verified without linked active officer access.`
     });
 
-    return NextResponse.redirect(new URL(shouldShowMemberLanding ? "/member" : "/", origin));
+    const authorizedReturnTo = await resolveVerifiedMemberReturnTo({
+      returnTo,
+      corporationId: identity.corporationId
+    });
+
+    return NextResponse.redirect(
+      new URL(
+        authorizedReturnTo ||
+          (returnTo || shouldShowMemberLanding ? "/member" : "/"),
+        origin
+      )
+    );
   } catch (error) {
     await logEveSsoResult({
       action: "EVE SSO Callback Failed",
       summary: error instanceof Error ? error.message : "EVE SSO callback failed."
     });
 
-    return redirectWithLoginError(origin, "EVE SSO login failed. Please try again or use manual officer login.");
+    return redirectWithLoginError(
+      origin,
+      "EVE SSO login failed. Please try again or use manual officer login.",
+      returnTo
+    );
   }
 }
 
-function redirectWithLoginError(origin: string, message: string) {
+function redirectWithLoginError(origin: string, message: string, returnTo = "") {
   const loginUrl = new URL("/login", origin);
   loginUrl.searchParams.set("error", message);
+  if (returnTo) {
+    loginUrl.searchParams.set("returnTo", returnTo);
+  }
 
   return NextResponse.redirect(loginUrl);
 }

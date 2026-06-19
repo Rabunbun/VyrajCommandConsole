@@ -271,6 +271,33 @@ EVE SSO is the primary login path for members and linked officers. Manual
 officer login remains available as fallback access for authorized officers and
 Super Admin recovery.
 
+## Hard Lockdown Route Policy
+
+Hard Lockdown is the authoritative server-side access policy:
+
+- Public: `/`, `/join`, `/login`, safe `/member` and EVE SSO compatibility
+  routes.
+- Member protected: `/corp/[corpId]`, Attendance, Doctrine, and SRP.
+- Officer protected: Recruitment Review, Loot Splits, and Corp Dashboard.
+- Admin protected: every `/admin/*` route according to its existing Super Admin
+  or internal permission requirement.
+
+Verified EVE corporation membership grants member-level access only when the
+character's current corporation ID matches the target corp's configured
+`CorpEveIdentityConfig.eveCorporationId`. Alliance-only matches do not grant
+access. Officer/admin tools always require an active internal Officer session
+and the existing assignments/permissions.
+
+Protected pages and mutations enforce access on the server. A short-lived,
+HTTP-only EVE OAuth return-path cookie may preserve an intended Attendance,
+Doctrine, SRP, or corp portal destination. The callback rechecks that destination
+against the verified character's corporation before redirecting. Public Join
+applications never grant access.
+
+Manual officer login remains available as fallback. Hard Lockdown does not store
+EVE access or refresh tokens, request new scopes, use authenticated/private ESI,
+auto-link identities, auto-create officers, or integrate Discord.
+
 ## EVE Ship Type Lookup
 
 Doctrine ship selection uses cached public EVE ship type rows from

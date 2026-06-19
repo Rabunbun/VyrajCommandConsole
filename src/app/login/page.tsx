@@ -3,12 +3,17 @@ import Link from "next/link";
 import { loginAction, logoutAction } from "@/app/auth-actions";
 import { getEveSsoConfigStatus } from "@/lib/eve-sso/config";
 import { getMemberLandingContext, getOfficerDestination } from "@/lib/member-landing";
+import {
+  resolveVerifiedMemberReturnTo,
+  sanitizeProtectedReturnTo
+} from "@/lib/route-policy";
 import { getCurrentOfficerSession } from "@/lib/session";
 
 type LoginPageProps = {
   searchParams: Promise<{
     error?: string;
     loggedOut?: string;
+    returnTo?: string;
   }>;
 };
 
@@ -17,6 +22,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const memberContext = await getMemberLandingContext();
   const params = await searchParams;
   const eveSso = getEveSsoConfigStatus();
+  const returnTo = sanitizeProtectedReturnTo(params.returnTo);
+  const eveLoginHref = returnTo
+    ? `/api/auth/eve/start?returnTo=${encodeURIComponent(returnTo)}`
+    : "/api/auth/eve/start";
 
   if (session) {
     return (
@@ -55,6 +64,13 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   }
 
   if (memberContext.accessMode === "verified_member" && memberContext.identity) {
+    const authorizedReturnTo = await resolveVerifiedMemberReturnTo({
+      returnTo,
+      corporationId: memberContext.identity.corporationId
+        ? BigInt(memberContext.identity.corporationId)
+        : null
+    });
+
     return (
       <div className="page-stack">
         <header className="page-heading">
@@ -94,8 +110,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             />
           </div>
           <div className="badge-row">
-            <Link className="command-button" href="/">
-              Continue to Alliance Hub
+            <Link className="command-button" href={authorizedReturnTo || "/"}>
+              {authorizedReturnTo ? "Continue to Requested Module" : "Continue to Alliance Hub"}
             </Link>
             <Link className="secondary-button" href="/member">
               Member Checkpoint
@@ -138,7 +154,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </p>
         </div>
         {eveSso.eveLoginEnabled ? (
-          <Link className="command-button" href="/api/auth/eve/start">
+          <Link className="command-button" href={eveLoginHref}>
             Login with EVE
           </Link>
         ) : (
@@ -150,6 +166,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           {eveSso.eveLoginEnabled
             ? "EVE SSO is configured. Verified members land at the identity checkpoint; linked officers unlock their normal Vyraj session."
             : `EVE SSO not configured. Missing: ${eveSso.missingVariables.join(", ")}.`}
+        </div>
+        <div className="badge-row">
+          <Link className="secondary-button" href="/join">
+            Join Us
+          </Link>
+          <Link className="secondary-button" href="/">
+            Alliance Hub
+          </Link>
         </div>
       </section>
 
@@ -165,6 +189,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </p>
         </div>
         <form action={loginAction} className="section-stack">
+          {returnTo ? <input name="returnTo" type="hidden" value={returnTo} /> : null}
           <div className="form-grid">
             <label className="field-stack">
               <span className="field-label">Officer Name</span>

@@ -143,13 +143,25 @@ function AllianceAccessPanel({
       <div className="access-detail">{roleLabel}</div>
       <div className="access-detail">{detailLabel}</div>
       {session ? (
-        <form action={logoutAction}>
-          <button className="secondary-button access-button" type="submit">
-            Lock
-          </button>
-        </form>
+        <div className="access-action-stack">
+          {identity?.portalHref ? (
+            <Link className="secondary-button access-button" href={identity.portalHref}>
+              Corp Portal
+            </Link>
+          ) : null}
+          <form action={logoutAction}>
+            <button className="secondary-button access-button" type="submit">
+              Log Out
+            </button>
+          </form>
+        </div>
       ) : identity ? (
         <div className="access-action-stack">
+          {identity.portalHref ? (
+            <Link className="command-button access-button" href={identity.portalHref}>
+              Corp Portal
+            </Link>
+          ) : null}
           <Link className="secondary-button access-button" href="/member">
             Checkpoint
           </Link>
@@ -160,9 +172,14 @@ function AllianceAccessPanel({
           </form>
         </div>
       ) : (
-        <Link className="command-button access-button" href="/login">
-          Unlock
-        </Link>
+        <div className="access-action-stack">
+          <Link className="command-button access-button" href="/login">
+            Login
+          </Link>
+          <Link className="secondary-button access-button" href="/join">
+            Join Us
+          </Link>
+        </div>
       )}
     </aside>
   );

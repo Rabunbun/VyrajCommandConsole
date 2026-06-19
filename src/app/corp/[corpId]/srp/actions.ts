@@ -31,7 +31,7 @@ export async function analyzeSrpRequestAssistAction(
 
   try {
     const corp = await getPublicSrpCorp(corpSlug);
-    await requireSoftLockdownMemberAccess(corpSlug);
+    await requireHardLockdownMemberAccess(corpSlug);
     const assist = await analyzeSrpAssist({
       killmailUrl: cleanText(formData.get("killmailUrl")),
       lossValue: parseIskAmount(formData.get("lossValue"), {
@@ -86,7 +86,7 @@ export async function submitSrpRequestAction(formData: FormData) {
 
   try {
     const corp = await getPublicSrpCorp(corpSlug);
-    await requireSoftLockdownMemberAccess(corpSlug);
+    await requireHardLockdownMemberAccess(corpSlug);
     const session = await getCurrentOfficerSession();
     const killmailUrl = cleanText(formData.get("killmailUrl"));
 
@@ -188,7 +188,7 @@ export async function submitSrpRequestAction(formData: FormData) {
   redirect(redirectTo);
 }
 
-async function requireSoftLockdownMemberAccess(corpSlug: string) {
+async function requireHardLockdownMemberAccess(corpSlug: string) {
   const access = await getCorpPortalAccessContext(corpSlug);
 
   if (!access.allowed) {

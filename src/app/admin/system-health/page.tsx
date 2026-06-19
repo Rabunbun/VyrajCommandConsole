@@ -30,6 +30,7 @@ const countCards: Array<{
   { key: "srpRequests", label: "SRP Requests" },
   { key: "doctrineFits", label: "Doctrine Fits" },
   { key: "recruitmentApplicants", label: "Recruitment" },
+  { key: "publicJoinApplications", label: "Public Join Apps" },
   { key: "lootSplits", label: "Loot Splits" },
   { key: "auditLogEntries", label: "Audit Logs" },
   { key: "eveTypeLookupRows", label: "EVE Type Rows" },
@@ -115,7 +116,7 @@ export default async function SystemHealthPage() {
 
       <MemberLandingReadinessSection counts={health.counts} />
 
-      <SoftLockdownSection counts={health.counts} />
+      <HardLockdownSection counts={health.counts} />
 
       <CorpEveMappingSection counts={health.counts} />
 
@@ -418,7 +419,7 @@ function MemberLandingReadinessSection({
         {
           label: "Landing enforcement",
           status: "OK",
-          detail: "First-login checkpoint remains available. Corp portal access is now handled by Soft Lockdown."
+          detail: "First-login checkpoint remains available. Corp portal access is enforced by Hard Lockdown."
         }
       ]
     : [
@@ -438,7 +439,7 @@ function MemberLandingReadinessSection({
   );
 }
 
-function SoftLockdownSection({
+function HardLockdownSection({
   counts
 }: {
   counts: SystemHealthCounts | null;
@@ -446,9 +447,14 @@ function SoftLockdownSection({
   const checks: HealthCheck[] = counts
     ? [
         {
-          label: "Soft Lockdown",
+          label: "Hard Lockdown",
           status: "OK",
-          detail: "Enabled for Corp Portal and member module routes."
+          detail: "Hard Lockdown is enabled across protected pages and server actions."
+        },
+        {
+          label: "Public Alliance Hub",
+          status: "OK",
+          detail: "Public."
         },
         {
           label: "Corp portals require member match",
@@ -474,6 +480,21 @@ function SoftLockdownSection({
           detail: formatNumber(counts.eveIdentitiesMatchedToConfiguredCorp)
         },
         {
+          label: "Member modules",
+          status: "OK",
+          detail: "Attendance, Doctrine, and SRP require verified corp access."
+        },
+        {
+          label: "Officer modules",
+          status: "OK",
+          detail: "Recruitment, Loot Splits, and Corp Dashboard require internal officer permissions."
+        },
+        {
+          label: "Public Join intake",
+          status: "OK",
+          detail: `${formatNumber(counts.publicJoinApplications)} application(s) received. Applications do not grant access.`
+        },
+        {
           label: "Manual officer fallback",
           status: "OK",
           detail: "Enabled. Manual officers still use internal sessions and permissions."
@@ -481,7 +502,7 @@ function SoftLockdownSection({
       ]
     : [
         {
-          label: "Soft Lockdown",
+          label: "Hard Lockdown",
           status: "Error",
           detail: "Database counts are unavailable."
         }
@@ -490,8 +511,8 @@ function SoftLockdownSection({
   return (
     <HealthSection
       checks={checks}
-      description="Active member gate for corp portals. EVE membership grants member-level portal access only."
-      title="Soft Lockdown"
+      description="Authoritative route and action policy. EVE membership grants member-level portal access only."
+      title="Hard Lockdown"
     />
   );
 }

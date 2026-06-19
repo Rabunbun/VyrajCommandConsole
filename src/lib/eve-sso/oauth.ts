@@ -6,8 +6,10 @@ import { logOfficerAudit } from "@/lib/audit";
 import { getDb } from "@/lib/db";
 import { createOfficerSession, getSessionDurationHours } from "@/lib/session";
 import { getEveSsoServerConfig } from "@/lib/eve-sso/config";
+import { sanitizeProtectedReturnTo } from "@/lib/route-policy";
 
 const oauthStateCookieName = "vyraj_eve_oauth_state";
+const oauthReturnToCookieName = "vyraj_eve_oauth_return_to";
 const unlinkedIdentityCookieName = "vyraj_eve_unlinked_identity";
 const oauthStateMaxAgeSeconds = 10 * 60;
 const unlinkedIdentityMaxAgeSeconds = Math.round(getSessionDurationHours() * 60 * 60);
@@ -95,7 +97,7 @@ export function isEveSsoConfiguredForLogin() {
   return getEveSsoServerConfig().eveLoginEnabled;
 }
 
-export async function buildEveAuthorizeUrl() {
+export async function buildEveAuthorizeUrl(returnTo?: string) {
   const config = getEveSsoServerConfig();
 
   if (!config.eveLoginEnabled) {
@@ -115,6 +117,7 @@ export async function buildEveAuthorizeUrl() {
   url.searchParams.set("redirect_uri", config.callbackUrl);
   url.searchParams.set("scope", config.scopes.join(" "));
   url.searchParams.set("state", state);
+  await setOAuthReturnToCookie(returnTo);
 
   return url;
 }
@@ -125,6 +128,7 @@ export async function verifyAndConsumeOAuthState(returnedState: string) {
   cookieStore.delete(oauthStateCookieName);
 
   if (!returnedState || !storedState) {
+    cookieStore.delete(oauthReturnToCookieName);
     return false;
   }
 
@@ -137,6 +141,7 @@ export async function verifyAndConsumeOAuthState(returnedState: string) {
 export async function clearOAuthStateCookie() {
   const cookieStore = await cookies();
   cookieStore.delete(oauthStateCookieName);
+  cookieStore.delete(oauthReturnToCookieName);
 }
 
 export async function clearEveSsoLocalCookies() {
@@ -144,10 +149,20 @@ export async function clearEveSsoLocalCookies() {
 
   // Local EVE SSO cookies:
   // - vyraj_eve_oauth_state protects the in-flight OAuth redirect.
+  // - vyraj_eve_oauth_return_to preserves a safe member-module destination.
   // - vyraj_eve_unlinked_identity stores the verified member checkpoint identity.
   // App logout should clear both. Neither cookie stores EVE tokens.
   cookieStore.delete(oauthStateCookieName);
+  cookieStore.delete(oauthReturnToCookieName);
   cookieStore.delete(unlinkedIdentityCookieName);
+}
+
+export async function consumeEveSsoReturnTo() {
+  const cookieStore = await cookies();
+  const returnTo = cookieStore.get(oauthReturnToCookieName)?.value || "";
+  cookieStore.delete(oauthReturnToCookieName);
+
+  return sanitizeProtectedReturnTo(returnTo);
 }
 
 export async function exchangeCodeForEveTokens(code: string) {
@@ -574,6 +589,24 @@ function createOAuthState() {
 async function setOAuthStateCookie(state: string) {
   const cookieStore = await cookies();
   cookieStore.set(oauthStateCookieName, state, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: oauthStateMaxAgeSeconds
+  });
+}
+
+async function setOAuthReturnToCookie(returnTo?: string) {
+  const cookieStore = await cookies();
+  const safeReturnTo = sanitizeProtectedReturnTo(returnTo);
+
+  if (!safeReturnTo) {
+    cookieStore.delete(oauthReturnToCookieName);
+    return;
+  }
+
+  cookieStore.set(oauthReturnToCookieName, safeReturnTo, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

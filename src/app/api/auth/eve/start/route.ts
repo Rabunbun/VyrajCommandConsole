@@ -1,11 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { buildEveAuthorizeUrl, logEveSsoResult } from "@/lib/eve-sso/oauth";
+import { sanitizeProtectedReturnTo } from "@/lib/route-policy";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const returnTo = sanitizeProtectedReturnTo(
+    request.nextUrl.searchParams.get("returnTo")
+  );
+
   try {
-    const authorizeUrl = await buildEveAuthorizeUrl();
+    const authorizeUrl = await buildEveAuthorizeUrl(returnTo);
 
     return NextResponse.redirect(authorizeUrl);
   } catch (error) {
@@ -16,6 +21,9 @@ export async function GET() {
 
     const url = new URL("/login", getAppBaseUrl());
     url.searchParams.set("error", "EVE SSO is not configured yet.");
+    if (returnTo) {
+      url.searchParams.set("returnTo", returnTo);
+    }
 
     return NextResponse.redirect(url);
   }

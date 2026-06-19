@@ -128,10 +128,21 @@ export default async function MemberLandingPage() {
             </div>
           </div>
         ) : (
-          <div className="empty-state">
-            No configured Vyraj corp portal matched this character&apos;s current
-            EVE corporation. Use the Alliance Hub navigation above for public
-            routes, or contact leadership if this corp should be mapped.
+          <div className="empty-state section-stack">
+            <p className="card-copy">
+              No configured Vyraj corp portal matched this character&apos;s
+              current EVE corporation. Verification does not grant immediate
+              access, and submitting an application does not bypass membership
+              review.
+            </p>
+            <div className="badge-row">
+              <Link className="command-button" href="/join">
+                Join Us
+              </Link>
+              <Link className="secondary-button" href="/">
+                Alliance Hub
+              </Link>
+            </div>
           </div>
         )}
       </section>

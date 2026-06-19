@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { logoutAction } from "@/app/auth-actions";
 import { getUnlinkedIdentityFromCookie } from "@/lib/eve-sso/oauth";
 
 export const dynamic = "force-dynamic";
@@ -6,6 +7,31 @@ export const dynamic = "force-dynamic";
 export default async function UnlinkedEveIdentityPage() {
   const identity = await getUnlinkedIdentityFromCookie();
   const hasInactiveOfficerLink = Boolean(identity?.officer);
+
+  if (!identity) {
+    return (
+      <div className="page-stack">
+        <header className="page-heading">
+          <div className="eyebrow">EVE SSO</div>
+          <h1 className="page-title">Identity Session Expired</h1>
+          <p className="page-copy">
+            No verified EVE identity context is active in this browser.
+          </p>
+        </header>
+        <div className="badge-row">
+          <Link className="command-button" href="/api/auth/eve/start">
+            Login with EVE
+          </Link>
+          <Link className="secondary-button" href="/join">
+            Join Us
+          </Link>
+          <Link className="secondary-button" href="/">
+            Alliance Hub
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-stack">
@@ -24,8 +50,13 @@ export default async function UnlinkedEveIdentityPage() {
             Alliance Hub
           </Link>
           <Link className="secondary-button" href="/login">
-            Officer Login
+            Login Options
           </Link>
+          <form action={logoutAction}>
+            <button className="secondary-button" type="submit">
+              Logout / Switch Character
+            </button>
+          </form>
         </div>
       </header>
 
@@ -35,9 +66,7 @@ export default async function UnlinkedEveIdentityPage() {
             EVE Identity Status
           </h2>
           <p className="card-copy">
-            {identity?.characterName
-              ? `${identity.characterName} is verified.`
-              : "EVE identity was verified, but this status link has expired."}
+            {identity.characterName} is verified.
           </p>
         </div>
         <div className="status-grid">
@@ -48,7 +77,7 @@ export default async function UnlinkedEveIdentityPage() {
           <div className="status-panel">
             <div className="status-label">Character</div>
             <div className="status-value">
-              {identity?.characterName || "Verified character"}
+              {identity.characterName}
             </div>
           </div>
           <div className="status-panel">
@@ -58,23 +87,25 @@ export default async function UnlinkedEveIdentityPage() {
           <div className="status-panel">
             <div className="status-label">Current Corp</div>
             <div className="status-value">
-              {identity
-                ? formatNamedId(identity.corporationName, identity.corporationId?.toString() ?? null)
-                : "Unknown"}
+              {formatNamedId(
+                identity.corporationName,
+                identity.corporationId?.toString() ?? null
+              )}
             </div>
           </div>
           <div className="status-panel">
             <div className="status-label">Current Alliance</div>
             <div className="status-value">
-              {identity
-                ? formatNamedId(identity.allianceName, identity.allianceId?.toString() ?? null)
-                : "Unknown"}
+              {formatNamedId(
+                identity.allianceName,
+                identity.allianceId?.toString() ?? null
+              )}
             </div>
           </div>
           <div className="status-panel">
             <div className="status-label">Matched Vyraj Corp</div>
             <div className="status-value">
-              {identity?.memberCorp
+              {identity.memberCorp
                 ? `${identity.memberCorp.name} [${identity.memberCorp.ticker}]`
                 : "No configured match"}
             </div>
@@ -82,7 +113,7 @@ export default async function UnlinkedEveIdentityPage() {
           <div className="status-panel">
             <div className="status-label">Identity Refreshed</div>
             <div className="status-value">
-              {identity?.lastIdentityRefreshAt
+              {identity.lastIdentityRefreshAt
                 ? formatDateTime(identity.lastIdentityRefreshAt)
                 : "Unknown"}
             </div>

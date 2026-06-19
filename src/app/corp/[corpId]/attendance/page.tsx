@@ -16,6 +16,7 @@ import {
   type OperationView
 } from "@/lib/modules/attendance";
 import { formatStatusLabel } from "@/lib/public-data";
+import { buildLoginPath } from "@/lib/route-policy";
 import { getCurrentOfficerSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -46,10 +47,16 @@ export default async function AttendancePage({
 
   if (!access.allowed) {
     if (access.loginRequired) {
-      redirect("/login");
+      redirect(buildLoginPath(`/corp/${corpSlug}/attendance`));
     }
 
-    return <CorpAccessDenied access={access} moduleName="Op Attendance" />;
+    return (
+      <CorpAccessDenied
+        access={access}
+        moduleName="Op Attendance"
+        returnTo={`/corp/${corpSlug}/attendance`}
+      />
+    );
   }
 
   const result = await getAttendancePageData(corpSlug, session);

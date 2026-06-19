@@ -24,7 +24,7 @@ export async function submitAttendanceAction(formData: FormData) {
 
   try {
     const corp = await getPublicAttendanceCorp(corpSlug);
-    await requireSoftLockdownMemberAccess(corpSlug);
+    await requireHardLockdownMemberAccess(corpSlug);
     const operationId = cleanText(formData.get("operationId"));
     const characterName = normalizeDisplayName(formData.get("characterName"));
     const attendanceStatus = parseAttendanceStatus(formData.get("attendanceStatus"));
@@ -110,7 +110,7 @@ export async function submitAttendanceAction(formData: FormData) {
   redirectWithMessage(corpSlug, "success", successMessage);
 }
 
-async function requireSoftLockdownMemberAccess(corpSlug: string) {
+async function requireHardLockdownMemberAccess(corpSlug: string) {
   const access = await getCorpPortalAccessContext(corpSlug);
 
   if (!access.allowed) {

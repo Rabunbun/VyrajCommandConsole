@@ -217,6 +217,27 @@ that corp. Applications do not create `EveIdentity` rows, officers, sessions, or
 permissions. Discord notification/webhook integration is planned for a later
 phase and is not active.
 
+## Hard Lockdown Access Policy
+
+Hard Lockdown does not require a new table. It uses existing `OfficerSession`,
+`EveIdentity`, `OfficerCorpAssignment`, `OfficerPermission`, `Corp`, and
+`CorpEveIdentityConfig` records as the authoritative access inputs.
+
+- Public routes remain available without a session: Alliance Hub, Join, Login,
+  and safe EVE identity checkpoint/compatibility pages.
+- Corp portal, Attendance, Doctrine, and SRP access requires a Super Admin,
+  internally allowed officer, or verified EVE identity with an exact current
+  corporation ID match to the target corp configuration.
+- Recruitment, Loot Splits, Corp Dashboard, and all admin routes require the
+  existing internal officer/Super Admin permissions.
+
+Alliance ID alone never grants access. Public recruitment applications never
+create sessions, identities, officers, assignments, or permissions. EVE OAuth
+may retain a short-lived protected member-route return path, but the callback
+validates the target corp against the verified identity before redirecting.
+No EVE tokens, new scopes, authenticated/private ESI, auto-linking, automatic
+permissions, or Discord integration are involved.
+
 Phase 2C.5 extends `EveTypeLookup` for cached ship profile metadata used by
 Doctrine selection: EVE Type ID, type name, group name, category name, generated
 render/icon URLs, published status, and refresh timestamp. Populate or refresh

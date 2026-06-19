@@ -10,6 +10,7 @@ import {
   getPublicCorpPortalData,
   type PublicCorpPortal
 } from "@/lib/public-data";
+import { buildLoginPath } from "@/lib/route-policy";
 import { getCurrentOfficerSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -61,10 +62,10 @@ export default async function CorpPortalPage({ params }: CorpPortalPageProps) {
 
   if (!access.allowed) {
     if (access.loginRequired) {
-      redirect("/login");
+      redirect(buildLoginPath(`/corp/${corpSlug}`));
     }
 
-    return <CorpAccessDenied access={access} />;
+    return <CorpAccessDenied access={access} returnTo={`/corp/${corpSlug}`} />;
   }
 
   return <CorpPortal corp={result.corp} session={session} />;

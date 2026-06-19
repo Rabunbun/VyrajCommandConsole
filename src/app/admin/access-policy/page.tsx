@@ -78,9 +78,9 @@ export default async function AccessPolicyPage({
         <div className="eyebrow">Super Admin</div>
         <h1 className="page-title">Access Policy Preview</h1>
         <p className="page-copy">
-          Soft Lockdown is active for corp portals. This page shows the same
-          member matching rules without exposing secrets or changing officer
-          permissions.
+          Hard Lockdown is active. This source-of-truth preview uses the same
+          member matching evaluator as protected corp routes while officer tools
+          remain governed by internal permissions.
         </p>
         <div className="badge-row">
           <Link className="secondary-button" href="/admin/super">
@@ -110,7 +110,7 @@ export default async function AccessPolicyPage({
               and internal permissions.
             </p>
           </div>
-          <span className="badge">Soft Lockdown Active</span>
+          <span className="badge">Hard Lockdown Active</span>
         </div>
       </section>
 
@@ -307,7 +307,7 @@ function CorpReadinessSection({
             Corp Readiness
           </h2>
           <p className="card-copy">
-            Corp registry EVE corporation IDs used by active Soft Lockdown for
+            Corp registry EVE corporation IDs used by active Hard Lockdown for
             portal matching.
           </p>
         </div>
@@ -368,7 +368,7 @@ function OfficerReadinessSection({
           </h2>
           <p className="card-copy">
             These officer accounts do not have a linked EVE identity yet.
-            Manual login remains available in this preview phase.
+            Manual login remains available as a Hard Lockdown fallback.
           </p>
         </div>
         <span className="badge">{officers.length}</span>

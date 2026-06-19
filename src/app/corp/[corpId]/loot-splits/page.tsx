@@ -62,11 +62,12 @@ export default async function LootSplitsPage({
   }
 
   if (result.status === "access_denied") {
+    const deniedAccess = await getOfficerOnlyDeniedContext(corpSlug);
+
     return (
-      <UnavailableState
-        eyebrow="Access"
-        message={result.message}
-        title="Loot Split Access Denied"
+      <CorpAccessDenied
+        access={deniedAccess}
+        moduleName="Loot Split Calculation"
       />
     );
   }

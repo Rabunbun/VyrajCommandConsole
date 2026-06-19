@@ -17,6 +17,7 @@ import {
 import { EveShipImage } from "@/components/eve-ship-image";
 import { getCorpPortalAccessContext } from "@/lib/corp-portal-access";
 import { formatStatusLabel } from "@/lib/public-data";
+import { buildLoginPath } from "@/lib/route-policy";
 import { getCurrentOfficerSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -47,10 +48,16 @@ export default async function DoctrinePage({
 
   if (!access.allowed) {
     if (access.loginRequired) {
-      redirect("/login");
+      redirect(buildLoginPath(`/corp/${corpSlug}/doctrine`));
     }
 
-    return <CorpAccessDenied access={access} moduleName="Doctrine Readiness" />;
+    return (
+      <CorpAccessDenied
+        access={access}
+        moduleName="Doctrine Readiness"
+        returnTo={`/corp/${corpSlug}/doctrine`}
+      />
+    );
   }
 
   const result = await getDoctrinePageData(corpSlug, session);

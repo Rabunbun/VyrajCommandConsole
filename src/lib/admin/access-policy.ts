@@ -35,6 +35,8 @@ export type AccessPolicyIdentityEvaluation = {
     officerName: string;
     role: OfficerRole;
     status: OfficerStatus;
+    permissionCount: number;
+    assignmentCount: number;
   } | null;
   matchedCorp: {
     id: string;
@@ -91,7 +93,13 @@ export async function getAccessPolicyPreviewData(): Promise<AccessPolicyPreviewD
             id: true,
             officerName: true,
             role: true,
-            status: true
+            status: true,
+            _count: {
+              select: {
+                permissions: true,
+                corpAssignments: true
+              }
+            }
           }
         }
       }
@@ -173,7 +181,16 @@ export async function getAccessPolicyPreviewData(): Promise<AccessPolicyPreviewD
       corporationName: identity.corporationName,
       allianceId: identity.allianceId?.toString() || "",
       allianceName: identity.allianceName,
-      linkedOfficer: identity.officer,
+      linkedOfficer: identity.officer
+        ? {
+            id: identity.officer.id,
+            officerName: identity.officer.officerName,
+            role: identity.officer.role,
+            status: identity.officer.status,
+            permissionCount: identity.officer._count.permissions,
+            assignmentCount: identity.officer._count.corpAssignments
+          }
+        : null,
       matchedCorp: matchedCorp
         ? {
             id: matchedCorp.id,
@@ -337,7 +354,14 @@ function evaluateIdentityAccess(input: Omit<
       })
     : null;
   const wouldAllowMemberPortal = Boolean(memberEvaluation?.allowed);
-  const wouldAllowOfficerTools = Boolean(linkedActiveOfficer);
+  const wouldAllowOfficerTools = Boolean(
+    linkedActiveOfficer &&
+    input.linkedOfficer &&
+    (
+      input.linkedOfficer.role === OfficerRole.SUPER_ADMIN ||
+      input.linkedOfficer.permissionCount > 0
+    )
+  );
   const destination = wouldAllowMemberPortal && input.matchedCorp
     ? `/corp/${input.matchedCorp.slug}`
     : "";
@@ -354,8 +378,10 @@ function evaluateIdentityAccess(input: Omit<
   }
 
   if (input.linkedOfficer) {
-    reason = linkedActiveOfficer
-      ? `${reason} Officer tools depend on linked active officer ${input.linkedOfficer.officerName}.`
+    reason = wouldAllowOfficerTools
+      ? `${reason} Officer tools depend on linked active officer ${input.linkedOfficer.officerName} and its internal permissions.`
+      : linkedActiveOfficer
+        ? `${reason} Linked officer ${input.linkedOfficer.officerName} has no internal officer permissions.`
       : `${reason} Officer link exists, but officer is not active.`;
   }
 

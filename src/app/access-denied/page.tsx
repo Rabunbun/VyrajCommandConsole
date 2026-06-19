@@ -12,11 +12,17 @@ export default function AccessDeniedPage() {
         </p>
       </header>
       <div className="badge-row">
+        <Link className="command-button" href="/api/auth/eve/start">
+          Login with EVE
+        </Link>
         <Link className="command-button" href="/">
           Alliance Hub
         </Link>
         <Link className="secondary-button" href="/login">
-          Officer Login
+          Login Options
+        </Link>
+        <Link className="secondary-button" href="/join">
+          Join Us
         </Link>
       </div>
     </div>
