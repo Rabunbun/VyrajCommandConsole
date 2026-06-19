@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CorpAccessDenied } from "@/components/corp-access-denied";
+import {
+  ModuleIcon,
+  type ModuleIconName
+} from "@/components/module-visuals";
 import { getOfficerOnlyDeniedContext } from "@/lib/corp-portal-access";
 import {
   getCorpDashboardPageData,
@@ -80,26 +84,31 @@ export default async function CorpDashboardPage({ params }: DashboardPageProps) 
       <section className="section-stack" aria-label="Corp dashboard watchlists">
         <Watchlist
           emptyText="No operations found."
+          icon="attendance"
           items={result.operations}
           title="Upcoming / Active Operations"
         />
         <Watchlist
           emptyText="No pending SRP."
+          icon="srp"
           items={result.pendingSrp}
           title="Pending SRP"
         />
         <Watchlist
           emptyText="No recruitment applicants in pipeline."
+          icon="recruitment"
           items={result.recruitmentPipeline}
           title="Recruitment Pipeline"
         />
         <Watchlist
           emptyText="No doctrine readiness data."
+          icon="doctrine"
           items={result.doctrineReadiness}
           title="Doctrine Readiness"
         />
         <Watchlist
           emptyText="No loot payouts waiting."
+          icon="loot"
           items={result.lootPayouts}
           title="Loot Payouts Waiting"
         />
@@ -201,19 +210,26 @@ function QuickLinks({ corp }: { corp: DashboardCorpView }) {
 
 function Watchlist({
   emptyText,
+  icon,
   items,
   title
 }: {
   emptyText: string;
+  icon: ModuleIconName;
   items: DashboardListItem[];
   title: string;
 }) {
   return (
     <section className="section-stack" aria-labelledby={`${title}-title`}>
       <div className="section-heading">
-        <h2 className="section-title" id={`${title}-title`}>
-          {title}
-        </h2>
+        <div className="section-title-group">
+          <div className="module-icon-block module-icon-block-small">
+            <ModuleIcon name={icon} size={21} />
+          </div>
+          <h2 className="section-title" id={`${title}-title`}>
+            {title}
+          </h2>
+        </div>
         <span className="badge">{items.length}</span>
       </div>
       {items.length ? (
@@ -229,7 +245,9 @@ function Watchlist({
                 <div className="card-subtitle">{formatSubtitle(item.subtitle)}</div>
               </div>
               <div className="badge-row">
-                <span className="badge">{formatStatusLabel(item.badge)}</span>
+                <span className="badge" data-state={item.badge}>
+                  {formatStatusLabel(item.badge)}
+                </span>
               </div>
             </Link>
           ))}

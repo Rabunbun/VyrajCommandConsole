@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
 import { logoutAction } from "@/app/auth-actions";
+import { EveCharacterPortrait } from "@/components/eve-character-portrait";
 import { consoleRoutes, routeGroups, type ConsoleRoute } from "@/lib/navigation";
 import { getAllianceAccessIdentityContext } from "@/lib/member-landing";
 import { hasPermission } from "@/lib/permissions";
@@ -124,20 +125,14 @@ function AllianceAccessPanel({
       : "No role active");
   const detailLabel = identity?.detailLabel ||
     (session ? "Command controls unlocked" : "Command controls locked");
-  const portraitUrl = identity?.characterId
-    ? `https://images.evetech.net/characters/${identity.characterId}/portrait?size=64`
-    : "";
-
   return (
     <aside className="alliance-access-panel" aria-label="Alliance access">
       <div className="access-indicator" aria-hidden="true" data-unlocked={unlocked} />
-      <div
-        aria-label={identity ? `${identity.characterName} EVE portrait` : "Alliance access fallback avatar"}
+      <EveCharacterPortrait
+        characterId={identity?.characterId}
+        characterName={displayName}
         className="access-avatar"
-        style={portraitUrl ? { backgroundImage: `url("${portraitUrl}")` } : undefined}
-      >
-        {portraitUrl ? null : displayName.slice(0, 1).toUpperCase()}
-      </div>
+      />
       <div className="access-label">Alliance Access</div>
       <div className="access-name">{displayName}</div>
       <div className="access-detail">{roleLabel}</div>

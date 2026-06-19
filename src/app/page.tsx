@@ -11,6 +11,7 @@ import {
   getPublicAllianceHubData,
   type PublicCorpCard
 } from "@/lib/public-data";
+import { StatusPip } from "@/components/module-visuals";
 import { isSuperAdminSession, getCurrentOfficerSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -335,6 +336,7 @@ function CorpCard({ corp }: { corp: PublicCorpCard }) {
         >
           {corp.recruitmentStatus}
         </span>
+        <StatusPip label="Verified Members Only" tone="muted" />
       </div>
       <div className="metric-grid">
         <Metric label="CEO" value={profile?.ceoName || "Unknown"} />

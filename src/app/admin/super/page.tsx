@@ -2,6 +2,10 @@ import { OfficerRole } from "@prisma/client";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { logoutAction } from "@/app/auth-actions";
+import {
+  ModuleTile,
+  type ModuleIconName
+} from "@/components/module-visuals";
 import { logOfficerAudit } from "@/lib/audit";
 import { getCurrentOfficerSession } from "@/lib/session";
 
@@ -9,49 +13,49 @@ export const dynamic = "force-dynamic";
 
 const adminCards = [
   {
-    code: "ADM",
+    icon: "officers" as ModuleIconName,
     title: "Officer Management",
     href: "/admin/officers",
     status: "Active",
     summary: "Manage officer accounts, assigned corps, permissions, and access."
   },
   {
-    code: "CORP",
+    icon: "corp" as ModuleIconName,
     title: "Corp Management",
     href: "/admin/corps",
     status: "Active",
     summary: "Manage corp registry records, portal announcements, and modules."
   },
   {
-    code: "HUB",
+    icon: "dashboard" as ModuleIconName,
     title: "Alliance Hub Editor",
     href: "/admin/alliance-hub",
     status: "Active",
     summary: "Create and manage audience-scoped alliance hub content."
   },
   {
-    code: "LOG",
+    icon: "audit" as ModuleIconName,
     title: "Audit Log",
     href: "/admin/audit-log",
     status: "Active",
     summary: "Review officer/admin actions with safe redacted details."
   },
   {
-    code: "SSO",
+    icon: "identity" as ModuleIconName,
     title: "EVE Identities / SSO Links",
     href: "/admin/eve-identities",
     status: "Active",
     summary: "Link verified EVE characters to internal officer accounts."
   },
   {
-    code: "LOCK",
+    icon: "lock" as ModuleIconName,
     title: "Access Policy Preview",
     href: "/admin/access-policy",
     status: "Active",
     summary: "Review active Hard Lockdown member matching and corp readiness."
   },
   {
-    code: "SYS",
+    icon: "health" as ModuleIconName,
     title: "System Health",
     href: "/admin/system-health",
     status: "Active",
@@ -160,19 +164,18 @@ export default async function SuperAdminPage() {
             <p className="card-copy">Open existing Super Admin pages from one place.</p>
           </div>
         </div>
-        <div className="data-grid">
+        <div className="module-tile-grid">
           {adminCards.map((card) => (
-            <Link className="data-card" href={card.href} key={card.href}>
-              <div className="tool-code" aria-hidden="true">
-                {card.code}
-              </div>
-              <div className="card-heading">
-                <h3 className="card-title">{card.title}</h3>
-                <div className="card-subtitle">{card.status}</div>
-              </div>
-              <p className="card-copy">{card.summary}</p>
-              <span className="command-button">Open Tool</span>
-            </Link>
+            <ModuleTile
+              actionLabel="Open Tool"
+              description={card.summary}
+              href={card.href}
+              icon={card.icon}
+              key={card.href}
+              status={{ label: card.status, tone: "ready" }}
+              subtitle="Super Admin"
+              title={card.title}
+            />
           ))}
         </div>
       </section>

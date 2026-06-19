@@ -6,6 +6,7 @@ import {
   updateOperationAction
 } from "@/app/corp/[corpId]/attendance/actions";
 import { CorpAccessDenied } from "@/components/corp-access-denied";
+import { ModuleIcon } from "@/components/module-visuals";
 import { getCorpPortalAccessContext } from "@/lib/corp-portal-access";
 import {
   attendanceStatusOptions,
@@ -338,14 +339,21 @@ function OperationList({
         operations.map((operation) => (
           <article className="data-card" key={operation.id}>
             <div className="section-heading">
-              <div className="card-heading">
-                <h3 className="card-title">{operation.title}</h3>
-                <div className="card-subtitle">
-                  {formatOptionalDate(operation.scheduledFor)}
+              <div className="record-card-heading">
+                <div className="module-icon-block module-icon-block-small">
+                  <ModuleIcon name="attendance" size={22} />
+                </div>
+                <div className="card-heading">
+                  <h3 className="card-title">{operation.title}</h3>
+                  <div className="card-subtitle">
+                    {formatOptionalDate(operation.scheduledFor)}
+                  </div>
                 </div>
               </div>
               <div className="badge-row">
-                <span className="badge">{formatStatusLabel(operation.status)}</span>
+                <span className="badge" data-state={operation.status}>
+                  {formatStatusLabel(operation.status)}
+                </span>
                 <span className="badge">{formatStatusLabel(operation.operationType || "OTHER")}</span>
                 <span className="badge">{corp.ticker}</span>
               </div>
@@ -383,7 +391,7 @@ function AttendanceSummary({ operation }: { operation: OperationView }) {
       {summaryEntries.length ? (
         <div className="badge-row">
           {summaryEntries.map(([status, count]) => (
-            <span className="badge" key={status}>
+            <span className="badge" data-state={status} key={status}>
               {formatStatusLabel(status)}: {count}
             </span>
           ))}

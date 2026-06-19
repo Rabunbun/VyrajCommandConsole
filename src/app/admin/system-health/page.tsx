@@ -2,6 +2,7 @@ import { OfficerRole } from "@prisma/client";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { logoutAction } from "@/app/auth-actions";
+import { ModuleIcon } from "@/components/module-visuals";
 import { logOfficerAudit } from "@/lib/audit";
 import {
   getSystemHealthData,
@@ -699,11 +700,16 @@ function HealthSection({
   return (
     <section className="section-stack" aria-labelledby={`${slugify(title)}-title`}>
       <div className="section-heading">
-        <div>
-          <h2 className="section-title" id={`${slugify(title)}-title`}>
-            {title}
-          </h2>
-          <p className="card-copy">{description}</p>
+        <div className="section-title-group">
+          <div className="module-icon-block module-icon-block-small">
+            <ModuleIcon name="health" size={21} />
+          </div>
+          <div>
+            <h2 className="section-title" id={`${slugify(title)}-title`}>
+              {title}
+            </h2>
+            <p className="card-copy">{description}</p>
+          </div>
         </div>
       </div>
       <div className="data-grid">
@@ -725,13 +731,18 @@ function WarningsSection({ warnings }: { warnings: HealthWarning[] }) {
   return (
     <section className="section-stack" aria-labelledby="warnings-title">
       <div className="section-heading">
-        <div>
-          <h2 className="section-title" id="warnings-title">
-            Warnings
-          </h2>
-          <p className="card-copy">
-            Items that may need attention before or after production rollout.
-          </p>
+        <div className="section-title-group">
+          <div className="module-icon-block module-icon-block-small">
+            <ModuleIcon name="health" size={21} />
+          </div>
+          <div>
+            <h2 className="section-title" id="warnings-title">
+              Warnings
+            </h2>
+            <p className="card-copy">
+              Items that may need attention before or after production rollout.
+            </p>
+          </div>
         </div>
       </div>
       {warnings.length ? (
@@ -757,14 +768,19 @@ function RecentAuditSection({ entries }: { entries: RecentAuditHeartbeat[] }) {
   return (
     <section className="section-stack" aria-labelledby="recent-audit-title">
       <div className="section-heading">
-        <div>
-          <h2 className="section-title" id="recent-audit-title">
-            Recent Audit Heartbeat
-          </h2>
-          <p className="card-copy">
-            Safe recent audit summaries only. Payloads, tokens, cookies, and
-            hashes are not rendered.
-          </p>
+        <div className="section-title-group">
+          <div className="module-icon-block module-icon-block-small">
+            <ModuleIcon name="audit" size={21} />
+          </div>
+          <div>
+            <h2 className="section-title" id="recent-audit-title">
+              Recent Audit Heartbeat
+            </h2>
+            <p className="card-copy">
+              Safe recent audit summaries only. Payloads, tokens, cookies, and
+              hashes are not rendered.
+            </p>
+          </div>
         </div>
       </div>
       {entries.length ? (

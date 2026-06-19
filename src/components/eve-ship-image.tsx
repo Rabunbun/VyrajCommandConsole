@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useState } from "react";
+import { ModuleIcon } from "@/components/module-visuals";
 
 type EveShipImageProps = {
   alt?: string;
@@ -26,7 +27,8 @@ export function EveShipImage({
   if (failed) {
     return (
       <div className="doctrine-ship-placeholder" aria-label={alt} role="img">
-        {fallbackLabel.slice(0, 2).toUpperCase()}
+        <ModuleIcon name="ship" size={28} />
+        <span className="visually-hidden">{fallbackLabel}</span>
       </div>
     );
   }

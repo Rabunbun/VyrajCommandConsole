@@ -5,6 +5,7 @@ import {
   updateRecruitmentApplicantAction
 } from "@/app/corp/[corpId]/recruitment/actions";
 import { CorpAccessDenied } from "@/components/corp-access-denied";
+import { ModuleIcon } from "@/components/module-visuals";
 import { getOfficerOnlyDeniedContext } from "@/lib/corp-portal-access";
 import {
   getRecruitmentPageData,
@@ -278,16 +279,21 @@ function ApplicantCard({
   return (
     <article className="data-card">
       <div className="section-heading">
-        <div className="card-heading">
-          <h3 className="card-title">{applicant.characterName}</h3>
-          <div className="card-subtitle">{applicant.discordName || "No Discord listed"}</div>
+        <div className="record-card-heading">
+          <div className="module-icon-block module-icon-block-small">
+            <ModuleIcon name="recruitment" size={22} />
+          </div>
+          <div className="card-heading">
+            <h3 className="card-title">{applicant.characterName}</h3>
+            <div className="card-subtitle">{applicant.discordName || "No Discord listed"}</div>
+          </div>
         </div>
         <div className="badge-row">
           <span className="badge" data-state={applicant.status}>
             {formatStatusLabel(applicant.status)}
           </span>
           {attentionStatuses.has(applicant.status) ? (
-            <span className="badge">Needs Attention</span>
+            <span className="badge" data-state="WARNING">Needs Attention</span>
           ) : null}
         </div>
       </div>

@@ -9,6 +9,7 @@ import {
   updateOfficerAction
 } from "@/app/admin/officers/actions";
 import { logoutAction } from "@/app/auth-actions";
+import { EveCharacterPortrait } from "@/components/eve-character-portrait";
 import { logOfficerAudit } from "@/lib/audit";
 import {
   getOfficerManagementData,
@@ -265,7 +266,17 @@ function OfficerCard({
           <div className="card-subtitle">{officer.role}</div>
         </div>
         <div className="badge-row">
-          <span className="badge">{officer.status}</span>
+          <span className="badge" data-state={officer.status}>{officer.status}</span>
+          <span
+            className="badge"
+            data-state={
+              officer.role === OfficerRole.SUPER_ADMIN
+                ? "SUPER_ADMIN"
+                : "OFFICER"
+            }
+          >
+            {officer.role}
+          </span>
         </div>
       </div>
 
@@ -282,23 +293,30 @@ function OfficerCard({
         {officer.eveIdentities.length ? (
           <div className="section-stack">
             {officer.eveIdentities.map((identity) => (
-              <div className="metric-grid" key={identity.id}>
-                <Metric label="Character" value={identity.characterName} />
-                <Metric label="Character ID" value={identity.characterId} />
-                <Metric
-                  label="Linked At"
-                  value={
-                    identity.linkedAt ? formatDateTime(identity.linkedAt) : "Not linked"
-                  }
+              <div className="identity-summary-card" key={identity.id}>
+                <EveCharacterPortrait
+                  characterId={identity.characterId}
+                  characterName={identity.characterName}
+                  className="identity-portrait"
                 />
-                <Metric
-                  label="Last EVE Login"
-                  value={
-                    identity.lastEveLoginAt
-                      ? formatDateTime(identity.lastEveLoginAt)
-                      : "Never"
-                  }
-                />
+                <div className="metric-grid">
+                  <Metric label="Character" value={identity.characterName} />
+                  <Metric label="Character ID" value={identity.characterId} />
+                  <Metric
+                    label="Linked At"
+                    value={
+                      identity.linkedAt ? formatDateTime(identity.linkedAt) : "Not linked"
+                    }
+                  />
+                  <Metric
+                    label="Last EVE Login"
+                    value={
+                      identity.lastEveLoginAt
+                        ? formatDateTime(identity.lastEveLoginAt)
+                        : "Never"
+                    }
+                  />
+                </div>
               </div>
             ))}
           </div>

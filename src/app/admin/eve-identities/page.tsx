@@ -6,6 +6,7 @@ import {
   unlinkEveIdentityAction
 } from "@/app/admin/eve-identities/actions";
 import { logoutAction } from "@/app/auth-actions";
+import { EveCharacterPortrait } from "@/components/eve-character-portrait";
 import { logOfficerAudit } from "@/lib/audit";
 import {
   getEveIdentityAdminData,
@@ -184,12 +185,19 @@ function EveIdentityCard({
   return (
     <article className="data-card">
       <div className="section-heading">
-        <div className="card-heading">
-          <h2 className="card-title">{identity.characterName}</h2>
-          <div className="card-subtitle">Character ID {identity.characterId}</div>
+        <div className="identity-card-heading">
+          <EveCharacterPortrait
+            characterId={identity.characterId}
+            characterName={identity.characterName}
+            className="identity-portrait"
+          />
+          <div className="card-heading">
+            <h2 className="card-title">{identity.characterName}</h2>
+            <div className="card-subtitle">Character ID {identity.characterId}</div>
+          </div>
         </div>
         <div className="badge-row">
-          <span className="badge">Identity Verified</span>
+          <span className="badge badge-verified">Identity Verified</span>
           <span
             className="health-badge"
             data-status={identity.linkedOfficer ? "OK" : "Warning"}

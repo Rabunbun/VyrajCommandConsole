@@ -5,6 +5,7 @@ import {
   updateLootSplitStatusAction
 } from "@/app/corp/[corpId]/loot-splits/actions";
 import { CorpAccessDenied } from "@/components/corp-access-denied";
+import { ModuleIcon } from "@/components/module-visuals";
 import { getOfficerOnlyDeniedContext } from "@/lib/corp-portal-access";
 import {
   getLootSplitPageData,
@@ -341,14 +342,21 @@ function LootSplitCard({
   return (
     <article className="data-card">
       <div className="section-heading">
-        <div className="card-heading">
-          <h3 className="card-title">{split.title}</h3>
-          <div className="card-subtitle">
-            {split.sourceType || "Loot Split"} / {formatDate(split.createdAt)}
+        <div className="record-card-heading">
+          <div className="module-icon-block module-icon-block-small">
+            <ModuleIcon name="loot" size={22} />
+          </div>
+          <div className="card-heading">
+            <h3 className="card-title">{split.title}</h3>
+            <div className="card-subtitle">
+              {split.sourceType || "Loot Split"} / {formatDate(split.createdAt)}
+            </div>
           </div>
         </div>
         <div className="badge-row">
-          <span className="badge">{formatStatusLabel(split.status)}</span>
+          <span className="badge" data-state={split.status}>
+            {formatStatusLabel(split.status)}
+          </span>
           <span className="badge">{corp.ticker}</span>
           <span className="badge">{split.participants.length} participants</span>
         </div>

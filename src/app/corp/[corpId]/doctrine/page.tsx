@@ -15,6 +15,7 @@ import {
   type DoctrineShipTypeOption
 } from "@/lib/modules/doctrine";
 import { EveShipImage } from "@/components/eve-ship-image";
+import { ModuleIcon } from "@/components/module-visuals";
 import { getCorpPortalAccessContext } from "@/lib/corp-portal-access";
 import { formatStatusLabel } from "@/lib/public-data";
 import { buildLoginPath } from "@/lib/route-policy";
@@ -359,7 +360,7 @@ function DoctrineFitList({
                   />
                 ) : (
                   <div className="doctrine-ship-placeholder" aria-hidden="true">
-                    {fit.shipName ? fit.shipName.slice(0, 2).toUpperCase() : "?"}
+                    <ModuleIcon name="ship" size={30} />
                   </div>
                 )}
                 <div className="card-heading">
@@ -429,7 +430,7 @@ function ReadinessSummary({ fit }: { fit: DoctrineFitView }) {
       {submittedCount ? (
         <div className="badge-row">
           {statuses.map(([status, count]) => (
-            <span className="badge" key={status}>
+            <span className="badge" data-state={status} key={status}>
               {formatStatusLabel(status)}: {count}
             </span>
           ))}

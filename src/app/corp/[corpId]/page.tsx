@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CorpAccessDenied } from "@/components/corp-access-denied";
+import {
+  ModuleTile,
+  type ModuleIconName
+} from "@/components/module-visuals";
 import { getCorpPortalAccessContext } from "@/lib/corp-portal-access";
 import { canViewCorpDashboard } from "@/lib/modules/dashboard";
 import { canManageLootSplits } from "@/lib/modules/loot-splits";
@@ -88,18 +92,21 @@ async function loadCorpPortal(corpSlug: string) {
 const memberModules = [
   {
     key: "attendance",
+    icon: "attendance",
     title: "Op Attendance",
     href: "attendance",
     summary: "View operations and record fleet attendance."
   },
   {
     key: "doctrine",
+    icon: "doctrine",
     title: "Doctrine Readiness",
     href: "doctrine",
     summary: "Review doctrine fits and readiness requirements."
   },
   {
     key: "srp",
+    icon: "srp",
     title: "SRP Requests",
     href: "srp",
     summary: "Submit and track ship replacement requests."
@@ -144,6 +151,7 @@ function CorpPortalContent({
   const officerModules = [
     showDashboard
       ? {
+          icon: "dashboard" as ModuleIconName,
           title: "Corp Dashboard",
           href: "dashboard",
           summary: "Review corp-scoped module summaries and watchlists."
@@ -151,6 +159,7 @@ function CorpPortalContent({
       : null,
     showRecruitment
       ? {
+          icon: "recruitment" as ModuleIconName,
           title: "Recruitment Review",
           href: "recruitment",
           summary: "Review applicants and track recruitment pipeline status."
@@ -158,13 +167,21 @@ function CorpPortalContent({
       : null,
     showLootSplits
       ? {
+          icon: "loot" as ModuleIconName,
           title: "Loot Split Calculation",
           href: "loot-splits",
           summary: "Calculate loot split payouts and track payout status."
         }
       : null
-  ].filter((module): module is { title: string; href: string; summary: string } =>
-    Boolean(module)
+  ].filter(
+    (
+      module
+    ): module is {
+      title: string;
+      href: string;
+      icon: ModuleIconName;
+      summary: string;
+    } => Boolean(module)
   );
 
   return (
@@ -251,19 +268,22 @@ function CorpPortalContent({
           Member Command Modules
         </h2>
         {enabledMemberModules.length ? (
-          <div className="module-list">
+          <div className="module-tile-grid">
             {enabledMemberModules.map((module) => (
-              <Link
-                className="data-card"
+              <ModuleTile
+                actionLabel="Open Member Module"
+                description={module.summary}
                 href={`/corp/${corp.slug}/${module.href}`}
+                icon={module.icon}
                 key={module.key}
-              >
-                <div className="card-heading">
-                  <h3 className="card-title">{module.title}</h3>
-                  <div className="card-subtitle">{corp.ticker}</div>
-                </div>
-                <p className="card-copy">{module.summary}</p>
-              </Link>
+                metrics={[
+                  { label: "Access", value: "Member" },
+                  { label: "State", value: "Enabled" }
+                ]}
+                status={{ label: "Available", tone: "ready" }}
+                subtitle={corp.ticker}
+                title={module.title}
+              />
             ))}
           </div>
         ) : (
@@ -276,19 +296,22 @@ function CorpPortalContent({
           <h2 className="section-title" id="officer-modules-title">
             Officer Command Modules
           </h2>
-          <div className="module-list">
+          <div className="module-tile-grid">
             {officerModules.map((module) => (
-              <Link
-                className="data-card"
+              <ModuleTile
+                actionLabel="Open Officer Module"
+                description={module.summary}
                 href={`/corp/${corp.slug}/${module.href}`}
+                icon={module.icon}
                 key={module.href}
-              >
-                <div className="card-heading">
-                  <h3 className="card-title">{module.title}</h3>
-                  <div className="card-subtitle">{corp.ticker}</div>
-                </div>
-                <p className="card-copy">{module.summary}</p>
-              </Link>
+                metrics={[
+                  { label: "Access", value: "Officer" },
+                  { label: "State", value: "Enabled" }
+                ]}
+                status={{ label: "Authorized", tone: "warning" }}
+                subtitle={corp.ticker}
+                title={module.title}
+              />
             ))}
           </div>
         </section>

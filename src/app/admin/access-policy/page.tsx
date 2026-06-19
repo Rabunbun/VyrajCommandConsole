@@ -2,6 +2,7 @@ import { OfficerRole } from "@prisma/client";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { logoutAction } from "@/app/auth-actions";
+import { EveCharacterPortrait } from "@/components/eve-character-portrait";
 import { logOfficerAudit } from "@/lib/audit";
 import {
   filterAccessPolicyIdentities,
@@ -251,15 +252,11 @@ function IdentityEvaluationRow({
     <tr>
       <td>
         <div className="identity-card-heading">
-          <div
-            aria-label={`${identity.characterName} EVE portrait`}
+          <EveCharacterPortrait
+            characterId={identity.characterId}
+            characterName={identity.characterName}
             className="identity-portrait"
-            style={{
-              backgroundImage: `url("https://images.evetech.net/characters/${identity.characterId}/portrait?size=64")`
-            }}
-          >
-            {identity.characterName.slice(0, 1).toUpperCase()}
-          </div>
+          />
           <div className="card-heading">
             <h3 className="card-title">{identity.characterName}</h3>
             <div className="card-subtitle">Character {identity.characterId}</div>
@@ -280,10 +277,16 @@ function IdentityEvaluationRow({
       <td>{identity.matchedCorp ? identity.matchedCorp.name : "None"}</td>
       <td>
         <div className="badge-row">
-          <span className={identity.wouldAllowMemberPortal ? "badge badge-verified" : "badge"}>
+          <span
+            className={identity.wouldAllowMemberPortal ? "badge badge-verified" : "badge"}
+            data-state={identity.wouldAllowMemberPortal ? "READY" : "DENIED"}
+          >
             Member {identity.wouldAllowMemberPortal ? "Yes" : "No"}
           </span>
-          <span className={identity.wouldAllowOfficerTools ? "badge badge-verified" : "badge"}>
+          <span
+            className={identity.wouldAllowOfficerTools ? "badge badge-verified" : "badge"}
+            data-state={identity.wouldAllowOfficerTools ? "READY" : "INACTIVE"}
+          >
             Officer {identity.wouldAllowOfficerTools ? "Yes" : "No"}
           </span>
         </div>
