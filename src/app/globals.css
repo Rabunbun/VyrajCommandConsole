@@ -2190,6 +2190,13 @@ hr {
 }
 
 /* Fitting Bay scaffold */
+.fitting-route-wide {
+  --fitting-route-width: min(calc(100vw - 48px), 1720px);
+  inline-size: var(--fitting-route-width);
+  margin-inline-end: calc((100% - var(--fitting-route-width)) / 2);
+  margin-inline-start: calc((100% - var(--fitting-route-width)) / 2);
+}
+
 .fitting-shell {
   display: grid;
   gap: 18px;
@@ -2698,6 +2705,12 @@ hr {
   inline-size: 0%;
 }
 
+@media (min-width: 1180px) {
+  .fitting-workspace-grid {
+    grid-template-columns: minmax(240px, 300px) minmax(620px, 1fr) minmax(280px, 330px);
+  }
+}
+
 table {
   border: 1px solid var(--color-border);
   background: var(--color-panel);
@@ -2724,6 +2737,11 @@ tbody tr:hover {
 }
 
 @media (max-width: 820px) {
+  .fitting-route-wide {
+    inline-size: 100%;
+    margin-inline: 0;
+  }
+
   .fitting-header {
     align-items: flex-start;
     flex-direction: column;

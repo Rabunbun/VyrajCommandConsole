@@ -11,5 +11,9 @@ export const dynamic = "force-dynamic";
 export default async function FittingBayPage() {
   const hulls = await getFittingHullIndex();
 
-  return <FittingWorkspace hulls={hulls} />;
+  return (
+    <div className="fitting-route-wide">
+      <FittingWorkspace hulls={hulls} />
+    </div>
+  );
 }
