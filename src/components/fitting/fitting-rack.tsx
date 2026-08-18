@@ -11,7 +11,7 @@ export function FittingRack({
   orientation = "horizontal",
   rack
 }: FittingRackProps) {
-  const slots = Array.from({ length: count }, (_, index) => index + 1);
+  const slots = Array.from({ length: Math.max(0, count) }, (_, index) => index + 1);
 
   return (
     <section
@@ -21,17 +21,21 @@ export function FittingRack({
       aria-label={label}
     >
       <div className="fitting-rack-label">{label}</div>
-      <ul className="fitting-slot-list">
-        {slots.map((slotNumber) => (
-          <li key={slotNumber}>
-            <span
-              className="fitting-slot"
-              role="img"
-              aria-label={`${label} empty slot ${slotNumber}`}
-            />
-          </li>
-        ))}
-      </ul>
+      {slots.length ? (
+        <ul className="fitting-slot-list">
+          {slots.map((slotNumber) => (
+            <li key={slotNumber}>
+              <span
+                className="fitting-slot"
+                role="img"
+                aria-label={`${label} empty slot ${slotNumber}`}
+              />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="fitting-rack-empty">No slots</div>
+      )}
     </section>
   );
 }

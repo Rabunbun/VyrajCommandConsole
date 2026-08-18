@@ -596,3 +596,23 @@ model EveTypeLookup {
   @@index([lastRefreshedAt])
   @@index([legacySheetName, legacyRowNumber])
 }
+
+model FittingHull {
+  id              String    @id @default(uuid()) @db.Uuid
+  typeId          Int       @unique
+  typeName        String
+  groupName       String    @default("")
+  categoryName    String    @default("")
+  highSlots       Int       @default(0)
+  midSlots        Int       @default(0)
+  lowSlots        Int       @default(0)
+  rigSlots        Int       @default(0)
+  lastRefreshedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([typeName])
+  @@index([groupName])
+  @@index([categoryName])
+  @@index([lastRefreshedAt])
+}

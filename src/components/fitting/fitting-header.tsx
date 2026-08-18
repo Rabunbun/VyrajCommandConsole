@@ -1,6 +1,11 @@
 import { StatusPip } from "@/components/module-visuals";
+import type { FittingHullSummary } from "@/lib/fitting/types";
 
-export function FittingHeader() {
+type FittingHeaderProps = {
+  selectedHull: FittingHullSummary | null;
+};
+
+export function FittingHeader({ selectedHull }: FittingHeaderProps) {
   return (
     <header className="fitting-header">
       <div className="fitting-header-main">
@@ -13,7 +18,10 @@ export function FittingHeader() {
         </p>
       </div>
       <div className="fitting-header-state" aria-label="Fit state">
-        <StatusPip label="Presentation Scaffold" tone="info" />
+        <StatusPip
+          label={selectedHull ? "Hull Selected" : "Hull Selection Ready"}
+          tone={selectedHull ? "verified" : "info"}
+        />
         <span className="badge" data-state="PENDING">
           Unsaved Fit
         </span>

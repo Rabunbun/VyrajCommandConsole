@@ -13,6 +13,14 @@ type EveShipImageProps = {
   renderUrl: string;
 };
 
+type ImageState = {
+  didFallback: boolean;
+  failed: boolean;
+  iconUrl?: string;
+  renderUrl: string;
+  src: string;
+};
+
 export function EveShipImage({
   alt = "",
   className,
@@ -20,11 +28,15 @@ export function EveShipImage({
   iconUrl,
   renderUrl
 }: EveShipImageProps) {
-  const [src, setSrc] = useState(renderUrl);
-  const [didFallback, setDidFallback] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [imageState, setImageState] = useState<ImageState>(() =>
+    createImageState(renderUrl, iconUrl)
+  );
+  const currentImageState =
+    imageState.renderUrl === renderUrl && imageState.iconUrl === iconUrl
+      ? imageState
+      : createImageState(renderUrl, iconUrl);
 
-  if (failed) {
+  if (currentImageState.failed) {
     return (
       <div className="doctrine-ship-placeholder" aria-label={alt} role="img">
         <ModuleIcon name="ship" size={28} />
@@ -38,14 +50,32 @@ export function EveShipImage({
       alt={alt}
       className={className}
       onError={() => {
-        if (iconUrl && !didFallback) {
-          setSrc(iconUrl);
-          setDidFallback(true);
+        if (iconUrl && !currentImageState.didFallback) {
+          setImageState({
+            didFallback: true,
+            failed: false,
+            iconUrl,
+            renderUrl,
+            src: iconUrl
+          });
         } else {
-          setFailed(true);
+          setImageState({
+            ...currentImageState,
+            failed: true
+          });
         }
       }}
-      src={src}
+      src={currentImageState.src}
     />
   );
+}
+
+function createImageState(renderUrl: string, iconUrl?: string): ImageState {
+  return {
+    didFallback: false,
+    failed: false,
+    iconUrl,
+    renderUrl,
+    src: renderUrl
+  };
 }
