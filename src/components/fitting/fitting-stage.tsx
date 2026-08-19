@@ -1,14 +1,17 @@
 import { FittingRack } from "@/components/fitting/fitting-rack";
 import { ShipCore } from "@/components/fitting/ship-core";
+import type { FittingSlot, FittingSlots } from "@/lib/fitting/fit-state";
 import type { FittingHullSummary } from "@/lib/fitting/types";
 
 type FittingStageProps = {
   selectedHull: FittingHullSummary | null;
+  slots: FittingSlots;
 };
 
-export function FittingStage({ selectedHull }: FittingStageProps) {
-  const midSlots = splitSlots(selectedHull?.midSlots ?? 8);
-  const lowSlots = splitSlots(selectedHull?.lowSlots ?? 8);
+export function FittingStage({ selectedHull, slots }: FittingStageProps) {
+  const displaySlots = selectedHull ? slots : createEmptyVisualSlots();
+  const midSlots = splitSlots(displaySlots.mid);
+  const lowSlots = splitSlots(displaySlots.low);
 
   return (
     <section className="fitting-stage" aria-labelledby="fitting-stage-title">
@@ -29,49 +32,49 @@ export function FittingStage({ selectedHull }: FittingStageProps) {
       <div className="fitting-stage-grid" aria-label="Empty fitting layout">
         <div className="fitting-rack-zone fitting-rack-zone-high">
           <FittingRack
-            count={selectedHull?.highSlots ?? 8}
             label="High Slots"
             rack="high"
+            slots={displaySlots.high}
           />
         </div>
         <div className="fitting-rack-zone fitting-rack-zone-mid-left">
           <FittingRack
-            count={midSlots.leading}
             label="Mid Slots"
             rack="mid"
             orientation="vertical"
+            slots={midSlots.leading}
           />
         </div>
         <ShipCore selectedHull={selectedHull} />
         <div className="fitting-rack-zone fitting-rack-zone-mid-right">
           <FittingRack
-            count={midSlots.trailing}
             label="Mid Slots"
             rack="mid"
             orientation="vertical"
+            slots={midSlots.trailing}
           />
         </div>
         <div className="fitting-rack-zone fitting-rack-zone-low-left">
           <FittingRack
-            count={lowSlots.leading}
             label="Low Slots"
             rack="low"
             orientation="vertical"
+            slots={lowSlots.leading}
           />
         </div>
         <div className="fitting-rack-zone fitting-rack-zone-low-right">
           <FittingRack
-            count={lowSlots.trailing}
             label="Low Slots"
             rack="low"
             orientation="vertical"
+            slots={lowSlots.trailing}
           />
         </div>
         <div className="fitting-rack-zone fitting-rack-zone-rig">
           <FittingRack
-            count={selectedHull?.rigSlots ?? 3}
             label="Rig Slots"
             rack="rig"
+            slots={displaySlots.rig}
           />
         </div>
       </div>
@@ -79,9 +82,28 @@ export function FittingStage({ selectedHull }: FittingStageProps) {
   );
 }
 
-function splitSlots(count: number) {
+function splitSlots(slots: FittingSlot[]) {
+  const splitIndex = Math.ceil(slots.length / 2);
+
   return {
-    leading: Math.ceil(count / 2),
-    trailing: Math.floor(count / 2)
+    leading: slots.slice(0, splitIndex),
+    trailing: slots.slice(splitIndex)
   };
+}
+
+function createEmptyVisualSlots(): FittingSlots {
+  return {
+    high: createVisualRackSlots(8),
+    low: createVisualRackSlots(8),
+    mid: createVisualRackSlots(8),
+    rig: createVisualRackSlots(3),
+    subsystem: []
+  };
+}
+
+function createVisualRackSlots(count: number): FittingSlot[] {
+  return Array.from({ length: count }, (_, index) => ({
+    index,
+    module: null
+  }));
 }

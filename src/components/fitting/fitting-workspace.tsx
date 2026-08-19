@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import { FitStatistics } from "@/components/fitting/fit-statistics";
 import { FittingHeader } from "@/components/fitting/fitting-header";
 import { FittingResources } from "@/components/fitting/fitting-resources";
 import { FittingStage } from "@/components/fitting/fitting-stage";
 import { ItemBrowser } from "@/components/fitting/item-browser";
+import { useFittingState } from "@/components/fitting/use-fitting-state";
 import type { FittingHullSummary } from "@/lib/fitting/types";
 
 type FittingWorkspaceProps = {
@@ -13,7 +13,7 @@ type FittingWorkspaceProps = {
 };
 
 export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
-  const [selectedHull, setSelectedHull] = useState<FittingHullSummary | null>(null);
+  const { fitState, selectHull, selectedHull } = useFittingState({ hulls });
 
   return (
     <div className="fitting-shell" aria-labelledby="fitting-bay-title">
@@ -21,10 +21,10 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
       <div className="fitting-workspace-grid">
         <ItemBrowser
           hulls={hulls}
-          onSelectHull={setSelectedHull}
+          onSelectHull={selectHull}
           selectedHull={selectedHull}
         />
-        <FittingStage selectedHull={selectedHull} />
+        <FittingStage selectedHull={selectedHull} slots={fitState.slots} />
         <FitStatistics />
       </div>
       <FittingResources selectedHull={selectedHull} />

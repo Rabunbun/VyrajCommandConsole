@@ -1,18 +1,18 @@
+import type { FittingSlot as FittingSlotState } from "@/lib/fitting/fit-state";
+
 type FittingRackProps = {
-  count: number;
   label: string;
   orientation?: "horizontal" | "vertical";
   rack: "high" | "low" | "mid" | "rig";
+  slots: FittingSlotState[];
 };
 
 export function FittingRack({
-  count,
   label,
   orientation = "horizontal",
-  rack
+  rack,
+  slots
 }: FittingRackProps) {
-  const slots = Array.from({ length: Math.max(0, count) }, (_, index) => index + 1);
-
   return (
     <section
       className="fitting-rack"
@@ -23,12 +23,12 @@ export function FittingRack({
       <div className="fitting-rack-label">{label}</div>
       {slots.length ? (
         <ul className="fitting-slot-list">
-          {slots.map((slotNumber) => (
-            <li key={slotNumber}>
+          {slots.map((slot) => (
+            <li key={slot.index}>
               <span
                 className="fitting-slot"
                 role="img"
-                aria-label={`${label} empty slot ${slotNumber}`}
+                aria-label={`${label} empty slot ${slot.index + 1}`}
               />
             </li>
           ))}
