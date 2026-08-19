@@ -27,7 +27,7 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
         <FittingStage selectedHull={selectedHull} />
         <FitStatistics />
       </div>
-      <FittingResources />
+      <FittingResources selectedHull={selectedHull} />
     </div>
   );
 }

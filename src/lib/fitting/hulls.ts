@@ -11,12 +11,19 @@ export async function getFittingHullIndex(): Promise<FittingHullSummary[]> {
     const hulls = await getDb().fittingHull.findMany({
       orderBy: [{ groupName: "asc" }, { typeName: "asc" }],
       select: {
+        calibrationCapacity: true,
         categoryName: true,
+        cpuBase: true,
+        droneBandwidth: true,
+        droneCapacity: true,
         groupName: true,
         highSlots: true,
+        launcherHardpoints: true,
         lowSlots: true,
         midSlots: true,
+        powergridBase: true,
         rigSlots: true,
+        turretHardpoints: true,
         typeId: true,
         typeName: true
       }

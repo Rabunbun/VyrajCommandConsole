@@ -34,6 +34,20 @@ export function ShipCore({ selectedHull }: ShipCoreProps) {
             <span>L {selectedHull.lowSlots}</span>
             <span>R {selectedHull.rigSlots}</span>
           </div>
+          <dl className="fitting-hardpoint-summary" aria-label="Selected hull base hardpoints">
+            <div>
+              <dt>Turrets</dt>
+              <dd>{formatNullableNumber(selectedHull.turretHardpoints)}</dd>
+            </div>
+            <div>
+              <dt>Launchers</dt>
+              <dd>{formatNullableNumber(selectedHull.launcherHardpoints)}</dd>
+            </div>
+            <div>
+              <dt>Bandwidth</dt>
+              <dd>{formatNullableNumber(selectedHull.droneBandwidth, " Mbit/sec")}</dd>
+            </div>
+          </dl>
         </div>
       </section>
     );
@@ -56,4 +70,14 @@ export function ShipCore({ selectedHull }: ShipCoreProps) {
       </div>
     </section>
   );
+}
+
+function formatNullableNumber(value: number | null, suffix = "") {
+  if (value === null) {
+    return "—";
+  }
+
+  return `${new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 2
+  }).format(value)}${suffix}`;
 }

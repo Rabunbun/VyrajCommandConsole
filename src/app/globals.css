@@ -2649,6 +2649,39 @@ hr {
   padding: 5px 8px;
 }
 
+.fitting-hardpoint-summary {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 2px 0 0;
+  min-width: min(100%, 300px);
+}
+
+.fitting-hardpoint-summary div {
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  background: rgba(10, 11, 15, 0.6);
+  display: grid;
+  gap: 2px;
+  padding: 7px 8px;
+}
+
+.fitting-hardpoint-summary dt {
+  color: var(--color-muted);
+  font-family: var(--font-command);
+  font-size: 0.52rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fitting-hardpoint-summary dd {
+  color: #f2f3f6;
+  font-family: var(--font-sans);
+  font-size: 0.84rem;
+  font-weight: 700;
+  margin: 0;
+}
+
 .fit-stat-section-list {
   display: grid;
   gap: 12px;
@@ -2699,8 +2732,17 @@ hr {
   border: 1px solid rgba(255, 255, 255, 0.07);
   background: var(--color-void);
   display: grid;
-  gap: 10px;
+  gap: 7px;
   padding: 12px;
+}
+
+.fitting-resource-scope {
+  color: var(--color-muted);
+  font-family: var(--font-command);
+  font-size: 0.54rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
 }
 
 .fitting-resource-track {

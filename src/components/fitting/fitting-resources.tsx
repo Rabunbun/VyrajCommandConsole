@@ -1,23 +1,29 @@
-const resources = [
-  {
-    label: "CPU",
-    value: "0 / — tf"
-  },
-  {
-    label: "Powergrid",
-    value: "0 / — MW"
-  },
-  {
-    label: "Calibration",
-    value: "0 / —"
-  },
-  {
-    label: "Drone Capacity",
-    value: "0 / —"
-  }
-];
+import type { FittingHullSummary } from "@/lib/fitting/types";
 
-export function FittingResources() {
+type FittingResourcesProps = {
+  selectedHull: FittingHullSummary | null;
+};
+
+export function FittingResources({ selectedHull }: FittingResourcesProps) {
+  const resources = [
+    {
+      label: "CPU",
+      value: formatCapacityValue(selectedHull?.cpuBase ?? null, "tf")
+    },
+    {
+      label: "Powergrid",
+      value: formatCapacityValue(selectedHull?.powergridBase ?? null, "MW")
+    },
+    {
+      label: "Calibration",
+      value: formatCapacityValue(selectedHull?.calibrationCapacity ?? null)
+    },
+    {
+      label: "Drone Capacity",
+      value: formatCapacityValue(selectedHull?.droneCapacity ?? null, "m³")
+    }
+  ];
+
   return (
     <section className="fitting-resource-bar" aria-labelledby="fitting-resources-title">
       <h2 className="visually-hidden" id="fitting-resources-title">
@@ -29,6 +35,7 @@ export function FittingResources() {
             <span className="metric-label">{resource.label}</span>
             <span className="metric-value">{resource.value}</span>
           </div>
+          <span className="fitting-resource-scope">Base Hull</span>
           <div
             className="fitting-resource-track"
             aria-hidden="true"
@@ -39,4 +46,17 @@ export function FittingResources() {
       ))}
     </section>
   );
+}
+
+function formatCapacityValue(value: number | null, unit = "") {
+  const capacity = value === null ? "—" : formatStaticNumber(value);
+  const suffix = unit ? ` ${unit}` : "";
+
+  return `0 / ${capacity}${suffix}`;
+}
+
+function formatStaticNumber(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 2
+  }).format(value);
 }
