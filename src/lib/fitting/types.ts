@@ -17,3 +17,21 @@ export type FittingHullSummary = {
   typeId: number;
   typeName: string;
 };
+
+export type BrowsableFittingRack = "high" | "mid" | "low" | "rig";
+
+export type FittingModuleSearchResult = {
+  groupId: number;
+  groupName: string;
+  marketGroupName: string | null;
+  metaGroupName: string | null;
+  metaLevel: number | null;
+  rack: BrowsableFittingRack;
+  techLevel: number | null;
+  typeId: number;
+  typeName: string;
+};
+
+export type FittingModuleSearchResponse = {
+  results: FittingModuleSearchResult[];
+};

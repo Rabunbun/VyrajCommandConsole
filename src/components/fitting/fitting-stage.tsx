@@ -1,14 +1,22 @@
 import { FittingRack } from "@/components/fitting/fitting-rack";
+import type { SelectedFittingSlot } from "@/components/fitting/fitting-ui-types";
 import { ShipCore } from "@/components/fitting/ship-core";
 import type { FittingSlot, FittingSlots } from "@/lib/fitting/fit-state";
 import type { FittingHullSummary } from "@/lib/fitting/types";
 
 type FittingStageProps = {
+  onSelectSlot: (slot: SelectedFittingSlot) => void;
   selectedHull: FittingHullSummary | null;
+  selectedSlot: SelectedFittingSlot | null;
   slots: FittingSlots;
 };
 
-export function FittingStage({ selectedHull, slots }: FittingStageProps) {
+export function FittingStage({
+  onSelectSlot,
+  selectedHull,
+  selectedSlot,
+  slots
+}: FittingStageProps) {
   const displaySlots = selectedHull ? slots : createEmptyVisualSlots();
   const midSlots = splitSlots(displaySlots.mid);
   const lowSlots = splitSlots(displaySlots.low);
@@ -32,48 +40,66 @@ export function FittingStage({ selectedHull, slots }: FittingStageProps) {
       <div className="fitting-stage-grid" aria-label="Empty fitting layout">
         <div className="fitting-rack-zone fitting-rack-zone-high">
           <FittingRack
+            enabled={Boolean(selectedHull)}
             label="High Slots"
+            onSelectSlot={onSelectSlot}
             rack="high"
+            selectedSlot={selectedSlot}
             slots={displaySlots.high}
           />
         </div>
         <div className="fitting-rack-zone fitting-rack-zone-mid-left">
           <FittingRack
+            enabled={Boolean(selectedHull)}
             label="Mid Slots"
+            onSelectSlot={onSelectSlot}
             rack="mid"
             orientation="vertical"
+            selectedSlot={selectedSlot}
             slots={midSlots.leading}
           />
         </div>
         <ShipCore selectedHull={selectedHull} />
         <div className="fitting-rack-zone fitting-rack-zone-mid-right">
           <FittingRack
+            enabled={Boolean(selectedHull)}
             label="Mid Slots"
+            onSelectSlot={onSelectSlot}
             rack="mid"
             orientation="vertical"
+            selectedSlot={selectedSlot}
             slots={midSlots.trailing}
           />
         </div>
         <div className="fitting-rack-zone fitting-rack-zone-low-left">
           <FittingRack
+            enabled={Boolean(selectedHull)}
             label="Low Slots"
+            onSelectSlot={onSelectSlot}
             rack="low"
             orientation="vertical"
+            selectedSlot={selectedSlot}
             slots={lowSlots.leading}
           />
         </div>
         <div className="fitting-rack-zone fitting-rack-zone-low-right">
           <FittingRack
+            enabled={Boolean(selectedHull)}
             label="Low Slots"
+            onSelectSlot={onSelectSlot}
             rack="low"
             orientation="vertical"
+            selectedSlot={selectedSlot}
             slots={lowSlots.trailing}
           />
         </div>
         <div className="fitting-rack-zone fitting-rack-zone-rig">
           <FittingRack
+            enabled={Boolean(selectedHull)}
             label="Rig Slots"
+            onSelectSlot={onSelectSlot}
             rack="rig"
+            selectedSlot={selectedSlot}
             slots={displaySlots.rig}
           />
         </div>
