@@ -5,6 +5,7 @@ import type { FittingSlot, FittingSlots } from "@/lib/fitting/fit-state";
 import type { FittingHullSummary } from "@/lib/fitting/types";
 
 type FittingStageProps = {
+  moduleNamesByTypeId: Readonly<Record<number, string>>;
   onSelectSlot: (slot: SelectedFittingSlot) => void;
   selectedHull: FittingHullSummary | null;
   selectedSlot: SelectedFittingSlot | null;
@@ -12,6 +13,7 @@ type FittingStageProps = {
 };
 
 export function FittingStage({
+  moduleNamesByTypeId,
   onSelectSlot,
   selectedHull,
   selectedSlot,
@@ -29,7 +31,7 @@ export function FittingStage({
             Fitting Stage
           </h2>
           <p className="card-copy">
-            Empty rack topology prepared for future hull and module state.
+            Select an empty socket, then choose a compatible-rack module.
           </p>
         </div>
         <span className="badge">
@@ -37,11 +39,12 @@ export function FittingStage({
         </span>
       </div>
 
-      <div className="fitting-stage-grid" aria-label="Empty fitting layout">
+      <div className="fitting-stage-grid" aria-label="Fitting layout">
         <div className="fitting-rack-zone fitting-rack-zone-high">
           <FittingRack
             enabled={Boolean(selectedHull)}
             label="High Slots"
+            moduleNamesByTypeId={moduleNamesByTypeId}
             onSelectSlot={onSelectSlot}
             rack="high"
             selectedSlot={selectedSlot}
@@ -52,6 +55,7 @@ export function FittingStage({
           <FittingRack
             enabled={Boolean(selectedHull)}
             label="Mid Slots"
+            moduleNamesByTypeId={moduleNamesByTypeId}
             onSelectSlot={onSelectSlot}
             rack="mid"
             orientation="vertical"
@@ -64,6 +68,7 @@ export function FittingStage({
           <FittingRack
             enabled={Boolean(selectedHull)}
             label="Mid Slots"
+            moduleNamesByTypeId={moduleNamesByTypeId}
             onSelectSlot={onSelectSlot}
             rack="mid"
             orientation="vertical"
@@ -75,6 +80,7 @@ export function FittingStage({
           <FittingRack
             enabled={Boolean(selectedHull)}
             label="Low Slots"
+            moduleNamesByTypeId={moduleNamesByTypeId}
             onSelectSlot={onSelectSlot}
             rack="low"
             orientation="vertical"
@@ -86,6 +92,7 @@ export function FittingStage({
           <FittingRack
             enabled={Boolean(selectedHull)}
             label="Low Slots"
+            moduleNamesByTypeId={moduleNamesByTypeId}
             onSelectSlot={onSelectSlot}
             rack="low"
             orientation="vertical"
@@ -97,6 +104,7 @@ export function FittingStage({
           <FittingRack
             enabled={Boolean(selectedHull)}
             label="Rig Slots"
+            moduleNamesByTypeId={moduleNamesByTypeId}
             onSelectSlot={onSelectSlot}
             rack="rig"
             selectedSlot={selectedSlot}

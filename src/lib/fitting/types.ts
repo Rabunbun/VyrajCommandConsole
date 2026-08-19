@@ -35,3 +35,13 @@ export type FittingModuleSearchResult = {
 export type FittingModuleSearchResponse = {
   results: FittingModuleSearchResult[];
 };
+
+export type ResolvedFittingModule = {
+  rack: BrowsableFittingRack;
+  typeId: number;
+  typeName: string;
+};
+
+export type FittingModulePlacementResponse = {
+  module: ResolvedFittingModule;
+};

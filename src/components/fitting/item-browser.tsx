@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { EveModuleIcon } from "@/components/fitting/eve-module-icon";
 import type { SelectedFittingSlot } from "@/components/fitting/fitting-ui-types";
+import type { FitModuleAttemptResult } from "@/components/fitting/use-fitting-state";
 import { ModuleIcon, type ModuleIconName } from "@/components/module-visuals";
 import type {
   FittingHullSummary,
@@ -43,6 +44,7 @@ const itemCategories: Array<{
 type ItemBrowserProps = {
   hulls: FittingHullSummary[];
   onClearSelectedSlot: () => void;
+  onFitModule: (typeId: number) => Promise<FitModuleAttemptResult>;
   onSelectHull: (hull: FittingHullSummary) => void;
   selectedHull: FittingHullSummary | null;
   selectedSlot: SelectedFittingSlot | null;
@@ -51,6 +53,7 @@ type ItemBrowserProps = {
 export function ItemBrowser({
   hulls,
   onClearSelectedSlot,
+  onFitModule,
   onSelectHull,
   selectedHull,
   selectedSlot
@@ -62,6 +65,7 @@ export function ItemBrowser({
       <ModuleBrowser
         key={selectedSlot.rack}
         onBack={onClearSelectedSlot}
+        onFitModule={onFitModule}
         selectedSlot={selectedSlot}
       />
     );
@@ -209,6 +213,7 @@ function HullBrowser({
 
 type ModuleBrowserProps = {
   onBack: () => void;
+  onFitModule: (typeId: number) => Promise<FitModuleAttemptResult>;
   selectedSlot: SelectedFittingSlot;
 };
 
@@ -217,11 +222,21 @@ type ModuleSearchState =
   | { message: string; status: "error" }
   | { results: FittingModuleSearchResult[]; status: "ready" };
 
-function ModuleBrowser({ onBack, selectedSlot }: ModuleBrowserProps) {
+function ModuleBrowser({
+  onBack,
+  onFitModule,
+  selectedSlot
+}: ModuleBrowserProps) {
   const [query, setQuery] = useState("");
   const [searchState, setSearchState] = useState<ModuleSearchState>({
     status: "loading"
   });
+  const [placementError, setPlacementError] = useState<string | null>(null);
+  const [pendingModule, setPendingModule] = useState<{
+    message: string;
+    typeId: number;
+  } | null>(null);
+  const [isFitting, startFittingTransition] = useTransition();
   const rackLabel = selectedSlot.rack.toLocaleUpperCase("en-US");
 
   useEffect(() => {
@@ -271,6 +286,28 @@ function ModuleBrowser({ onBack, selectedSlot }: ModuleBrowserProps) {
       abortController.abort();
     };
   }, [query, selectedSlot.rack]);
+
+  function handleFitModule(module: FittingModuleSearchResult) {
+    setPlacementError(null);
+    setPendingModule({
+      message: `Fitting ${module.typeName}...`,
+      typeId: module.typeId
+    });
+
+    startFittingTransition(async () => {
+      try {
+        const result = await onFitModule(module.typeId);
+
+        if (!result.ok) {
+          setPlacementError(result.message);
+        }
+      } catch {
+        setPlacementError("The selected module could not be fitted.");
+      } finally {
+        setPendingModule(null);
+      }
+    });
+  }
 
   return (
     <aside className="fitting-panel fitting-item-browser" aria-labelledby="item-library-title">
@@ -324,13 +361,21 @@ function ModuleBrowser({ onBack, selectedSlot }: ModuleBrowserProps) {
             searchState.results.length ? (
               <div className="fitting-module-list">
                 {searchState.results.map((module) => (
-                  <article className="fitting-module-result" key={module.typeId}>
+                  <button
+                    aria-label={`Fit ${module.typeName} into ${rackLabel} slot ${selectedSlot.index + 1}`}
+                    className="fitting-module-result"
+                    data-pending={isFitting && pendingModule?.typeId === module.typeId}
+                    disabled={isFitting}
+                    key={module.typeId}
+                    onClick={() => handleFitModule(module)}
+                    type="button"
+                  >
                     <EveModuleIcon typeId={module.typeId} typeName={module.typeName} />
                     <div className="fitting-hull-result-copy">
                       <strong>{module.typeName}</strong>
                       <span>{formatModuleMetadata(module)}</span>
                     </div>
-                  </article>
+                  </button>
                 ))}
               </div>
             ) : (
@@ -344,8 +389,20 @@ function ModuleBrowser({ onBack, selectedSlot }: ModuleBrowserProps) {
         </div>
       </section>
 
+      <div aria-live="polite">
+        {isFitting && pendingModule ? (
+          <div className="fitting-empty-note">{pendingModule.message}</div>
+        ) : null}
+        {placementError ? (
+          <div className="fitting-empty-note" data-tone="error">
+            {placementError}
+          </div>
+        ) : null}
+      </div>
+
       <div className="fitting-empty-note">
-        Browsing only. Selecting a result will be enabled in a later fitting mission.
+        Structural placement only: hull, socket, occupancy, authoritative module,
+        and rack checks are active. Full EVE fitting validation comes later.
       </div>
     </aside>
   );

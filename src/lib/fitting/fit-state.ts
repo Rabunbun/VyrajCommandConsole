@@ -1,8 +1,13 @@
 export type RackType = "high" | "mid" | "low" | "rig" | "subsystem";
 
+export type FittedModule = {
+  instanceId: string;
+  typeId: number;
+};
+
 export type FittingSlot = {
   index: number;
-  module: null;
+  module: FittedModule | null;
 };
 
 export type FittingSlots = Record<RackType, FittingSlot[]>;
