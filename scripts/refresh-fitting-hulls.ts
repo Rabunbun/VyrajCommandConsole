@@ -71,6 +71,11 @@ const FITTING_ATTRIBUTE_IDS = {
     sdeName: "rigSlots",
     label: "Rig Slots"
   },
+  rigSize: {
+    id: 1547,
+    sdeName: "rigSize",
+    label: "Rig Size"
+  },
   droneBandwidth: {
     id: 1271,
     sdeName: "droneBandwidth",
@@ -122,6 +127,7 @@ type FittingHullRecord = {
   droneBandwidth: number | null;
   droneCapacity: number | null;
   groupName: string;
+  groupId: number;
   highSlots: number;
   lastRefreshedAt: Date;
   launcherHardpoints: number | null;
@@ -129,6 +135,7 @@ type FittingHullRecord = {
   midSlots: number;
   powergridBase: number | null;
   rigSlots: number;
+  rigSize: number | null;
   turretHardpoints: number | null;
   typeId: number;
   typeName: string;
@@ -174,6 +181,7 @@ async function main() {
         midSlots: hullAttributes.get(ship.typeId)?.midSlots ?? 0,
         powergridBase: hullAttributes.get(ship.typeId)?.powergridBase ?? null,
         rigSlots: hullAttributes.get(ship.typeId)?.rigSlots ?? 0,
+        rigSize: hullAttributes.get(ship.typeId)?.rigSize ?? null,
         turretHardpoints: hullAttributes.get(ship.typeId)?.turretHardpoints ?? null,
         lastRefreshedAt: refreshedAt
       }))
@@ -194,7 +202,7 @@ async function main() {
 
     for (const hull of verified) {
       console.log(
-        `- ${hull.typeName}: high ${hull.highSlots}, mid ${hull.midSlots}, low ${hull.lowSlots}, rig ${hull.rigSlots}; CPU ${formatNullableValue(hull.cpuBase)}, PG ${formatNullableValue(hull.powergridBase)}, calibration ${formatNullableValue(hull.calibrationCapacity)}, turrets ${formatNullableValue(hull.turretHardpoints)}, launchers ${formatNullableValue(hull.launcherHardpoints)}, drone bay ${formatNullableValue(hull.droneCapacity)}, bandwidth ${formatNullableValue(hull.droneBandwidth)}`
+        `- ${hull.typeName}: high ${hull.highSlots}, mid ${hull.midSlots}, low ${hull.lowSlots}, rig ${hull.rigSlots}, rig size ${formatNullableValue(hull.rigSize)}; CPU ${formatNullableValue(hull.cpuBase)}, PG ${formatNullableValue(hull.powergridBase)}, calibration ${formatNullableValue(hull.calibrationCapacity)}, turrets ${formatNullableValue(hull.turretHardpoints)}, launchers ${formatNullableValue(hull.launcherHardpoints)}, drone bay ${formatNullableValue(hull.droneCapacity)}, bandwidth ${formatNullableValue(hull.droneBandwidth)}`
       );
     }
 
@@ -372,6 +380,7 @@ async function readPublishedShips(
 ) {
   const ships = new Map<number, {
     categoryName: string;
+    groupId: number;
     groupName: string;
     typeId: number;
     typeName: string;
@@ -386,6 +395,7 @@ async function readPublishedShips(
 
     ships.set(type._key, {
       categoryName: categoryNames.get(group.categoryId) || "Ship",
+      groupId: type.groupID,
       groupName: group.groupName,
       typeId: type._key,
       typeName: getEnglishName(type.name)
@@ -411,6 +421,7 @@ async function readHullDogmaAttributes(
     midSlots: number;
     powergridBase: number | null;
     rigSlots: number;
+    rigSize: number | null;
     turretHardpoints: number | null;
   }>();
 
@@ -437,6 +448,7 @@ async function readHullDogmaAttributes(
       midSlots: readSlotValue(attributeValues, FITTING_ATTRIBUTE_IDS.midSlots.id),
       powergridBase: readNullableNumber(attributeValues, FITTING_ATTRIBUTE_IDS.powergridBase.id),
       rigSlots: readSlotValue(attributeValues, FITTING_ATTRIBUTE_IDS.rigSlots.id),
+      rigSize: readNullableInteger(attributeValues, FITTING_ATTRIBUTE_IDS.rigSize.id),
       turretHardpoints: readNullableInteger(attributeValues, FITTING_ATTRIBUTE_IDS.turretHardpoints.id)
     });
   }

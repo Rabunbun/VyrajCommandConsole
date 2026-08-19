@@ -18,6 +18,7 @@
     "prisma:reset:operational-data": "tsx scripts/reset-operational-data.ts",
     "eve:refresh-ship-types": "tsx scripts/refresh-eve-ship-types.ts",
     "eve:refresh-fitting-hulls": "tsx scripts/refresh-fitting-hulls.ts",
+    "eve:refresh-fitting-modules": "tsx scripts/refresh-fitting-modules.ts",
     "db:studio": "prisma studio"
   },
   "dependencies": {

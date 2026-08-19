@@ -58,6 +58,14 @@ enum AllianceContentPriority {
   CRITICAL
 }
 
+enum FittingRack {
+  HIGH
+  MID
+  LOW
+  RIG
+  SUBSYSTEM
+}
+
 model Corp {
   id                       String     @id @default(uuid()) @db.Uuid
   slug                     String     @unique
@@ -601,6 +609,7 @@ model FittingHull {
   id                  String    @id @default(uuid()) @db.Uuid
   typeId              Int       @unique
   typeName            String
+  groupId             Int?
   groupName           String    @default("")
   categoryName        String    @default("")
   highSlots           Int       @default(0)
@@ -614,12 +623,49 @@ model FittingHull {
   launcherHardpoints  Int?
   droneCapacity       Float?
   droneBandwidth      Float?
+  rigSize             Int?
   lastRefreshedAt     DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
   @@index([typeName])
+  @@index([groupId])
   @@index([groupName])
   @@index([categoryName])
+  @@index([lastRefreshedAt])
+}
+
+model FittingModule {
+  id                            String      @id @default(uuid()) @db.Uuid
+  typeId                        Int         @unique
+  typeName                      String
+  groupId                       Int
+  groupName                     String
+  rack                          FittingRack
+  marketGroupId                 Int?
+  marketGroupName               String?
+  metaGroupId                   Int?
+  metaGroupName                 String?
+  metaLevel                     Int?
+  techLevel                     Int?
+  cpuRequirement                Float       @default(0)
+  powergridRequirement          Float       @default(0)
+  calibrationCost               Int         @default(0)
+  rigSize                       Int?
+  requiresTurretHardpoint       Boolean     @default(false)
+  requiresLauncherHardpoint     Boolean     @default(false)
+  allowedShipGroupIds           Int[]       @default([])
+  allowedShipTypeIds            Int[]       @default([])
+  maxGroupFitted                Int?
+  maxTypeFitted                 Int?
+  chargeGroupIds                Int[]       @default([])
+  chargeSize                    Int?
+  lastRefreshedAt               DateTime?
+  createdAt                     DateTime    @default(now())
+  updatedAt                     DateTime    @updatedAt
+
+  @@index([rack, typeName])
+  @@index([groupId])
+  @@index([marketGroupId])
   @@index([lastRefreshedAt])
 }
