@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { EveModuleIcon } from "@/components/fitting/eve-module-icon";
 import type {
   FittingDragSource,
@@ -10,6 +11,7 @@ type FittingRackProps = {
   dragSource: FittingDragSource | null;
   enabled: boolean;
   label: string;
+  layout: "left" | "lower" | "right" | "upper";
   moduleNamesByTypeId: Readonly<Record<number, string>>;
   moveSource: SelectedFittingSlot | null;
   onDragEnd: () => void;
@@ -20,7 +22,6 @@ type FittingRackProps = {
   ) => void;
   onMoveTarget: (slot: SelectedFittingSlot) => void;
   onSelectSlot: (slot: SelectedFittingSlot) => void;
-  orientation?: "horizontal" | "vertical";
   rack: "high" | "low" | "mid" | "rig";
   selectedSlot: SelectedFittingSlot | null;
   slots: FittingSlotState[];
@@ -31,6 +32,7 @@ export function FittingRack({
   dragSource,
   enabled,
   label,
+  layout,
   moduleNamesByTypeId,
   moveSource,
   onDragEnd,
@@ -39,7 +41,6 @@ export function FittingRack({
   onFittedModuleDragStart,
   onMoveTarget,
   onSelectSlot,
-  orientation = "horizontal",
   rack,
   selectedSlot,
   slots
@@ -47,7 +48,7 @@ export function FittingRack({
   return (
     <section
       className="fitting-rack"
-      data-orientation={orientation}
+      data-layout={layout}
       data-rack={rack}
       aria-label={label}
     >
@@ -81,7 +82,7 @@ export function FittingRack({
               dragOverSlot?.rack === rack && dragOverSlot.index === slot.index;
 
             return (
-              <li key={slot.index}>
+              <li key={slot.index} style={getSlotArcStyle(slot.index, slots.length)}>
                 <button
                   aria-label={
                     isMoveTarget
@@ -191,6 +192,24 @@ export function FittingRack({
       )}
     </section>
   );
+}
+
+type FittingSlotArcStyle = CSSProperties & {
+  "--slot-center-offset": string;
+  "--slot-edge-offset": string;
+};
+
+function getSlotArcStyle(index: number, count: number): FittingSlotArcStyle {
+  const centerIndex = (count - 1) / 2;
+  const normalizedDistance = centerIndex
+    ? Math.abs(index - centerIndex) / centerIndex
+    : 0;
+  const curve = normalizedDistance ** 1.65;
+
+  return {
+    "--slot-center-offset": `${Math.round((1 - curve) * 11)}px`,
+    "--slot-edge-offset": `${Math.round(curve * 13)}px`
+  };
 }
 
 function isStructurallyValidDropTarget(

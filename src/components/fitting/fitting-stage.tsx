@@ -51,8 +51,6 @@ export function FittingStage({
   slots
 }: FittingStageProps) {
   const displaySlots = selectedHull ? slots : createEmptyVisualSlots();
-  const midSlots = splitSlots(displaySlots.mid);
-  const lowSlots = splitSlots(displaySlots.low);
   const dragProps = {
     dragOverSlot,
     dragSource,
@@ -121,6 +119,11 @@ export function FittingStage({
       </div>
 
       <div className="fitting-stage-grid" aria-label="Fitting layout">
+        <div className="fitting-stage-traces" aria-hidden="true">
+          <span data-trace="outer" />
+          <span data-trace="middle" />
+          <span data-trace="inner" />
+        </div>
         <div className="fitting-rack-zone fitting-rack-zone-high">
           <FittingRack
             {...dragProps}
@@ -130,12 +133,13 @@ export function FittingStage({
             moveSource={moveSource}
             onMoveTarget={onMoveTarget}
             onSelectSlot={onSelectSlot}
+            layout="upper"
             rack="high"
             selectedSlot={selectedSlot}
             slots={displaySlots.high}
           />
         </div>
-        <div className="fitting-rack-zone fitting-rack-zone-mid-left">
+        <div className="fitting-rack-zone fitting-rack-zone-mid">
           <FittingRack
             {...dragProps}
             enabled={Boolean(selectedHull)}
@@ -144,29 +148,14 @@ export function FittingStage({
             moveSource={moveSource}
             onMoveTarget={onMoveTarget}
             onSelectSlot={onSelectSlot}
+            layout="left"
             rack="mid"
-            orientation="vertical"
             selectedSlot={selectedSlot}
-            slots={midSlots.leading}
+            slots={displaySlots.mid}
           />
         </div>
         <ShipCore analysis={analysis} selectedHull={selectedHull} />
-        <div className="fitting-rack-zone fitting-rack-zone-mid-right">
-          <FittingRack
-            {...dragProps}
-            enabled={Boolean(selectedHull)}
-            label="Mid Slots"
-            moduleNamesByTypeId={moduleNamesByTypeId}
-            moveSource={moveSource}
-            onMoveTarget={onMoveTarget}
-            onSelectSlot={onSelectSlot}
-            rack="mid"
-            orientation="vertical"
-            selectedSlot={selectedSlot}
-            slots={midSlots.trailing}
-          />
-        </div>
-        <div className="fitting-rack-zone fitting-rack-zone-low-left">
+        <div className="fitting-rack-zone fitting-rack-zone-low">
           <FittingRack
             {...dragProps}
             enabled={Boolean(selectedHull)}
@@ -175,25 +164,10 @@ export function FittingStage({
             moveSource={moveSource}
             onMoveTarget={onMoveTarget}
             onSelectSlot={onSelectSlot}
+            layout="right"
             rack="low"
-            orientation="vertical"
             selectedSlot={selectedSlot}
-            slots={lowSlots.leading}
-          />
-        </div>
-        <div className="fitting-rack-zone fitting-rack-zone-low-right">
-          <FittingRack
-            {...dragProps}
-            enabled={Boolean(selectedHull)}
-            label="Low Slots"
-            moduleNamesByTypeId={moduleNamesByTypeId}
-            moveSource={moveSource}
-            onMoveTarget={onMoveTarget}
-            onSelectSlot={onSelectSlot}
-            rack="low"
-            orientation="vertical"
-            selectedSlot={selectedSlot}
-            slots={lowSlots.trailing}
+            slots={displaySlots.low}
           />
         </div>
         <div className="fitting-rack-zone fitting-rack-zone-rig">
@@ -205,6 +179,7 @@ export function FittingStage({
             moveSource={moveSource}
             onMoveTarget={onMoveTarget}
             onSelectSlot={onSelectSlot}
+            layout="lower"
             rack="rig"
             selectedSlot={selectedSlot}
             slots={displaySlots.rig}
@@ -213,15 +188,6 @@ export function FittingStage({
       </div>
     </section>
   );
-}
-
-function splitSlots(slots: FittingSlot[]) {
-  const splitIndex = Math.ceil(slots.length / 2);
-
-  return {
-    leading: slots.slice(0, splitIndex),
-    trailing: slots.slice(splitIndex)
-  };
 }
 
 function createEmptyVisualSlots(): FittingSlots {
