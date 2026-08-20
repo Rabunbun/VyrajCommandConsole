@@ -401,8 +401,8 @@ function ModuleBrowser({
       </div>
 
       <div className="fitting-empty-note">
-        Structural placement only: hull, socket, occupancy, authoritative module,
-        and rack checks are active. Full EVE fitting validation comes later.
+        Hard fitting restrictions are enforced. CPU, powergrid, and calibration
+        are shown as base / unmodified warnings and do not block placement.
       </div>
     </aside>
   );

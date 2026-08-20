@@ -2898,6 +2898,30 @@ button.fitting-slot[data-occupied="true"] {
   text-transform: uppercase;
 }
 
+.fitting-resource-scope-row {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.fitting-resource-overage {
+  color: #efb85b;
+  font-family: var(--font-command);
+  font-size: 0.58rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.fitting-resource[data-tone="warning"] {
+  border-color: rgba(239, 184, 91, 0.38);
+  background: rgba(69, 45, 12, 0.2);
+}
+
+.fitting-resource[data-tone="warning"] .metric-value {
+  color: #ffd38a;
+}
+
 .fitting-resource-track {
   background: rgba(255, 255, 255, 0.05);
   block-size: 6px;
@@ -2909,6 +2933,10 @@ button.fitting-slot[data-occupied="true"] {
   block-size: 100%;
   display: block;
   inline-size: 0%;
+}
+
+.fitting-resource[data-tone="warning"] .fitting-resource-fill {
+  background: linear-gradient(90deg, #d1872e, #efb85b);
 }
 
 @media (min-width: 1180px) {

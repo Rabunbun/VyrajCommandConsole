@@ -1,15 +1,22 @@
-import { useCallback, useMemo, useReducer } from "react";
+import { useCallback, useMemo, useReducer, useRef, useState } from "react";
 import {
   fittingReducer,
   validateFitModulePlacement,
   type FitModuleInput,
   type FitModuleRejection
 } from "@/lib/fitting/fit-reducer";
-import { createEmptyFitState } from "@/lib/fitting/fit-state";
+import {
+  createEmptyFitState,
+  type FitState,
+  type RackType
+} from "@/lib/fitting/fit-state";
 import type {
+  BaseFitAnalysis,
   BrowsableFittingRack,
+  FittedModuleAddress,
   FittingHullSummary,
   FittingModulePlacementResponse,
+  FitValidationIssue,
   ResolvedFittingModule
 } from "@/lib/fitting/types";
 
@@ -35,6 +42,9 @@ export type FitModuleAttemptResult =
 
 export function useFittingState({ hulls }: UseFittingStateOptions) {
   const [fitState, dispatch] = useReducer(fittingReducer, undefined, createEmptyFitState);
+  const [analysis, setAnalysis] = useState<BaseFitAnalysis>(createEmptyAnalysis);
+  const [fitWarnings, setFitWarnings] = useState<FitValidationIssue[]>([]);
+  const validationEpochRef = useRef(0);
   const hullsByTypeId = useMemo(
     () => new Map(hulls.map((hull) => [hull.typeId, hull])),
     [hulls]
@@ -43,6 +53,9 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
     ? hullsByTypeId.get(fitState.hullTypeId) ?? null
     : null;
   const selectHull = useCallback((hull: FittingHullSummary) => {
+    validationEpochRef.current += 1;
+    setAnalysis(createEmptyAnalysis());
+    setFitWarnings([]);
     dispatch({
       hullTypeId: hull.typeId,
       topology: {
@@ -56,19 +69,33 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
   }, []);
   const fitModule = useCallback(
     async ({ index, rack, typeId }: FitModuleOptions): Promise<FitModuleAttemptResult> => {
-      const resolvedModule = await resolveModuleForPlacement({ rack, typeId });
+      const validationEpoch = validationEpochRef.current;
+      const validation = await resolveModuleForPlacement({
+        fittedModules: getFittedModuleAddresses(fitState),
+        hullTypeId: fitState.hullTypeId,
+        index,
+        rack,
+        typeId
+      });
 
-      if (!resolvedModule.ok) {
-        return resolvedModule;
+      if (!validation.ok) {
+        return validation;
+      }
+
+      if (validationEpoch !== validationEpochRef.current) {
+        return {
+          message: "The selected hull changed before placement completed.",
+          ok: false
+        };
       }
 
       const input: FitModuleInput = {
         index,
         module: {
           instanceId: crypto.randomUUID(),
-          typeId: resolvedModule.module.typeId
+          typeId: validation.response.module.typeId
         },
-        moduleRack: resolvedModule.module.rack,
+        moduleRack: validation.response.module.rack,
         rack
       };
       const rejection = validateFitModulePlacement(fitState, input);
@@ -81,14 +108,21 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
       }
 
       dispatch({ ...input, type: "fit-module" });
+      setAnalysis(validation.response.analysis);
+      setFitWarnings(validation.response.warnings);
 
-      return resolvedModule;
+      return {
+        module: validation.response.module,
+        ok: true
+      };
     },
     [fitState]
   );
 
   return {
+    analysis,
     fitModule,
+    fitWarnings,
     fitState,
     selectHull,
     selectedHull
@@ -96,9 +130,21 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
 }
 
 async function resolveModuleForPlacement(input: {
+  fittedModules: FittedModuleAddress[];
+  hullTypeId: number | null;
+  index: number;
   rack: BrowsableFittingRack;
   typeId: number;
-}): Promise<FitModuleAttemptResult> {
+}): Promise<
+  | { message: string; ok: false }
+  | {
+      ok: true;
+      response: FittingModulePlacementResponse & {
+        allowed: true;
+        module: ResolvedFittingModule;
+      };
+    }
+> {
   try {
     const response = await fetch("/api/fitting/modules", {
       body: JSON.stringify(input),
@@ -116,14 +162,21 @@ async function resolveModuleForPlacement(input: {
     if (!response.ok) {
       return {
         message:
-          payload && "error" in payload && typeof payload.error === "string"
+          isPlacementResponse(payload) && payload.errors[0]
+            ? payload.errors[0].message
+            : payload && "error" in payload && typeof payload.error === "string"
             ? payload.error
             : "The selected module could not be validated.",
         ok: false
       };
     }
 
-    if (!payload || !("module" in payload) || !isResolvedModule(payload.module, input)) {
+    if (
+      !isPlacementResponse(payload) ||
+      !payload.allowed ||
+      !payload.module ||
+      !isResolvedModule(payload.module, input)
+    ) {
       return {
         message: "The module validation response was invalid.",
         ok: false
@@ -131,8 +184,12 @@ async function resolveModuleForPlacement(input: {
     }
 
     return {
-      module: payload.module,
-      ok: true
+      ok: true,
+      response: {
+        ...payload,
+        allowed: true,
+        module: payload.module
+      }
     };
   } catch {
     return {
@@ -140,6 +197,54 @@ async function resolveModuleForPlacement(input: {
       ok: false
     };
   }
+}
+
+function isPlacementResponse(value: unknown): value is FittingModulePlacementResponse {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "allowed" in value &&
+    "analysis" in value &&
+    "errors" in value &&
+    "module" in value &&
+    "warnings" in value &&
+    typeof value.allowed === "boolean" &&
+    isBaseFitAnalysis(value.analysis) &&
+    Array.isArray(value.errors) &&
+    value.errors.every(isFitValidationIssue) &&
+    Array.isArray(value.warnings) &&
+    value.warnings.every(isFitValidationIssue)
+  );
+}
+
+function isBaseFitAnalysis(value: unknown): value is BaseFitAnalysis {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "calibrationUsed" in value &&
+    "cpuUsed" in value &&
+    "launcherHardpointsUsed" in value &&
+    "powergridUsed" in value &&
+    "turretHardpointsUsed" in value &&
+    isNonnegativeFiniteNumber(value.calibrationUsed) &&
+    isNonnegativeFiniteNumber(value.cpuUsed) &&
+    isNonnegativeFiniteNumber(value.launcherHardpointsUsed) &&
+    isNonnegativeFiniteNumber(value.powergridUsed) &&
+    isNonnegativeFiniteNumber(value.turretHardpointsUsed)
+  );
+}
+
+function isFitValidationIssue(value: unknown): value is FitValidationIssue {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "code" in value &&
+    "message" in value &&
+    typeof value.code === "string" &&
+    Boolean(value.code) &&
+    typeof value.message === "string" &&
+    Boolean(value.message.trim())
+  );
 }
 
 function isResolvedModule(
@@ -174,4 +279,29 @@ function getPlacementRejectionMessage(rejection: FitModuleRejection) {
     case "invalid-module":
       return "The fitted-module instance is invalid.";
   }
+}
+
+function getFittedModuleAddresses(fitState: FitState): FittedModuleAddress[] {
+  return (Object.entries(fitState.slots) as [RackType, FitState["slots"][RackType]][])
+    .flatMap(([rack, slots]) =>
+      slots.flatMap((slot) =>
+        slot.module
+          ? [{ index: slot.index, rack, typeId: slot.module.typeId }]
+          : []
+      )
+    );
+}
+
+function createEmptyAnalysis(): BaseFitAnalysis {
+  return {
+    calibrationUsed: 0,
+    cpuUsed: 0,
+    launcherHardpointsUsed: 0,
+    powergridUsed: 0,
+    turretHardpointsUsed: 0
+  };
+}
+
+function isNonnegativeFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }

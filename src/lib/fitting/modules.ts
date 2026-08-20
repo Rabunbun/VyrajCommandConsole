@@ -3,8 +3,7 @@ import { FittingRack, Prisma } from "@prisma/client";
 import { getDb, isDatabaseConfigured } from "@/lib/db";
 import type {
   BrowsableFittingRack,
-  FittingModuleSearchResult,
-  ResolvedFittingModule
+  FittingModuleSearchResult
 } from "@/lib/fitting/types";
 
 const databaseRackByBrowserRack: Record<BrowsableFittingRack, FittingRack> = {
@@ -13,27 +12,6 @@ const databaseRackByBrowserRack: Record<BrowsableFittingRack, FittingRack> = {
   mid: FittingRack.MID,
   rig: FittingRack.RIG
 };
-const browserRackByDatabaseRack: Partial<
-  Record<FittingRack, BrowsableFittingRack>
-> = {
-  [FittingRack.HIGH]: "high",
-  [FittingRack.LOW]: "low",
-  [FittingRack.MID]: "mid",
-  [FittingRack.RIG]: "rig"
-};
-
-export type ResolveFittingModuleResult =
-  | {
-      status: "not-found";
-    }
-  | {
-      status: "rack-mismatch";
-    }
-  | {
-      module: ResolvedFittingModule;
-      status: "resolved";
-    };
-
 type SearchFittingModulesOptions = {
   limit: number;
   query: string;
@@ -98,43 +76,4 @@ export async function searchFittingModules({
     ...module,
     rack
   }));
-}
-
-export async function resolveFittingModuleForRack(input: {
-  rack: BrowsableFittingRack;
-  typeId: number;
-}): Promise<ResolveFittingModuleResult> {
-  if (!isDatabaseConfigured()) {
-    throw new Error("The fitting module cache is unavailable.");
-  }
-
-  const staticModule = await getDb().fittingModule.findUnique({
-    where: {
-      typeId: input.typeId
-    },
-    select: {
-      rack: true,
-      typeId: true,
-      typeName: true
-    }
-  });
-
-  if (!staticModule) {
-    return { status: "not-found" };
-  }
-
-  const rack = browserRackByDatabaseRack[staticModule.rack];
-
-  if (!rack || rack !== input.rack) {
-    return { status: "rack-mismatch" };
-  }
-
-  return {
-    module: {
-      rack,
-      typeId: staticModule.typeId,
-      typeName: staticModule.typeName
-    },
-    status: "resolved"
-  };
 }

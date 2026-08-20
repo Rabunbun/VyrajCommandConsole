@@ -1,26 +1,53 @@
-import type { FittingHullSummary } from "@/lib/fitting/types";
+import type {
+  BaseFitAnalysis,
+  FittingHullSummary,
+  FitValidationIssue
+} from "@/lib/fitting/types";
 
 type FittingResourcesProps = {
+  analysis: BaseFitAnalysis;
   selectedHull: FittingHullSummary | null;
+  warnings: FitValidationIssue[];
 };
 
-export function FittingResources({ selectedHull }: FittingResourcesProps) {
+export function FittingResources({
+  analysis,
+  selectedHull,
+  warnings
+}: FittingResourcesProps) {
+  const warningCodes = new Set(warnings.map((warning) => warning.code));
   const resources = [
     {
+      capacity: selectedHull?.cpuBase ?? null,
       label: "CPU",
-      value: formatCapacityValue(selectedHull?.cpuBase ?? null, "tf")
+      scope: "Base / Unmodified",
+      unit: "tf",
+      used: analysis.cpuUsed,
+      warning: warningCodes.has("CPU_BASE_OVER")
     },
     {
+      capacity: selectedHull?.powergridBase ?? null,
       label: "Powergrid",
-      value: formatCapacityValue(selectedHull?.powergridBase ?? null, "MW")
+      scope: "Base / Unmodified",
+      unit: "MW",
+      used: analysis.powergridUsed,
+      warning: warningCodes.has("POWERGRID_BASE_OVER")
     },
     {
+      capacity: selectedHull?.calibrationCapacity ?? null,
       label: "Calibration",
-      value: formatCapacityValue(selectedHull?.calibrationCapacity ?? null)
+      scope: "Base / Unmodified",
+      unit: "",
+      used: analysis.calibrationUsed,
+      warning: warningCodes.has("CALIBRATION_OVER")
     },
     {
+      capacity: selectedHull?.droneCapacity ?? null,
       label: "Drone Capacity",
-      value: formatCapacityValue(selectedHull?.droneCapacity ?? null, "m³")
+      scope: "Base Hull",
+      unit: "m³",
+      used: 0,
+      warning: false
     }
   ];
 
@@ -30,17 +57,30 @@ export function FittingResources({ selectedHull }: FittingResourcesProps) {
         Fitting resources
       </h2>
       {resources.map((resource) => (
-        <div className="fitting-resource" key={resource.label}>
+        <div
+          className="fitting-resource"
+          data-tone={resource.warning ? "warning" : "default"}
+          key={resource.label}
+        >
           <div className="fitting-resource-header">
             <span className="metric-label">{resource.label}</span>
-            <span className="metric-value">{resource.value}</span>
+            <span className="metric-value">
+              {formatUsageValue(resource.used, resource.capacity, resource.unit)}
+            </span>
           </div>
-          <span className="fitting-resource-scope">Base Hull</span>
-          <div
-            className="fitting-resource-track"
-            aria-hidden="true"
-          >
-            <span className="fitting-resource-fill" />
+          <div className="fitting-resource-scope-row">
+            <span className="fitting-resource-scope">{resource.scope}</span>
+            {resource.warning && resource.capacity !== null ? (
+              <span className="fitting-resource-overage">
+                {formatOverage(resource.used - resource.capacity, resource.unit)} over
+              </span>
+            ) : null}
+          </div>
+          <div className="fitting-resource-track" aria-hidden="true">
+            <span
+              className="fitting-resource-fill"
+              style={{ inlineSize: `${getUsagePercent(resource.used, resource.capacity)}%` }}
+            />
           </div>
         </div>
       ))}
@@ -48,11 +88,23 @@ export function FittingResources({ selectedHull }: FittingResourcesProps) {
   );
 }
 
-function formatCapacityValue(value: number | null, unit = "") {
-  const capacity = value === null ? "—" : formatStaticNumber(value);
+function formatUsageValue(used: number, capacity: number | null, unit = "") {
+  const formattedCapacity = capacity === null ? "—" : formatStaticNumber(capacity);
   const suffix = unit ? ` ${unit}` : "";
 
-  return `0 / ${capacity}${suffix}`;
+  return `${formatStaticNumber(used)} / ${formattedCapacity}${suffix}`;
+}
+
+function formatOverage(value: number, unit: string) {
+  return `${formatStaticNumber(value)}${unit ? ` ${unit}` : ""}`;
+}
+
+function getUsagePercent(used: number, capacity: number | null) {
+  if (capacity === null || capacity <= 0) {
+    return used > 0 ? 100 : 0;
+  }
+
+  return Math.min(100, Math.max(0, (used / capacity) * 100));
 }
 
 function formatStaticNumber(value: number) {

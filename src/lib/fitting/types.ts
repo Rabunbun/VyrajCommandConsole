@@ -1,3 +1,5 @@
+import type { RackType } from "@/lib/fitting/fit-state";
+
 export type FittingHullSummary = {
   calibrationCapacity: number | null;
   categoryName: string;
@@ -42,6 +44,51 @@ export type ResolvedFittingModule = {
   typeName: string;
 };
 
+export type FitValidationIssueCode =
+  | "CALIBRATION_OVER"
+  | "CPU_BASE_OVER"
+  | "HULL_NOT_FOUND"
+  | "HULL_NOT_SELECTED"
+  | "INVALID_FIT_STATE"
+  | "INVALID_SLOT"
+  | "LAUNCHER_CAPACITY_UNAVAILABLE"
+  | "LAUNCHER_HARDPOINTS_EXHAUSTED"
+  | "MAX_GROUP_FITTED"
+  | "MAX_TYPE_FITTED"
+  | "MODULE_NOT_FOUND"
+  | "POWERGRID_BASE_OVER"
+  | "RACK_MISMATCH"
+  | "RIG_SIZE_MISMATCH"
+  | "RIG_SIZE_UNAVAILABLE"
+  | "SHIP_RESTRICTION"
+  | "SLOT_OCCUPIED"
+  | "SUBSYSTEM_DEFERRED"
+  | "TURRET_CAPACITY_UNAVAILABLE"
+  | "TURRET_HARDPOINTS_EXHAUSTED";
+
+export type FitValidationIssue = {
+  code: FitValidationIssueCode;
+  message: string;
+};
+
+export type BaseFitAnalysis = {
+  calibrationUsed: number;
+  cpuUsed: number;
+  launcherHardpointsUsed: number;
+  powergridUsed: number;
+  turretHardpointsUsed: number;
+};
+
+export type FittedModuleAddress = {
+  index: number;
+  rack: RackType;
+  typeId: number;
+};
+
 export type FittingModulePlacementResponse = {
-  module: ResolvedFittingModule;
+  allowed: boolean;
+  analysis: BaseFitAnalysis;
+  errors: FitValidationIssue[];
+  module: ResolvedFittingModule | null;
+  warnings: FitValidationIssue[];
 };

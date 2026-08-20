@@ -18,7 +18,14 @@ type FittingWorkspaceProps = {
 };
 
 export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
-  const { fitModule, fitState, selectHull, selectedHull } = useFittingState({ hulls });
+  const {
+    analysis,
+    fitModule,
+    fitWarnings,
+    fitState,
+    selectHull,
+    selectedHull
+  } = useFittingState({ hulls });
   const [selectedSlot, setSelectedSlot] = useState<SelectedFittingSlot | null>(null);
   const [resolvedModuleNamesByTypeId, setResolvedModuleNamesByTypeId] = useState<
     Record<number, string>
@@ -75,6 +82,7 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
           selectedSlot={selectedSlot}
         />
         <FittingStage
+          analysis={analysis}
           moduleNamesByTypeId={resolvedModuleNamesByTypeId}
           onSelectSlot={setSelectedSlot}
           selectedHull={selectedHull}
@@ -83,7 +91,11 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
         />
         <FitStatistics />
       </div>
-      <FittingResources selectedHull={selectedHull} />
+      <FittingResources
+        analysis={analysis}
+        selectedHull={selectedHull}
+        warnings={fitWarnings}
+      />
     </div>
   );
 }

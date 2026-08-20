@@ -2,9 +2,10 @@ import { FittingRack } from "@/components/fitting/fitting-rack";
 import type { SelectedFittingSlot } from "@/components/fitting/fitting-ui-types";
 import { ShipCore } from "@/components/fitting/ship-core";
 import type { FittingSlot, FittingSlots } from "@/lib/fitting/fit-state";
-import type { FittingHullSummary } from "@/lib/fitting/types";
+import type { BaseFitAnalysis, FittingHullSummary } from "@/lib/fitting/types";
 
 type FittingStageProps = {
+  analysis: BaseFitAnalysis;
   moduleNamesByTypeId: Readonly<Record<number, string>>;
   onSelectSlot: (slot: SelectedFittingSlot) => void;
   selectedHull: FittingHullSummary | null;
@@ -13,6 +14,7 @@ type FittingStageProps = {
 };
 
 export function FittingStage({
+  analysis,
   moduleNamesByTypeId,
   onSelectSlot,
   selectedHull,
@@ -63,7 +65,7 @@ export function FittingStage({
             slots={midSlots.leading}
           />
         </div>
-        <ShipCore selectedHull={selectedHull} />
+        <ShipCore analysis={analysis} selectedHull={selectedHull} />
         <div className="fitting-rack-zone fitting-rack-zone-mid-right">
           <FittingRack
             enabled={Boolean(selectedHull)}

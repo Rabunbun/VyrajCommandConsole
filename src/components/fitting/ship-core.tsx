@@ -1,12 +1,13 @@
 import { EveShipImage } from "@/components/eve-ship-image";
 import { ModuleIcon } from "@/components/module-visuals";
-import type { FittingHullSummary } from "@/lib/fitting/types";
+import type { BaseFitAnalysis, FittingHullSummary } from "@/lib/fitting/types";
 
 type ShipCoreProps = {
+  analysis: BaseFitAnalysis;
   selectedHull: FittingHullSummary | null;
 };
 
-export function ShipCore({ selectedHull }: ShipCoreProps) {
+export function ShipCore({ analysis, selectedHull }: ShipCoreProps) {
   if (selectedHull) {
     return (
       <section className="ship-core ship-core-selected" aria-labelledby="ship-core-title">
@@ -37,11 +38,21 @@ export function ShipCore({ selectedHull }: ShipCoreProps) {
           <dl className="fitting-hardpoint-summary" aria-label="Selected hull base hardpoints">
             <div>
               <dt>Turrets</dt>
-              <dd>{formatNullableNumber(selectedHull.turretHardpoints)}</dd>
+              <dd>
+                {formatUsageCapacity(
+                  analysis.turretHardpointsUsed,
+                  selectedHull.turretHardpoints
+                )}
+              </dd>
             </div>
             <div>
               <dt>Launchers</dt>
-              <dd>{formatNullableNumber(selectedHull.launcherHardpoints)}</dd>
+              <dd>
+                {formatUsageCapacity(
+                  analysis.launcherHardpointsUsed,
+                  selectedHull.launcherHardpoints
+                )}
+              </dd>
             </div>
             <div>
               <dt>Bandwidth</dt>
@@ -80,4 +91,8 @@ function formatNullableNumber(value: number | null, suffix = "") {
   return `${new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 2
   }).format(value)}${suffix}`;
+}
+
+function formatUsageCapacity(used: number, capacity: number | null) {
+  return `${formatNullableNumber(used)} / ${formatNullableNumber(capacity)}`;
 }
