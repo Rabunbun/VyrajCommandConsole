@@ -6,3 +6,17 @@ export type SelectedFittingSlot = {
 };
 
 export type ModuleActionMode = "move" | "replace" | null;
+
+export type FittingDragSource =
+  | {
+      kind: "browser-module";
+      rack: BrowsableFittingRack;
+      typeId: number;
+      typeName: string;
+    }
+  | {
+      from: SelectedFittingSlot;
+      instanceId: string;
+      kind: "fitted-module";
+      typeId: number;
+    };

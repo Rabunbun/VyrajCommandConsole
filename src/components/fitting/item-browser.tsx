@@ -50,10 +50,13 @@ const itemCategories: Array<{
 
 type ItemBrowserProps = {
   actionMode: ModuleActionMode;
+  draggingModuleTypeId: number | null;
   hulls: FittingHullSummary[];
   manipulationError: string | null;
   onClearSelectedSlot: () => void;
   onFitModule: (typeId: number) => Promise<FitModuleAttemptResult>;
+  onModuleDragEnd: () => void;
+  onModuleDragStart: (module: FittingModuleSearchResult) => void;
   onRemoveModule: () => Promise<FitOperationAttemptResult>;
   onReplaceModule: (typeId: number) => Promise<FitModuleAttemptResult>;
   onReturnToActions: () => void;
@@ -68,10 +71,13 @@ type ItemBrowserProps = {
 
 export function ItemBrowser({
   actionMode,
+  draggingModuleTypeId,
   hulls,
   manipulationError,
   onClearSelectedSlot,
   onFitModule,
+  onModuleDragEnd,
+  onModuleDragStart,
   onRemoveModule,
   onReplaceModule,
   onReturnToActions,
@@ -94,6 +100,8 @@ export function ItemBrowser({
             key={`replace:${selectedSlot.rack}:${selectedSlot.index}`}
             onBack={onReturnToActions}
             onChooseModule={onReplaceModule}
+            onModuleDragEnd={onModuleDragEnd}
+            onModuleDragStart={onModuleDragStart}
             selectedSlot={selectedSlot}
           />
         );
@@ -120,6 +128,9 @@ export function ItemBrowser({
         key={`fit:${selectedSlot.rack}:${selectedSlot.index}`}
         onBack={onClearSelectedSlot}
         onChooseModule={onFitModule}
+        draggingModuleTypeId={draggingModuleTypeId}
+        onModuleDragEnd={onModuleDragEnd}
+        onModuleDragStart={onModuleDragStart}
         selectedSlot={selectedSlot}
       />
     );
@@ -365,8 +376,11 @@ function OccupiedModuleActions({
 
 type ModuleBrowserProps = {
   action: "fit" | "replace";
+  draggingModuleTypeId?: number | null;
   onBack: () => void;
   onChooseModule: (typeId: number) => Promise<FitModuleAttemptResult>;
+  onModuleDragEnd: () => void;
+  onModuleDragStart: (module: FittingModuleSearchResult) => void;
   selectedSlot: SelectedFittingSlot;
 };
 
@@ -377,8 +391,11 @@ type ModuleSearchState =
 
 function ModuleBrowser({
   action,
+  draggingModuleTypeId = null,
   onBack,
   onChooseModule,
+  onModuleDragEnd,
+  onModuleDragStart,
   selectedSlot
 }: ModuleBrowserProps) {
   const [query, setQuery] = useState("");
@@ -521,10 +538,26 @@ function ModuleBrowser({
                   <button
                     aria-label={`${actionLabel} ${module.typeName} in ${rackLabel} slot ${selectedSlot.index + 1}`}
                     className="fitting-module-result"
+                    data-dragging={draggingModuleTypeId === module.typeId}
                     data-pending={isFitting && pendingModule?.typeId === module.typeId}
                     disabled={isFitting}
+                    draggable={action === "fit" && !isFitting}
                     key={module.typeId}
                     onClick={() => handleChooseModule(module)}
+                    onDragEnd={onModuleDragEnd}
+                    onDragStart={(event) => {
+                      if (action !== "fit") {
+                        event.preventDefault();
+                        return;
+                      }
+
+                      event.dataTransfer.effectAllowed = "copy";
+                      event.dataTransfer.setData(
+                        "text/plain",
+                        `fitting-module:${module.typeId}`
+                      );
+                      onModuleDragStart(module);
+                    }}
                     type="button"
                   >
                     <EveModuleIcon typeId={module.typeId} typeName={module.typeName} />
