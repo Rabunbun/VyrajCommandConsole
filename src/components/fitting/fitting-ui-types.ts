@@ -4,3 +4,5 @@ export type SelectedFittingSlot = {
   index: number;
   rack: BrowsableFittingRack;
 };
+
+export type ModuleActionMode = "move" | "replace" | null;

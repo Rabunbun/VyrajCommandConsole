@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { EveModuleIcon } from "@/components/fitting/eve-module-icon";
-import type { SelectedFittingSlot } from "@/components/fitting/fitting-ui-types";
-import type { FitModuleAttemptResult } from "@/components/fitting/use-fitting-state";
+import type {
+  ModuleActionMode,
+  SelectedFittingSlot
+} from "@/components/fitting/fitting-ui-types";
+import type {
+  FitModuleAttemptResult,
+  FitOperationAttemptResult
+} from "@/components/fitting/use-fitting-state";
 import { ModuleIcon, type ModuleIconName } from "@/components/module-visuals";
+import type { FittedModule } from "@/lib/fitting/fit-state";
 import type {
   FittingHullSummary,
   FittingModuleSearchResponse,
@@ -42,30 +49,77 @@ const itemCategories: Array<{
 ];
 
 type ItemBrowserProps = {
+  actionMode: ModuleActionMode;
   hulls: FittingHullSummary[];
+  manipulationError: string | null;
   onClearSelectedSlot: () => void;
   onFitModule: (typeId: number) => Promise<FitModuleAttemptResult>;
+  onRemoveModule: () => Promise<FitOperationAttemptResult>;
+  onReplaceModule: (typeId: number) => Promise<FitModuleAttemptResult>;
+  onReturnToActions: () => void;
   onSelectHull: (hull: FittingHullSummary) => void;
+  onStartMove: () => void;
+  onStartReplace: () => void;
   selectedHull: FittingHullSummary | null;
+  selectedModule: FittedModule | null;
+  selectedModuleName: string | null;
   selectedSlot: SelectedFittingSlot | null;
 };
 
 export function ItemBrowser({
+  actionMode,
   hulls,
+  manipulationError,
   onClearSelectedSlot,
   onFitModule,
+  onRemoveModule,
+  onReplaceModule,
+  onReturnToActions,
   onSelectHull,
+  onStartMove,
+  onStartReplace,
   selectedHull,
+  selectedModule,
+  selectedModuleName,
   selectedSlot
 }: ItemBrowserProps) {
   const [hullQuery, setHullQuery] = useState("");
 
   if (selectedSlot) {
+    if (selectedModule) {
+      if (actionMode === "replace") {
+        return (
+          <ModuleBrowser
+            action="replace"
+            key={`replace:${selectedSlot.rack}:${selectedSlot.index}`}
+            onBack={onReturnToActions}
+            onChooseModule={onReplaceModule}
+            selectedSlot={selectedSlot}
+          />
+        );
+      }
+
+      return (
+        <OccupiedModuleActions
+          actionMode={actionMode}
+          error={manipulationError}
+          module={selectedModule}
+          moduleName={selectedModuleName ?? `Module type ${selectedModule.typeId}`}
+          onCancel={onClearSelectedSlot}
+          onRemove={onRemoveModule}
+          onStartMove={onStartMove}
+          onStartReplace={onStartReplace}
+          selectedSlot={selectedSlot}
+        />
+      );
+    }
+
     return (
       <ModuleBrowser
-        key={selectedSlot.rack}
+        action="fit"
+        key={`fit:${selectedSlot.rack}:${selectedSlot.index}`}
         onBack={onClearSelectedSlot}
-        onFitModule={onFitModule}
+        onChooseModule={onFitModule}
         selectedSlot={selectedSlot}
       />
     );
@@ -211,9 +265,108 @@ function HullBrowser({
   );
 }
 
+type OccupiedModuleActionsProps = {
+  actionMode: ModuleActionMode;
+  error: string | null;
+  module: FittedModule;
+  moduleName: string;
+  onCancel: () => void;
+  onRemove: () => Promise<FitOperationAttemptResult>;
+  onStartMove: () => void;
+  onStartReplace: () => void;
+  selectedSlot: SelectedFittingSlot;
+};
+
+function OccupiedModuleActions({
+  actionMode,
+  error,
+  module,
+  moduleName,
+  onCancel,
+  onRemove,
+  onStartMove,
+  onStartReplace,
+  selectedSlot
+}: OccupiedModuleActionsProps) {
+  const [isRemoving, startRemovingTransition] = useTransition();
+  const rackLabel = selectedSlot.rack.toLocaleUpperCase("en-US");
+
+  return (
+    <aside className="fitting-panel fitting-item-browser" aria-labelledby="item-library-title">
+      <div className="fitting-panel-heading">
+        <div>
+          <h2 className="section-title" id="item-library-title">
+            Item Library
+          </h2>
+          <div className="fitting-library-context">
+            {rackLabel} SLOT {selectedSlot.index + 1}
+          </div>
+        </div>
+        <button className="fitting-library-back" onClick={onCancel} type="button">
+          Cancel
+        </button>
+      </div>
+
+      <div className="fitting-selected-module">
+        <EveModuleIcon typeId={module.typeId} typeName={moduleName} />
+        <div className="fitting-hull-result-copy">
+          <strong>{moduleName}</strong>
+          <span>Type {module.typeId}</span>
+        </div>
+      </div>
+
+      <div className="fitting-module-actions" aria-label="Fitted module actions">
+        <button
+          disabled={isRemoving}
+          onClick={() => {
+            startRemovingTransition(async () => {
+              await onRemove();
+            });
+          }}
+          type="button"
+        >
+          {isRemoving ? "Removing..." : "Remove"}
+        </button>
+        <button disabled={isRemoving} onClick={onStartReplace} type="button">
+          Replace
+        </button>
+        <button
+          data-active={actionMode === "move"}
+          disabled={isRemoving}
+          onClick={onStartMove}
+          type="button"
+        >
+          Move
+        </button>
+      </div>
+
+      {actionMode === "move" ? (
+        <div className="fitting-empty-note" data-tone="active">
+          Select an empty {selectedSlot.rack} slot. The module instance will move
+          without changing fitting resources.
+        </div>
+      ) : (
+        <div className="fitting-empty-note">
+          Remove the module, replace it through the rack-scoped browser, or move
+          this exact instance within the same rack.
+        </div>
+      )}
+
+      <div aria-live="polite">
+        {error ? (
+          <div className="fitting-empty-note" data-tone="error">
+            {error}
+          </div>
+        ) : null}
+      </div>
+    </aside>
+  );
+}
+
 type ModuleBrowserProps = {
+  action: "fit" | "replace";
   onBack: () => void;
-  onFitModule: (typeId: number) => Promise<FitModuleAttemptResult>;
+  onChooseModule: (typeId: number) => Promise<FitModuleAttemptResult>;
   selectedSlot: SelectedFittingSlot;
 };
 
@@ -223,8 +376,9 @@ type ModuleSearchState =
   | { results: FittingModuleSearchResult[]; status: "ready" };
 
 function ModuleBrowser({
+  action,
   onBack,
-  onFitModule,
+  onChooseModule,
   selectedSlot
 }: ModuleBrowserProps) {
   const [query, setQuery] = useState("");
@@ -238,6 +392,7 @@ function ModuleBrowser({
   } | null>(null);
   const [isFitting, startFittingTransition] = useTransition();
   const rackLabel = selectedSlot.rack.toLocaleUpperCase("en-US");
+  const actionLabel = action === "replace" ? "Replace" : "Fit";
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -287,22 +442,24 @@ function ModuleBrowser({
     };
   }, [query, selectedSlot.rack]);
 
-  function handleFitModule(module: FittingModuleSearchResult) {
+  function handleChooseModule(module: FittingModuleSearchResult) {
     setPlacementError(null);
     setPendingModule({
-      message: `Fitting ${module.typeName}...`,
+      message: `${action === "replace" ? "Replacing with" : "Fitting"} ${module.typeName}...`,
       typeId: module.typeId
     });
 
     startFittingTransition(async () => {
       try {
-        const result = await onFitModule(module.typeId);
+        const result = await onChooseModule(module.typeId);
 
         if (!result.ok) {
           setPlacementError(result.message);
         }
       } catch {
-        setPlacementError("The selected module could not be fitted.");
+        setPlacementError(
+          `The selected module could not be ${action === "replace" ? "used as a replacement" : "fitted"}.`
+        );
       } finally {
         setPendingModule(null);
       }
@@ -317,11 +474,11 @@ function ModuleBrowser({
             Item Library
           </h2>
           <div className="fitting-library-context">
-            {rackLabel} SLOT {selectedSlot.index + 1}
+            {action === "replace" ? "REPLACE " : ""}{rackLabel} SLOT {selectedSlot.index + 1}
           </div>
         </div>
         <button className="fitting-library-back" onClick={onBack} type="button">
-          Ships
+          {action === "replace" ? "Actions" : "Ships"}
         </button>
       </div>
 
@@ -362,12 +519,12 @@ function ModuleBrowser({
               <div className="fitting-module-list">
                 {searchState.results.map((module) => (
                   <button
-                    aria-label={`Fit ${module.typeName} into ${rackLabel} slot ${selectedSlot.index + 1}`}
+                    aria-label={`${actionLabel} ${module.typeName} in ${rackLabel} slot ${selectedSlot.index + 1}`}
                     className="fitting-module-result"
                     data-pending={isFitting && pendingModule?.typeId === module.typeId}
                     disabled={isFitting}
                     key={module.typeId}
-                    onClick={() => handleFitModule(module)}
+                    onClick={() => handleChooseModule(module)}
                     type="button"
                   >
                     <EveModuleIcon typeId={module.typeId} typeName={module.typeName} />

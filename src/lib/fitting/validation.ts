@@ -6,6 +6,7 @@ import type {
   BaseFitAnalysis,
   BrowsableFittingRack,
   FittedModuleAddress,
+  FittingAnalysisResponse,
   FittingModulePlacementResponse,
   FitValidationIssue,
   ResolvedFittingModule
@@ -17,6 +18,11 @@ export type ValidateFittingModulePlacementInput = {
   index: number;
   rack: RackType;
   typeId: number;
+};
+
+export type AnalyzeFittingFitInput = {
+  fittedModules: FittedModuleAddress[];
+  hullTypeId: number | null;
 };
 
 const emptyAnalysis: BaseFitAnalysis = {
@@ -47,17 +53,52 @@ const browserRackByDatabaseRack: Partial<
 export async function validateFittingModulePlacement(
   input: ValidateFittingModulePlacementInput
 ): Promise<FittingModulePlacementResponse> {
+  const proposedModule: FittedModuleAddress = {
+    index: input.index,
+    rack: input.rack,
+    typeId: input.typeId
+  };
+  const result = await evaluateFittingFit({
+    fittedModules: [...input.fittedModules, proposedModule],
+    hullTypeId: input.hullTypeId,
+    proposedModule
+  });
+
+  return {
+    ...result.response,
+    module: result.resolvedProposedModule
+  };
+}
+
+export async function analyzeFittingFit(
+  input: AnalyzeFittingFitInput
+): Promise<FittingAnalysisResponse> {
+  const result = await evaluateFittingFit(input);
+
+  return result.response;
+}
+
+async function evaluateFittingFit(input: AnalyzeFittingFitInput & {
+  proposedModule?: FittedModuleAddress;
+}): Promise<{
+  resolvedProposedModule: ResolvedFittingModule | null;
+  response: FittingAnalysisResponse;
+}> {
   if (!isDatabaseConfigured()) {
     throw new Error("The fitting static-data cache is unavailable.");
   }
 
   if (input.hullTypeId === null) {
-    return rejected("HULL_NOT_SELECTED", "Select a hull before fitting modules.");
+    return {
+      resolvedProposedModule: null,
+      response: rejectedAnalysis(
+        "HULL_NOT_SELECTED",
+        "Select a hull before fitting modules."
+      )
+    };
   }
 
-  const typeIds = Array.from(
-    new Set([...input.fittedModules.map((module) => module.typeId), input.typeId])
-  );
+  const typeIds = Array.from(new Set(input.fittedModules.map((item) => item.typeId)));
   const [hull, staticModules] = await Promise.all([
     getDb().fittingHull.findUnique({
       where: { typeId: input.hullTypeId },
@@ -100,17 +141,19 @@ export async function validateFittingModulePlacement(
   ]);
 
   if (!hull) {
-    return rejected(
-      "HULL_NOT_FOUND",
-      "The selected hull does not exist in the fitting cache."
-    );
+    return {
+      resolvedProposedModule: null,
+      response: rejectedAnalysis(
+        "HULL_NOT_FOUND",
+        "The selected hull does not exist in the fitting cache."
+      )
+    };
   }
 
   const errors: FitValidationIssue[] = [];
   const staticModuleByTypeId = new Map(
     staticModules.map((module) => [module.typeId, module])
   );
-  const proposedModule = staticModuleByTypeId.get(input.typeId) ?? null;
   const rackCapacityByRack: Record<RackType, number> = {
     high: hull.highSlots,
     low: hull.lowSlots,
@@ -119,93 +162,72 @@ export async function validateFittingModulePlacement(
     subsystem: 0
   };
 
-  if (input.rack === "subsystem") {
-    addIssue(
-      errors,
-      "SUBSYSTEM_DEFERRED",
-      "Subsystem fitting is not supported yet."
-    );
-  }
-
-  if (
-    !Number.isInteger(input.index) ||
-    input.index < 0 ||
-    input.index >= rackCapacityByRack[input.rack]
-  ) {
-    addIssue(errors, "INVALID_SLOT", "The target socket does not exist on this hull.");
-  }
-
   const occupiedAddresses = new Set<string>();
+  const tentativeModules = [] as typeof staticModules;
 
   for (const fittedModule of input.fittedModules) {
+    const isProposedModule = fittedModule === input.proposedModule;
     const address = getSlotAddress(fittedModule.rack, fittedModule.index);
 
     if (occupiedAddresses.has(address)) {
       addIssue(
         errors,
-        "INVALID_FIT_STATE",
-        "The current fit contains more than one module in the same socket."
+        isProposedModule ? "SLOT_OCCUPIED" : "INVALID_FIT_STATE",
+        isProposedModule
+          ? "The target socket is already occupied."
+          : "The current fit contains more than one module in the same socket."
       );
     }
     occupiedAddresses.add(address);
 
+    if (fittedModule.rack === "subsystem") {
+      addIssue(
+        errors,
+        isProposedModule ? "SUBSYSTEM_DEFERRED" : "INVALID_FIT_STATE",
+        isProposedModule
+          ? "Subsystem fitting is not supported yet."
+          : "The current fit contains a deferred subsystem module."
+      );
+    }
+
     if (
-      fittedModule.rack === "subsystem" ||
       !Number.isInteger(fittedModule.index) ||
       fittedModule.index < 0 ||
       fittedModule.index >= rackCapacityByRack[fittedModule.rack]
     ) {
       addIssue(
         errors,
-        "INVALID_FIT_STATE",
-        "The current fit contains a module outside the selected hull's sockets."
+        isProposedModule ? "INVALID_SLOT" : "INVALID_FIT_STATE",
+        isProposedModule
+          ? "The target socket does not exist on this hull."
+          : "The current fit contains a module outside the selected hull's sockets."
       );
     }
-  }
 
-  if (occupiedAddresses.has(getSlotAddress(input.rack, input.index))) {
-    addIssue(errors, "SLOT_OCCUPIED", "The target socket is already occupied.");
-  }
-
-  if (!proposedModule) {
-    addIssue(
-      errors,
-      "MODULE_NOT_FOUND",
-      "The selected module does not exist in the fitting cache."
-    );
-  } else if (proposedModule.rack !== databaseRackByRack[input.rack]) {
-    addIssue(
-      errors,
-      "RACK_MISMATCH",
-      "The selected module does not fit the target rack."
-    );
-  }
-
-  const tentativeModules = input.fittedModules.flatMap((address) => {
-    const staticModule = staticModuleByTypeId.get(address.typeId);
+    const staticModule = staticModuleByTypeId.get(fittedModule.typeId);
 
     if (!staticModule) {
       addIssue(
         errors,
         "MODULE_NOT_FOUND",
-        `Module type ${address.typeId} in the current fit is missing from the fitting cache.`
+        isProposedModule
+          ? "The selected module does not exist in the fitting cache."
+          : `Module type ${fittedModule.typeId} in the current fit is missing from the fitting cache.`
       );
-      return [];
+      continue;
     }
 
-    if (staticModule.rack !== databaseRackByRack[address.rack]) {
+    if (staticModule.rack !== databaseRackByRack[fittedModule.rack]) {
       addIssue(
         errors,
-        "INVALID_FIT_STATE",
-        `${staticModule.typeName} is stored in the wrong rack in the current fit.`
+        isProposedModule ? "RACK_MISMATCH" : "INVALID_FIT_STATE",
+        isProposedModule
+          ? "The selected module does not fit the target rack."
+          : `${staticModule.typeName} is stored in the wrong rack in the current fit.`
       );
     }
 
-    return [staticModule];
-  });
-
-  if (proposedModule) {
-    tentativeModules.push(proposedModule);
+    tentativeModules.push(staticModule);
   }
 
   for (const fittingModule of tentativeModules) {
@@ -220,24 +242,29 @@ export async function validateFittingModulePlacement(
   validateHardpoints(errors, hull, analysis);
 
   const warnings = buildResourceWarnings(hull, analysis);
-  const resolvedRack = proposedModule
-    ? browserRackByDatabaseRack[proposedModule.rack]
+  const proposedStaticModule = input.proposedModule
+    ? staticModuleByTypeId.get(input.proposedModule.typeId) ?? null
+    : null;
+  const resolvedRack = proposedStaticModule
+    ? browserRackByDatabaseRack[proposedStaticModule.rack]
     : null;
   const resolvedModule: ResolvedFittingModule | null =
-    proposedModule && resolvedRack
+    proposedStaticModule && resolvedRack
       ? {
           rack: resolvedRack,
-          typeId: proposedModule.typeId,
-          typeName: proposedModule.typeName
+          typeId: proposedStaticModule.typeId,
+          typeName: proposedStaticModule.typeName
         }
       : null;
 
   return {
-    allowed: errors.length === 0,
-    analysis,
-    errors,
-    module: resolvedModule,
-    warnings
+    resolvedProposedModule: resolvedModule,
+    response: {
+      allowed: errors.length === 0,
+      analysis,
+      errors,
+      warnings
+    }
   };
 }
 
@@ -443,15 +470,14 @@ function buildResourceWarnings(
   return warnings;
 }
 
-function rejected(
+function rejectedAnalysis(
   code: FitValidationIssue["code"],
   message: string
-): FittingModulePlacementResponse {
+): FittingAnalysisResponse {
   return {
     allowed: false,
     analysis: { ...emptyAnalysis },
     errors: [{ code, message }],
-    module: null,
     warnings: []
   };
 }

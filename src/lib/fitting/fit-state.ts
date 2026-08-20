@@ -10,6 +10,11 @@ export type FittingSlot = {
   module: FittedModule | null;
 };
 
+export type FittingSlotAddress = {
+  index: number;
+  rack: RackType;
+};
+
 export type FittingSlots = Record<RackType, FittingSlot[]>;
 
 export type FitState = {

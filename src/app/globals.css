@@ -2445,9 +2445,57 @@ hr {
   background: rgba(63, 191, 155, 0.1);
 }
 
+.fitting-selected-module {
+  align-items: center;
+  border: 1px solid rgba(63, 191, 155, 0.2);
+  background: var(--color-void);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 44px minmax(0, 1fr);
+  padding: 12px;
+}
+
+.fitting-module-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fitting-module-actions button {
+  border: 1px solid rgba(63, 191, 155, 0.24);
+  background: rgba(63, 191, 155, 0.05);
+  color: #c9f4e8;
+  cursor: pointer;
+  font-family: var(--font-command);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  min-height: 36px;
+  padding: 8px;
+  text-transform: uppercase;
+}
+
+.fitting-module-actions button:hover,
+.fitting-module-actions button:focus-visible,
+.fitting-module-actions button[data-active="true"] {
+  border-color: rgba(63, 191, 155, 0.58);
+  background: rgba(63, 191, 155, 0.12);
+  outline: none;
+}
+
+.fitting-module-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
 .fitting-empty-note[data-tone="error"] {
   border-color: rgba(179, 38, 46, 0.52);
   color: #efb0b4;
+}
+
+.fitting-empty-note[data-tone="active"] {
+  border-color: rgba(63, 191, 155, 0.44);
+  color: #bcebdc;
 }
 
 .fitting-hull-result:hover,
@@ -2648,6 +2696,23 @@ button.fitting-slot:not(:disabled):focus-visible {
     inset 0 0 0 3px rgba(0, 0, 0, 0.32),
     0 0 0 2px rgba(63, 191, 155, 0.28),
     0 0 18px rgba(63, 191, 155, 0.28);
+}
+
+.fitting-rack button.fitting-slot[data-move-target="true"] {
+  border-color: rgba(137, 216, 194, 0.78);
+  border-style: dashed;
+  box-shadow:
+    inset 0 0 0 3px rgba(0, 0, 0, 0.32),
+    0 0 0 2px rgba(63, 191, 155, 0.2),
+    0 0 16px rgba(63, 191, 155, 0.2);
+}
+
+.fitting-rack button.fitting-slot[data-move-source="true"] {
+  border-color: rgba(239, 184, 91, 0.72);
+  box-shadow:
+    inset 0 0 0 3px rgba(0, 0, 0, 0.32),
+    0 0 0 2px rgba(239, 184, 91, 0.18),
+    0 0 16px rgba(239, 184, 91, 0.18);
 }
 
 button.fitting-slot:disabled {

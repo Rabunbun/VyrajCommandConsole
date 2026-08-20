@@ -2,6 +2,7 @@ import {
   createEmptyFitState,
   createFittingSlots,
   type FittedModule,
+  type FittingSlotAddress,
   type FittingTopology,
   type FitState,
   type RackType
@@ -15,12 +16,23 @@ export type FitModuleInput = {
 };
 
 export type FitModuleRejection =
+  | "empty-slot"
   | "invalid-module"
   | "missing-hull"
   | "missing-rack"
   | "missing-slot"
   | "occupied-slot"
-  | "rack-mismatch";
+  | "rack-mismatch"
+  | "same-slot";
+
+export type RemoveModuleInput = FittingSlotAddress;
+
+export type ReplaceModuleInput = FitModuleInput;
+
+export type MoveModuleInput = {
+  from: FittingSlotAddress;
+  to: FittingSlotAddress;
+};
 
 export type FitAction =
   | {
@@ -33,6 +45,15 @@ export type FitAction =
     }
   | (FitModuleInput & {
       type: "fit-module";
+    })
+  | (RemoveModuleInput & {
+      type: "remove-module";
+    })
+  | (ReplaceModuleInput & {
+      type: "replace-module";
+    })
+  | (MoveModuleInput & {
+      type: "move-module";
     });
 
 export function validateFitModulePlacement(
@@ -97,6 +118,125 @@ export function fitModuleIntoSlot(
   };
 }
 
+export function validateRemoveModule(
+  state: FitState,
+  input: RemoveModuleInput
+): FitModuleRejection | null {
+  const targetSlot = resolveSlot(state, input);
+
+  if (typeof targetSlot === "string") {
+    return targetSlot;
+  }
+
+  return targetSlot.module ? null : "empty-slot";
+}
+
+export function removeModule(
+  state: FitState,
+  input: RemoveModuleInput
+): FitState {
+  if (validateRemoveModule(state, input)) {
+    return state;
+  }
+
+  return updateRack(state, input.rack, (slot) =>
+    slot.index === input.index ? { ...slot, module: null } : slot
+  );
+}
+
+export function validateReplaceModule(
+  state: FitState,
+  input: ReplaceModuleInput
+): FitModuleRejection | null {
+  const targetSlot = resolveSlot(state, input);
+
+  if (typeof targetSlot === "string") {
+    return targetSlot;
+  }
+
+  if (!targetSlot.module) {
+    return "empty-slot";
+  }
+
+  if (!isValidFittedModule(input.module)) {
+    return "invalid-module";
+  }
+
+  return input.moduleRack === input.rack ? null : "rack-mismatch";
+}
+
+export function replaceModule(
+  state: FitState,
+  input: ReplaceModuleInput
+): FitState {
+  if (validateReplaceModule(state, input)) {
+    return state;
+  }
+
+  return updateRack(state, input.rack, (slot) =>
+    slot.index === input.index
+      ? { ...slot, module: { ...input.module } }
+      : slot
+  );
+}
+
+export function validateMoveModule(
+  state: FitState,
+  input: MoveModuleInput
+): FitModuleRejection | null {
+  if (input.from.rack !== input.to.rack) {
+    return "rack-mismatch";
+  }
+
+  const sourceSlot = resolveSlot(state, input.from);
+
+  if (typeof sourceSlot === "string") {
+    return sourceSlot;
+  }
+
+  const targetSlot = resolveSlot(state, input.to);
+
+  if (typeof targetSlot === "string") {
+    return targetSlot;
+  }
+
+  if (sourceSlot.index === targetSlot.index) {
+    return "same-slot";
+  }
+
+  if (!sourceSlot.module) {
+    return "empty-slot";
+  }
+
+  return targetSlot.module ? "occupied-slot" : null;
+}
+
+export function moveModule(state: FitState, input: MoveModuleInput): FitState {
+  if (validateMoveModule(state, input)) {
+    return state;
+  }
+
+  const sourceModule = state.slots[input.from.rack].find(
+    (slot) => slot.index === input.from.index
+  )?.module;
+
+  if (!sourceModule) {
+    return state;
+  }
+
+  return updateRack(state, input.from.rack, (slot) => {
+    if (slot.index === input.from.index) {
+      return { ...slot, module: null };
+    }
+
+    if (slot.index === input.to.index) {
+      return { ...slot, module: { ...sourceModule } };
+    }
+
+    return slot;
+  });
+}
+
 export function fittingReducer(state: FitState, action: FitAction): FitState {
   switch (action.type) {
     case "select-hull":
@@ -108,9 +248,45 @@ export function fittingReducer(state: FitState, action: FitAction): FitState {
       return createEmptyFitState();
     case "fit-module":
       return fitModuleIntoSlot(state, action);
+    case "remove-module":
+      return removeModule(state, action);
+    case "replace-module":
+      return replaceModule(state, action);
+    case "move-module":
+      return moveModule(state, action);
     default:
       return state;
   }
+}
+
+function resolveSlot(state: FitState, address: FittingSlotAddress) {
+  if (state.hullTypeId === null) {
+    return "missing-hull" as const;
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(state.slots, address.rack)) {
+    return "missing-rack" as const;
+  }
+
+  return (
+    state.slots[address.rack].find((slot) => slot.index === address.index) ??
+    ("missing-slot" as const)
+  );
+}
+
+function updateRack(
+  state: FitState,
+  rack: RackType,
+  updateSlot: (slot: FitState["slots"][RackType][number]) =>
+    FitState["slots"][RackType][number]
+): FitState {
+  return {
+    ...state,
+    slots: {
+      ...state.slots,
+      [rack]: state.slots[rack].map(updateSlot)
+    }
+  };
 }
 
 function isValidFittedModule(module: FittedModule) {

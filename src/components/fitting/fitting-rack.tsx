@@ -6,6 +6,8 @@ type FittingRackProps = {
   enabled: boolean;
   label: string;
   moduleNamesByTypeId: Readonly<Record<number, string>>;
+  moveSource: SelectedFittingSlot | null;
+  onMoveTarget: (slot: SelectedFittingSlot) => void;
   onSelectSlot: (slot: SelectedFittingSlot) => void;
   orientation?: "horizontal" | "vertical";
   rack: "high" | "low" | "mid" | "rig";
@@ -17,6 +19,8 @@ export function FittingRack({
   enabled,
   label,
   moduleNamesByTypeId,
+  moveSource,
+  onMoveTarget,
   onSelectSlot,
   orientation = "horizontal",
   rack,
@@ -40,27 +44,39 @@ export function FittingRack({
               : null;
             const occupied = Boolean(slot.module);
             const selected =
-              !occupied &&
               selectedSlot?.rack === rack &&
               selectedSlot.index === slot.index;
+            const isMoveSource =
+              moveSource?.rack === rack && moveSource.index === slot.index;
+            const isMoveTarget =
+              Boolean(moveSource) && moveSource?.rack === rack && !occupied;
 
             return (
               <li key={slot.index}>
                 <button
                   aria-label={
-                    occupied
+                    isMoveTarget
+                      ? `${label} empty slot ${slot.index + 1}, valid move target`
+                      : occupied
                       ? `${label} slot ${slot.index + 1}, fitted with ${moduleName}`
                       : `${label} empty slot ${slot.index + 1}`
                   }
                   aria-pressed={selected}
                   className="fitting-slot"
+                  data-module-instance-id={slot.module?.instanceId}
                   data-module-type-id={slot.module?.typeId}
+                  data-move-source={isMoveSource}
+                  data-move-target={isMoveTarget}
                   data-occupied={occupied}
                   data-selected={selected}
-                  disabled={!enabled || occupied}
+                  disabled={!enabled}
                   onClick={() => {
-                    if (!occupied) {
-                      onSelectSlot({ index: slot.index, rack });
+                    const address = { index: slot.index, rack };
+
+                    if (moveSource) {
+                      onMoveTarget(address);
+                    } else {
+                      onSelectSlot(address);
                     }
                   }}
                   title={moduleName ?? `${label} empty slot ${slot.index + 1}`}

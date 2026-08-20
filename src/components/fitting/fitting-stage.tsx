@@ -7,6 +7,8 @@ import type { BaseFitAnalysis, FittingHullSummary } from "@/lib/fitting/types";
 type FittingStageProps = {
   analysis: BaseFitAnalysis;
   moduleNamesByTypeId: Readonly<Record<number, string>>;
+  moveSource: SelectedFittingSlot | null;
+  onMoveTarget: (slot: SelectedFittingSlot) => void;
   onSelectSlot: (slot: SelectedFittingSlot) => void;
   selectedHull: FittingHullSummary | null;
   selectedSlot: SelectedFittingSlot | null;
@@ -16,6 +18,8 @@ type FittingStageProps = {
 export function FittingStage({
   analysis,
   moduleNamesByTypeId,
+  moveSource,
+  onMoveTarget,
   onSelectSlot,
   selectedHull,
   selectedSlot,
@@ -33,7 +37,7 @@ export function FittingStage({
             Fitting Stage
           </h2>
           <p className="card-copy">
-            Select an empty socket, then choose a compatible-rack module.
+            Select a socket to fit or manage its module.
           </p>
         </div>
         <span className="badge">
@@ -47,6 +51,8 @@ export function FittingStage({
             enabled={Boolean(selectedHull)}
             label="High Slots"
             moduleNamesByTypeId={moduleNamesByTypeId}
+            moveSource={moveSource}
+            onMoveTarget={onMoveTarget}
             onSelectSlot={onSelectSlot}
             rack="high"
             selectedSlot={selectedSlot}
@@ -58,6 +64,8 @@ export function FittingStage({
             enabled={Boolean(selectedHull)}
             label="Mid Slots"
             moduleNamesByTypeId={moduleNamesByTypeId}
+            moveSource={moveSource}
+            onMoveTarget={onMoveTarget}
             onSelectSlot={onSelectSlot}
             rack="mid"
             orientation="vertical"
@@ -71,6 +79,8 @@ export function FittingStage({
             enabled={Boolean(selectedHull)}
             label="Mid Slots"
             moduleNamesByTypeId={moduleNamesByTypeId}
+            moveSource={moveSource}
+            onMoveTarget={onMoveTarget}
             onSelectSlot={onSelectSlot}
             rack="mid"
             orientation="vertical"
@@ -83,6 +93,8 @@ export function FittingStage({
             enabled={Boolean(selectedHull)}
             label="Low Slots"
             moduleNamesByTypeId={moduleNamesByTypeId}
+            moveSource={moveSource}
+            onMoveTarget={onMoveTarget}
             onSelectSlot={onSelectSlot}
             rack="low"
             orientation="vertical"
@@ -95,6 +107,8 @@ export function FittingStage({
             enabled={Boolean(selectedHull)}
             label="Low Slots"
             moduleNamesByTypeId={moduleNamesByTypeId}
+            moveSource={moveSource}
+            onMoveTarget={onMoveTarget}
             onSelectSlot={onSelectSlot}
             rack="low"
             orientation="vertical"
@@ -107,6 +121,8 @@ export function FittingStage({
             enabled={Boolean(selectedHull)}
             label="Rig Slots"
             moduleNamesByTypeId={moduleNamesByTypeId}
+            moveSource={moveSource}
+            onMoveTarget={onMoveTarget}
             onSelectSlot={onSelectSlot}
             rack="rig"
             selectedSlot={selectedSlot}

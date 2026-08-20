@@ -4,7 +4,10 @@ import type {
   BrowsableFittingRack,
   FittedModuleAddress
 } from "@/lib/fitting/types";
-import { validateFittingModulePlacement } from "@/lib/fitting/validation";
+import {
+  analyzeFittingFit,
+  validateFittingModulePlacement
+} from "@/lib/fitting/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -74,21 +77,54 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid module placement request." }, { status: 400 });
   }
 
-  const rack = parseFittingRack(typeof body.rack === "string" ? body.rack : null);
+  const operation = body.operation ?? "place";
   const fittedModules = parseFittedModules(body.fittedModules);
   const hullTypeId = body.hullTypeId;
-  const index = body.index;
-  const typeId = body.typeId;
 
   if (
-    !rack ||
+    (operation !== "analyze" && operation !== "place") ||
     fittedModules === null ||
     !(
       hullTypeId === null ||
       (typeof hullTypeId === "number" &&
         Number.isInteger(hullTypeId) &&
         hullTypeId > 0)
-    ) ||
+    )
+  ) {
+    return Response.json(
+      { error: "A valid hull, operation, and current fit are required." },
+      { status: 400 }
+    );
+  }
+
+  if (operation === "analyze") {
+    try {
+      const result = await analyzeFittingFit({ fittedModules, hullTypeId });
+
+      return Response.json(result, {
+        headers: {
+          "Cache-Control": "no-store"
+        },
+        status: result.allowed ? 200 : 409
+      });
+    } catch {
+      console.warn(
+        "Fitting analysis unavailable. Run migrations and refresh fitting static data."
+      );
+
+      return Response.json(
+        { error: "Fitting analysis is temporarily unavailable." },
+        { status: 503 }
+      );
+    }
+  }
+
+  const rack = parseFittingRack(typeof body.rack === "string" ? body.rack : null);
+  const index = body.index;
+  const typeId = body.typeId;
+
+  if (
+    !rack ||
     typeof index !== "number" ||
     !Number.isInteger(index) ||
     typeof typeId !== "number" ||
@@ -96,7 +132,7 @@ export async function POST(request: Request) {
     typeId <= 0
   ) {
     return Response.json(
-      { error: "A valid hull, target socket, module typeId, and current fit are required." },
+      { error: "A valid target socket and module typeId are required." },
       { status: 400 }
     );
   }

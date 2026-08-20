@@ -85,10 +85,13 @@ export type FittedModuleAddress = {
   typeId: number;
 };
 
-export type FittingModulePlacementResponse = {
+export type FittingAnalysisResponse = {
   allowed: boolean;
   analysis: BaseFitAnalysis;
   errors: FitValidationIssue[];
-  module: ResolvedFittingModule | null;
   warnings: FitValidationIssue[];
+};
+
+export type FittingModulePlacementResponse = FittingAnalysisResponse & {
+  module: ResolvedFittingModule | null;
 };
