@@ -660,12 +660,35 @@ model FittingModule {
   maxTypeFitted                 Int?
   chargeGroupIds                Int[]       @default([])
   chargeSize                    Int?
+  capacity                      Float?
   lastRefreshedAt               DateTime?
   createdAt                     DateTime    @default(now())
   updatedAt                     DateTime    @updatedAt
 
   @@index([rack, typeName])
   @@index([groupId])
+  @@index([marketGroupId])
+  @@index([lastRefreshedAt])
+}
+
+model FittingCharge {
+  id                String    @id @default(uuid()) @db.Uuid
+  typeId            Int       @unique
+  typeName          String
+  groupId           Int
+  groupName         String
+  marketGroupId     Int?
+  marketGroupName   String?
+  metaGroupId       Int?
+  metaGroupName     String?
+  techLevel         Int?
+  chargeSize        Int?
+  volume            Float
+  lastRefreshedAt   DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([groupId, typeName])
   @@index([marketGroupId])
   @@index([lastRefreshedAt])
 }

@@ -13,20 +13,18 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { FittingRack, PrismaClient } from "@prisma/client";
+import {
+  CHARGE_GROUP_ATTRIBUTES,
+  CHARGE_SIZE_ATTRIBUTE,
+  classifyModuleRack,
+  MODULE_CATEGORY_ID,
+  RACK_EFFECTS
+} from "./lib/fitting-sde-classification";
 
 const prisma = new PrismaClient();
 const sdeJsonlZipUrl =
   "https://developers.eveonline.com/static-data/eve-online-static-data-latest-jsonl.zip";
-const moduleCategoryId = 7;
 const databaseBatchSize = 250;
-
-const RACK_EFFECTS = {
-  11: { name: "loPower", rack: FittingRack.LOW },
-  12: { name: "hiPower", rack: FittingRack.HIGH },
-  13: { name: "medPower", rack: FittingRack.MID },
-  2663: { name: "rigSlot", rack: FittingRack.RIG },
-  3772: { name: "subSystem", rack: FittingRack.SUBSYSTEM }
-} as const;
 
 const HARDPOINT_EFFECTS = {
   launcher: { id: 40, name: "launcherFitted" },
@@ -45,12 +43,6 @@ const FITTING_ATTRIBUTES = {
     id: 50,
     name: "cpu",
     unitId: 106
-  },
-  chargeSize: {
-    defaultValue: 0,
-    id: 128,
-    name: "chargeSize",
-    unitId: 117
   },
   calibrationCost: {
     defaultValue: 0,
@@ -77,14 +69,6 @@ const FITTING_ATTRIBUTES = {
     unitId: null
   }
 } as const;
-
-const CHARGE_GROUP_ATTRIBUTES = [
-  { id: 604, name: "chargeGroup1" },
-  { id: 605, name: "chargeGroup2" },
-  { id: 606, name: "chargeGroup3" },
-  { id: 609, name: "chargeGroup4" },
-  { id: 610, name: "chargeGroup5" }
-] as const;
 
 const SHIP_GROUP_RESTRICTION_ATTRIBUTES = [
   { id: 1298, name: "canFitShipGroup01" },
@@ -125,11 +109,11 @@ const SHIP_TYPE_RESTRICTION_ATTRIBUTES = [
 ] as const;
 
 const VERIFICATION_MODULE_NAMES = [
+  "Core Probe Launcher I",
+  "Small Capacitor Booster I",
   "125mm Gatling AutoCannon I",
   "Light Missile Launcher I",
-  "1MN Afterburner I",
-  "Damage Control I",
-  "Small Trimark Armor Pump I"
+  "Small Ancillary Shield Booster"
 ] as const;
 
 type LocalizedName = {
@@ -151,6 +135,7 @@ type SdeGroup = {
 
 type SdeType = {
   _key: number;
+  capacity?: number;
   groupID: number;
   marketGroupID?: number;
   metaGroupID?: number;
@@ -195,6 +180,7 @@ type SdeTypeDogma = {
 };
 
 type PublishedModuleType = {
+  capacity: number | null;
   groupId: number;
   groupName: string;
   marketGroupId: number | null;
@@ -410,12 +396,12 @@ async function readCategories(filePath: string) {
 }
 
 function validateModuleCategory(categories: Map<number, SdeCategory>) {
-  const category = categories.get(moduleCategoryId);
+  const category = categories.get(MODULE_CATEGORY_ID);
   const categoryName = getEnglishName(category?.name);
 
   if (categoryName !== "Module" || category?.published !== true) {
     throw new Error(
-      `CCP category ${moduleCategoryId} was expected to be published Module, but SDE reported ${categoryName || "missing"} (${formatPublished(category?.published)}).`
+      `CCP category ${MODULE_CATEGORY_ID} was expected to be published Module, but SDE reported ${categoryName || "missing"} (${formatPublished(category?.published)}).`
     );
   }
 }
@@ -480,6 +466,26 @@ function validateDogmaDefinitions(
     }
   }
 
+  const chargeSize = attributes.get(CHARGE_SIZE_ATTRIBUTE.id);
+  validateCanonicalName(
+    attributes,
+    CHARGE_SIZE_ATTRIBUTE.id,
+    CHARGE_SIZE_ATTRIBUTE.name,
+    "attribute"
+  );
+
+  if ((chargeSize?.unitID ?? null) !== CHARGE_SIZE_ATTRIBUTE.unitId) {
+    throw new Error(
+      `Dogma attribute ${CHARGE_SIZE_ATTRIBUTE.id} (${CHARGE_SIZE_ATTRIBUTE.name}) expected unit ${CHARGE_SIZE_ATTRIBUTE.unitId}, but SDE reported ${formatNullableValue(chargeSize?.unitID)}.`
+    );
+  }
+
+  if (chargeSize?.defaultValue !== CHARGE_SIZE_ATTRIBUTE.defaultValue) {
+    throw new Error(
+      `Dogma attribute ${CHARGE_SIZE_ATTRIBUTE.id} (${CHARGE_SIZE_ATTRIBUTE.name}) expected default ${CHARGE_SIZE_ATTRIBUTE.defaultValue}, but SDE reported ${formatNullableValue(chargeSize?.defaultValue)}.`
+    );
+  }
+
   for (const expected of [
     ...CHARGE_GROUP_ATTRIBUTES,
     ...SHIP_GROUP_RESTRICTION_ATTRIBUTES,
@@ -540,7 +546,7 @@ async function readPublishedModuleGroups(filePath: string) {
   const groups = new Map<number, { groupId: number; groupName: string }>();
 
   for await (const group of readJsonLines<SdeGroup>(filePath)) {
-    if (group.categoryID !== moduleCategoryId || group.published !== true) {
+    if (group.categoryID !== MODULE_CATEGORY_ID || group.published !== true) {
       continue;
     }
 
@@ -567,6 +573,10 @@ async function readPublishedModuleTypes(
     }
 
     types.set(type._key, {
+      capacity: readOptionalNonnegativeNumber(
+        type.capacity,
+        `type ${type._key} capacity`
+      ),
       groupId: group.groupId,
       groupName: group.groupName,
       marketGroupId: readOptionalInteger(type.marketGroupID, `type ${type._key} marketGroupID`),
@@ -628,9 +638,6 @@ function buildFittingModules({
   const modules: FittingModuleRecord[] = [];
   const zeroRack: PublishedModuleType[] = [];
   const ambiguous: PublishedModuleType[] = [];
-  const recognizedRackEffectIds = new Set(
-    Object.keys(RACK_EFFECTS).map(Number)
-  );
   const cpuDefault = requireDefaultValue(
     attributeDefinitions,
     FITTING_ATTRIBUTES.cpuRequirement.id
@@ -646,28 +653,25 @@ function buildFittingModules({
 
   for (const moduleType of publishedModuleTypes.values()) {
     const dogma = typeDogma.get(moduleType.typeId);
-    const rackEffects = (dogma?.dogmaEffects || [])
-      .map((effect) => effect.effectID)
-      .filter((effectId) => recognizedRackEffectIds.has(effectId));
+    const rackClassification = classifyModuleRack(dogma?.dogmaEffects);
 
-    if (!rackEffects.length) {
+    if (rackClassification.kind === "none") {
       zeroRack.push(moduleType);
       continue;
     }
 
-    if (rackEffects.length > 1) {
+    if (rackClassification.kind === "ambiguous") {
       ambiguous.push(moduleType);
       continue;
     }
 
-    const rackEffectId = rackEffects[0] as keyof typeof RACK_EFFECTS;
-    const rack = RACK_EFFECTS[rackEffectId].rack;
-
-    if (rack === FittingRack.SUBSYSTEM) {
+    if (rackClassification.kind === "subsystem") {
       throw new Error(
         `Published Category 7 type ${moduleType.typeId}/${moduleType.typeName} unexpectedly uses subsystem rack effect 3772. Database mutation was skipped.`
       );
     }
+
+    const rack = rackClassification.rack;
 
     const attributes = new Map(
       (dogma?.dogmaAttributes || []).map((attribute) => [
@@ -718,7 +722,7 @@ function buildFittingModules({
       ),
       chargeSize: readNullableNonnegativeInteger(
         attributes,
-        FITTING_ATTRIBUTES.chargeSize.id,
+        CHARGE_SIZE_ATTRIBUTE.id,
         `${moduleType.typeName} charge size`
       ),
       cpuRequirement: readNumberWithDefault(
@@ -902,12 +906,30 @@ function readOptionalInteger(value: number | undefined, label: string) {
   return value;
 }
 
+function readOptionalNonnegativeNumber(
+  value: number | undefined,
+  label: string
+) {
+  if (value === undefined) {
+    return null;
+  }
+
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(
+      `${label} must be a finite nonnegative number, received ${value}.`
+    );
+  }
+
+  return value;
+}
+
 async function synchronizeFittingModules(modules: FittingModuleRecord[]) {
   const existing = await prisma.fittingModule.findMany({
     select: {
       allowedShipGroupIds: true,
       allowedShipTypeIds: true,
       calibrationCost: true,
+      capacity: true,
       chargeGroupIds: true,
       chargeSize: true,
       cpuRequirement: true,
@@ -1004,6 +1026,7 @@ function moduleHasChanged(
     current.cpuRequirement !== incoming.cpuRequirement ||
     current.powergridRequirement !== incoming.powergridRequirement ||
     current.calibrationCost !== incoming.calibrationCost ||
+    current.capacity !== incoming.capacity ||
     current.rigSize !== incoming.rigSize ||
     current.requiresTurretHardpoint !== incoming.requiresTurretHardpoint ||
     current.requiresLauncherHardpoint !== incoming.requiresLauncherHardpoint ||
@@ -1103,7 +1126,7 @@ function logVerificationSamples(modules: FittingModuleRecord[]) {
       .join("; ");
 
     console.log(
-      `- ${fittingModule.typeName}: ${fittingModule.rack}; CPU ${fittingModule.cpuRequirement}; PG ${fittingModule.powergridRequirement}; calibration ${fittingModule.calibrationCost}; rig size ${formatNullableValue(fittingModule.rigSize)}; turret ${formatYesNo(fittingModule.requiresTurretHardpoint)}; launcher ${formatYesNo(fittingModule.requiresLauncherHardpoint)}; restrictions ${restrictions || "none"}.`
+      `- ${fittingModule.typeName}: ${fittingModule.rack}; capacity ${formatNullableValue(fittingModule.capacity)}; charge groups ${fittingModule.chargeGroupIds.join(",") || "none"}; charge size ${formatNullableValue(fittingModule.chargeSize)}; CPU ${fittingModule.cpuRequirement}; PG ${fittingModule.powergridRequirement}; calibration ${fittingModule.calibrationCost}; rig size ${formatNullableValue(fittingModule.rigSize)}; turret ${formatYesNo(fittingModule.requiresTurretHardpoint)}; launcher ${formatYesNo(fittingModule.requiresLauncherHardpoint)}; restrictions ${restrictions || "none"}.`
     );
   }
 }
