@@ -2975,6 +2975,11 @@ button.fitting-slot[data-occupied="true"]:not(:disabled):active {
   z-index: 12;
 }
 
+.fitting-slot-actions::before {
+  content: "";
+  position: absolute;
+}
+
 .fitting-slot-actions button {
   border: 1px solid rgb(var(--rack-rgb) / 0.24);
   background: rgb(var(--rack-rgb) / 0.055);
@@ -3016,6 +3021,12 @@ button.fitting-slot[data-occupied="true"]:not(:disabled):active {
   transform: translate(-50%, -2px);
 }
 
+.fitting-rack[data-layout="upper"] .fitting-slot-actions::before {
+  block-size: 5px;
+  inset-block-end: 100%;
+  inset-inline: 0;
+}
+
 .fitting-rack[data-layout="upper"]
   .fitting-slot-item:hover
   > .fitting-slot-actions,
@@ -3029,6 +3040,12 @@ button.fitting-slot[data-occupied="true"]:not(:disabled):active {
   bottom: calc(100% + 5px);
   left: 50%;
   transform: translate(-50%, 2px);
+}
+
+.fitting-rack[data-layout="lower"] .fitting-slot-actions::before {
+  block-size: 5px;
+  inset-block-start: 100%;
+  inset-inline: 0;
 }
 
 .fitting-rack[data-layout="lower"]
@@ -3051,9 +3068,21 @@ button.fitting-slot[data-occupied="true"]:not(:disabled):active {
   transform: translate(-2px, -50%);
 }
 
+.fitting-rack[data-layout="left"] .fitting-slot-actions::before {
+  block-size: 100%;
+  inline-size: 5px;
+  inset-inline-end: 100%;
+}
+
 .fitting-rack[data-layout="right"] .fitting-slot-actions {
   right: calc(100% + 5px);
   transform: translate(2px, -50%);
+}
+
+.fitting-rack[data-layout="right"] .fitting-slot-actions::before {
+  block-size: 100%;
+  inline-size: 5px;
+  inset-inline-start: 100%;
 }
 
 .fitting-rack[data-layout="left"]
