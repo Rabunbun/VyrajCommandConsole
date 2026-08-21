@@ -57,7 +57,11 @@ export async function searchFittingModules({
   } satisfies Prisma.FittingModuleWhereInput;
 
   const modules = await getDb().fittingModule.findMany({
-    orderBy: [{ typeName: "asc" }, { typeId: "asc" }],
+    orderBy: [
+      { groupName: "asc" },
+      { typeName: "asc" },
+      { typeId: "asc" }
+    ],
     select: {
       groupId: true,
       groupName: true,

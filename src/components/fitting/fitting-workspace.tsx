@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FitStatistics } from "@/components/fitting/fit-statistics";
 import { FittingHeader } from "@/components/fitting/fitting-header";
 import { FittingResources } from "@/components/fitting/fitting-resources";
 import { FittingStage } from "@/components/fitting/fitting-stage";
 import type {
+  FittingBrowserSection,
   FittingDragSource,
   ModuleActionMode,
   SelectedFittingSlot
@@ -17,6 +18,7 @@ import {
   type FitOperationAttemptResult
 } from "@/components/fitting/use-fitting-state";
 import type {
+  BrowsableFittingRack,
   FittingHullSummary,
   FittingModuleSearchResult
 } from "@/lib/fitting/types";
@@ -40,6 +42,10 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
   } = useFittingState({ hulls });
   const [selectedSlot, setSelectedSlot] = useState<SelectedFittingSlot | null>(null);
   const [moduleActionMode, setModuleActionMode] = useState<ModuleActionMode>(null);
+  const [browserRack, setBrowserRack] = useState<BrowsableFittingRack>("high");
+  const [openBrowserSections, setOpenBrowserSections] = useState<
+    Record<FittingBrowserSection, boolean>
+  >({ charges: false, hulls: true, modules: false });
   const [manipulationError, setManipulationError] = useState<string | null>(null);
   const [dragSource, setDragSource] = useState<FittingDragSource | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<SelectedFittingSlot | null>(null);
@@ -48,6 +54,7 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
   const [resolvedModuleNamesByTypeId, setResolvedModuleNamesByTypeId] = useState<
     Record<number, string>
   >({});
+  const browserRackBeforeReplacementRef = useRef<BrowsableFittingRack | null>(null);
   const selectedModule = selectedSlot
     ? fitState.slots[selectedSlot.rack].find(
         (slot) => slot.index === selectedSlot.index
@@ -62,14 +69,26 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
     setDragSource(null);
     setIsRemoveDragOver(false);
   }, []);
+  const openBrowserSection = useCallback((section: FittingBrowserSection) => {
+    setOpenBrowserSections((current) => ({ ...current, [section]: true }));
+  }, []);
+  const restoreBrowserRackAfterReplacement = useCallback(() => {
+    const previousRack = browserRackBeforeReplacementRef.current;
+
+    if (previousRack) {
+      setBrowserRack(previousRack);
+      browserRackBeforeReplacementRef.current = null;
+    }
+  }, []);
   const clearSelectedSlot = useCallback(() => {
     cancelPendingOperation();
     clearDragState();
+    restoreBrowserRackAfterReplacement();
     setDragError(null);
     setManipulationError(null);
     setModuleActionMode(null);
     setSelectedSlot(null);
-  }, [cancelPendingOperation, clearDragState]);
+  }, [cancelPendingOperation, clearDragState, restoreBrowserRackAfterReplacement]);
   const handleSelectHull = useCallback(
     (hull: FittingHullSummary) => {
       setResolvedModuleNamesByTypeId({});
@@ -78,12 +97,28 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
     },
     [clearSelectedSlot, selectHull]
   );
-  const handleSelectSlot = useCallback((slot: SelectedFittingSlot) => {
-    setDragError(null);
-    setManipulationError(null);
-    setModuleActionMode(null);
-    setSelectedSlot(slot);
-  }, []);
+  const handleSelectSlot = useCallback(
+    (slot: SelectedFittingSlot) => {
+      const fittedModule = fitState.slots[slot.rack].find(
+        (candidate) => candidate.index === slot.index
+      )?.module;
+
+      restoreBrowserRackAfterReplacement();
+
+      if (fittedModule) {
+        openBrowserSection("charges");
+      } else {
+        setBrowserRack(slot.rack);
+        openBrowserSection("modules");
+      }
+
+      setDragError(null);
+      setManipulationError(null);
+      setModuleActionMode(null);
+      setSelectedSlot(slot);
+    },
+    [fitState.slots, openBrowserSection, restoreBrowserRackAfterReplacement]
+  );
   const fitModuleAtSlot = useCallback(
     async (
       targetSlot: SelectedFittingSlot,
@@ -227,18 +262,32 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
 
     return handleRemoveModuleAt(selectedSlot);
   }, [handleRemoveModuleAt, selectedModule, selectedSlot]);
-  const handleStartMoveAt = useCallback((slot: SelectedFittingSlot) => {
-    setDragError(null);
-    setManipulationError(null);
-    setSelectedSlot(slot);
-    setModuleActionMode("move");
-  }, []);
-  const handleStartReplaceAt = useCallback((slot: SelectedFittingSlot) => {
-    setDragError(null);
-    setManipulationError(null);
-    setSelectedSlot(slot);
-    setModuleActionMode("replace");
-  }, []);
+  const handleStartMoveAt = useCallback(
+    (slot: SelectedFittingSlot) => {
+      restoreBrowserRackAfterReplacement();
+      openBrowserSection("charges");
+      setDragError(null);
+      setManipulationError(null);
+      setSelectedSlot(slot);
+      setModuleActionMode("move");
+    },
+    [openBrowserSection, restoreBrowserRackAfterReplacement]
+  );
+  const handleStartReplaceAt = useCallback(
+    (slot: SelectedFittingSlot) => {
+      if (!browserRackBeforeReplacementRef.current) {
+        browserRackBeforeReplacementRef.current = browserRack;
+      }
+
+      setBrowserRack(slot.rack);
+      openBrowserSection("modules");
+      setDragError(null);
+      setManipulationError(null);
+      setSelectedSlot(slot);
+      setModuleActionMode("replace");
+    },
+    [browserRack, openBrowserSection]
+  );
   const handleMoveTarget = useCallback(
     (target: SelectedFittingSlot) => {
       if (!selectedSlot || moduleActionMode !== "move") {
@@ -357,6 +406,7 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
       <div className="fitting-workspace-grid">
         <ItemBrowser
           actionMode={moduleActionMode}
+          browserRack={browserRack}
           draggingModuleTypeId={
             dragSource?.kind === "browser-module" ? dragSource.typeId : null
           }
@@ -367,9 +417,11 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
           onFitModule={handleFitModule}
           onModuleDragEnd={clearDragState}
           onModuleDragStart={handleModuleDragStart}
+          onModuleRackChange={setBrowserRack}
           onRemoveModule={handleRemoveModule}
           onReplaceModule={handleReplaceModule}
           onReturnToActions={() => {
+            restoreBrowserRackAfterReplacement();
             setManipulationError(null);
             setModuleActionMode(null);
           }}
@@ -384,6 +436,13 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
               handleStartReplaceAt(selectedSlot);
             }
           }}
+          onToggleSection={(section) => {
+            setOpenBrowserSections((current) => ({
+              ...current,
+              [section]: !current[section]
+            }));
+          }}
+          openSections={openBrowserSections}
           selectedHull={selectedHull}
           selectedModule={selectedModule}
           selectedModuleName={selectedModuleName}

@@ -1,6 +1,13 @@
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition
+} from "react";
 import { EveModuleIcon } from "@/components/fitting/eve-module-icon";
 import type {
+  FittingBrowserSection,
   ModuleActionMode,
   SelectedFittingSlot
 } from "@/components/fitting/fitting-ui-types";
@@ -8,9 +15,12 @@ import type {
   FitModuleAttemptResult,
   FitOperationAttemptResult
 } from "@/components/fitting/use-fitting-state";
-import { ModuleIcon, type ModuleIconName } from "@/components/module-visuals";
+import { ModuleIcon } from "@/components/module-visuals";
 import type { FittedModule } from "@/lib/fitting/fit-state";
 import type {
+  BrowsableFittingRack,
+  FittingChargeSearchResponse,
+  FittingChargeSearchResult,
   FittingHullSummary,
   FittingModuleSearchResponse,
   FittingModuleSearchResult
@@ -19,37 +29,18 @@ import type {
 const initialHullResultLimit = 18;
 const filteredHullResultLimit = 36;
 const moduleResultLimit = 40;
-const moduleSearchDebounceMs = 250;
-
-const itemCategories: Array<{
-  description: string;
-  icon: ModuleIconName;
-  label: string;
-}> = [
-  {
-    description: "Hull selection will attach here.",
-    icon: "ship",
-    label: "Ships"
-  },
-  {
-    description: "High, mid, low, rig, and subsystem modules.",
-    icon: "doctrine",
-    label: "Modules"
-  },
-  {
-    description: "Ammunition, scripts, boosters, and reloadable charges.",
-    icon: "loot",
-    label: "Charges"
-  },
-  {
-    description: "Drone and fighter bay planning.",
-    icon: "dashboard",
-    label: "Drones"
-  }
+const chargeResultLimit = 40;
+const searchDebounceMs = 250;
+const browserRacks: Array<{ label: string; rack: BrowsableFittingRack }> = [
+  { label: "High", rack: "high" },
+  { label: "Mid", rack: "mid" },
+  { label: "Low", rack: "low" },
+  { label: "Rig", rack: "rig" }
 ];
 
 type ItemBrowserProps = {
   actionMode: ModuleActionMode;
+  browserRack: BrowsableFittingRack;
   draggingModuleTypeId: number | null;
   hulls: FittingHullSummary[];
   manipulationError: string | null;
@@ -60,12 +51,15 @@ type ItemBrowserProps = {
   onFitModule: (typeId: number) => Promise<FitModuleAttemptResult>;
   onModuleDragEnd: () => void;
   onModuleDragStart: (module: FittingModuleSearchResult) => void;
+  onModuleRackChange: (rack: BrowsableFittingRack) => void;
   onRemoveModule: () => Promise<FitOperationAttemptResult>;
   onReplaceModule: (typeId: number) => Promise<FitModuleAttemptResult>;
   onReturnToActions: () => void;
   onSelectHull: (hull: FittingHullSummary) => void;
   onStartMove: () => void;
   onStartReplace: () => void;
+  onToggleSection: (section: FittingBrowserSection) => void;
+  openSections: Record<FittingBrowserSection, boolean>;
   selectedHull: FittingHullSummary | null;
   selectedModule: FittedModule | null;
   selectedModuleName: string | null;
@@ -74,6 +68,7 @@ type ItemBrowserProps = {
 
 export function ItemBrowser({
   actionMode,
+  browserRack,
   draggingModuleTypeId,
   hulls,
   manipulationError,
@@ -82,73 +77,221 @@ export function ItemBrowser({
   onFitModule,
   onModuleDragEnd,
   onModuleDragStart,
+  onModuleRackChange,
   onRemoveModule,
   onReplaceModule,
   onReturnToActions,
   onSelectHull,
   onStartMove,
   onStartReplace,
+  onToggleSection,
+  openSections,
   selectedHull,
   selectedModule,
   selectedModuleName,
   selectedSlot
 }: ItemBrowserProps) {
   const [hullQuery, setHullQuery] = useState("");
+  const [moduleQuery, setModuleQuery] = useState("");
+  const [chargeQuery, setChargeQuery] = useState("");
+  const [collapsedModuleGroups, setCollapsedModuleGroups] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [collapsedChargeGroups, setCollapsedChargeGroups] = useState<Set<string>>(
+    () => new Set()
+  );
+  const selectedRack = selectedSlot?.rack ?? null;
+  const replacementActive = actionMode === "replace" && Boolean(selectedModule);
+  const lockedModuleRack =
+    selectedRack && (!selectedModule || replacementActive) ? selectedRack : null;
 
-  if (selectedSlot) {
-    if (selectedModule) {
-      if (actionMode === "replace") {
-        return (
-          <ModuleBrowser
-            action="replace"
-            key={`replace:${selectedSlot.rack}:${selectedSlot.index}`}
-            onBack={onReturnToActions}
-            onChooseModule={onReplaceModule}
-            onModuleDragEnd={onModuleDragEnd}
-            onModuleDragStart={onModuleDragStart}
-            selectedSlot={selectedSlot}
-          />
-        );
+  function toggleCollapsedGroup(
+    setCollapsedGroups: React.Dispatch<React.SetStateAction<Set<string>>>,
+    groupKey: string
+  ) {
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+      } else {
+        next.add(groupKey);
       }
 
-      return (
-        <OccupiedModuleActions
-          actionMode={actionMode}
-          error={manipulationError}
-          module={selectedModule}
-          moduleName={selectedModuleName ?? `Module type ${selectedModule.typeId}`}
-          onCancel={onClearSelectedSlot}
-          onRemove={onRemoveModule}
-          onStartMove={onStartMove}
-          onStartReplace={onStartReplace}
-          selectedSlot={selectedSlot}
-        />
-      );
-    }
-
-    return (
-      <ModuleBrowser
-        action="fit"
-        key={`fit:${selectedSlot.rack}:${selectedSlot.index}`}
-        onBack={onClearSelectedSlot}
-        onAutoFitModule={onAutoFitModule}
-        onChooseModule={onFitModule}
-        draggingModuleTypeId={draggingModuleTypeId}
-        onModuleDragEnd={onModuleDragEnd}
-        onModuleDragStart={onModuleDragStart}
-        selectedSlot={selectedSlot}
-      />
-    );
+      return next;
+    });
   }
 
   return (
-    <HullBrowser
-      hulls={hulls}
-      onSelectHull={onSelectHull}
-      query={hullQuery}
-      selectedHull={selectedHull}
-      setQuery={setHullQuery}
-    />
+    <aside
+      className="fitting-panel fitting-item-browser"
+      aria-labelledby="item-library-title"
+    >
+      <div className="fitting-panel-heading">
+        <div>
+          <h2 className="section-title" id="item-library-title">
+            Item Library
+          </h2>
+          <div className="fitting-library-context">PERSISTENT FITTING INDEX</div>
+        </div>
+        <span className="badge" data-state={hulls.length ? "ACTIVE" : "WARNING"}>
+          {hulls.length ? `${hulls.length} Hulls` : "No Hull Data"}
+        </span>
+      </div>
+
+      {selectedSlot ? (
+        selectedModule ? (
+          <OccupiedModuleActions
+            actionMode={actionMode}
+            error={manipulationError}
+            module={selectedModule}
+            moduleName={selectedModuleName ?? `Module type ${selectedModule.typeId}`}
+            onCancel={onClearSelectedSlot}
+            onRemove={onRemoveModule}
+            onReturnToActions={onReturnToActions}
+            onStartMove={onStartMove}
+            onStartReplace={onStartReplace}
+            selectedSlot={selectedSlot}
+          />
+        ) : (
+          <div className="fitting-browser-context-bar" data-tone="target">
+            <span>
+              {selectedSlot.rack.toLocaleUpperCase("en-US")} SLOT {selectedSlot.index + 1}
+            </span>
+            <button onClick={onClearSelectedSlot} type="button">
+              Clear target
+            </button>
+          </div>
+        )
+      ) : null}
+
+      <PersistentBrowserSection
+        badge="Ships"
+        description="Hull selection and future saved fits"
+        id="fitting-browser-hulls"
+        onToggle={() => onToggleSection("hulls")}
+        open={openSections.hulls}
+        title="Hulls & Fits"
+      >
+        <HullBrowser
+          hulls={hulls}
+          onSelectHull={onSelectHull}
+          query={hullQuery}
+          selectedHull={selectedHull}
+          setQuery={setHullQuery}
+        />
+      </PersistentBrowserSection>
+
+      <PersistentBrowserSection
+        badge={browserRack.toLocaleUpperCase("en-US")}
+        description="Rack-scoped ship modules"
+        id="fitting-browser-modules"
+        onToggle={() => onToggleSection("modules")}
+        open={openSections.modules}
+        title="Modules"
+      >
+        <div className="fitting-browser-rack-tabs" aria-label="Module rack filter">
+          {browserRacks.map(({ label, rack }) => (
+            <button
+              aria-pressed={browserRack === rack}
+              disabled={Boolean(lockedModuleRack && lockedModuleRack !== rack)}
+              key={rack}
+              onClick={() => onModuleRackChange(rack)}
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <ModuleBrowser
+          action={replacementActive ? "replace" : "fit"}
+          active={openSections.modules}
+          collapsedGroups={collapsedModuleGroups}
+          draggingModuleTypeId={draggingModuleTypeId}
+          onAutoFitModule={onAutoFitModule}
+          onChooseModule={replacementActive ? onReplaceModule : onFitModule}
+          onModuleDragEnd={onModuleDragEnd}
+          onModuleDragStart={onModuleDragStart}
+          onToggleGroup={(groupKey) =>
+            toggleCollapsedGroup(setCollapsedModuleGroups, groupKey)
+          }
+          query={moduleQuery}
+          rack={browserRack}
+          selectedSlot={selectedSlot}
+          setQuery={setModuleQuery}
+        />
+      </PersistentBrowserSection>
+
+      <PersistentBrowserSection
+        badge={selectedModule ? "Context" : "Select module"}
+        description="Compatible reloadable charges"
+        id="fitting-browser-charges"
+        onToggle={() => onToggleSection("charges")}
+        open={openSections.charges}
+        title="Charges"
+      >
+        <ChargeBrowser
+          active={openSections.charges}
+          collapsedGroups={collapsedChargeGroups}
+          onToggleGroup={(groupKey) =>
+            toggleCollapsedGroup(setCollapsedChargeGroups, groupKey)
+          }
+          query={chargeQuery}
+          selectedModule={selectedModule}
+          setQuery={setChargeQuery}
+        />
+      </PersistentBrowserSection>
+    </aside>
+  );
+}
+
+type PersistentBrowserSectionProps = {
+  badge: string;
+  children: React.ReactNode;
+  description: string;
+  id: string;
+  onToggle: () => void;
+  open: boolean;
+  title: string;
+};
+
+function PersistentBrowserSection({
+  badge,
+  children,
+  description,
+  id,
+  onToggle,
+  open,
+  title
+}: PersistentBrowserSectionProps) {
+  return (
+    <section className="fitting-browser-section" data-open={open}>
+      <button
+        aria-controls={`${id}-content`}
+        aria-expanded={open}
+        className="fitting-browser-section-toggle"
+        id={`${id}-toggle`}
+        onClick={onToggle}
+        type="button"
+      >
+        <span aria-hidden="true" className="fitting-browser-chevron">
+          {open ? "−" : "+"}
+        </span>
+        <span className="fitting-browser-section-copy">
+          <strong>{title}</strong>
+          <small>{description}</small>
+        </span>
+        <span className="fitting-browser-section-badge">{badge}</span>
+      </button>
+      <div
+        aria-labelledby={`${id}-toggle`}
+        className="fitting-browser-section-content"
+        hidden={!open}
+        id={`${id}-content`}
+      >
+        {children}
+      </div>
+    </section>
   );
 }
 
@@ -185,28 +328,16 @@ function HullBrowser({
       visibleHulls: matches.slice(0, limit)
     };
   }, [hulls, normalizedQuery]);
-  const resultLimit = normalizedQuery
-    ? filteredHullResultLimit
-    : initialHullResultLimit;
   const hasMoreResults = searchResult.matchCount > searchResult.visibleHulls.length;
 
   return (
-    <aside className="fitting-panel fitting-item-browser" aria-labelledby="item-library-title">
-      <div className="fitting-panel-heading">
-        <h2 className="section-title" id="item-library-title">
-          Item Library
-        </h2>
-        <span className="badge" data-state={hulls.length ? "ACTIVE" : "WARNING"}>
-          {hulls.length ? `${hulls.length} Hulls` : "No Hull Data"}
-        </span>
-      </div>
-
+    <>
       <label className="field-stack">
-        <span className="field-label">Search</span>
+        <span className="field-label">Search hulls</span>
         <input
           className="text-input fitting-search-input"
-          placeholder="Search ships, modules, charges..."
           onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search ship name or group..."
           type="search"
           value={query}
         />
@@ -259,25 +390,14 @@ function HullBrowser({
         )}
       </section>
 
-      <nav className="fitting-category-list" aria-label="Future fitting item categories">
-        {itemCategories.slice(1).map((category) => (
-          <div className="fitting-category-card" key={category.label}>
-            <div className="module-icon-block module-icon-block-small">
-              <ModuleIcon name={category.icon} size={20} />
-            </div>
-            <div>
-              <div className="card-title">{category.label}</div>
-              <p className="card-copy">{category.description}</p>
-            </div>
-          </div>
-        ))}
-      </nav>
-
-      <div className="fitting-empty-note">
-        Ship results are capped at {resultLimit}. Refine search to narrow the
-        hull index.
+      <div className="fitting-browser-placeholder" aria-disabled="true">
+        <ModuleIcon name="doctrine" size={16} />
+        <span>
+          <strong>Saved Fits</strong>
+          <small>Persistence is planned for a later mission.</small>
+        </span>
       </div>
-    </aside>
+    </>
   );
 }
 
@@ -288,6 +408,7 @@ type OccupiedModuleActionsProps = {
   moduleName: string;
   onCancel: () => void;
   onRemove: () => Promise<FitOperationAttemptResult>;
+  onReturnToActions: () => void;
   onStartMove: () => void;
   onStartReplace: () => void;
   selectedSlot: SelectedFittingSlot;
@@ -300,6 +421,7 @@ function OccupiedModuleActions({
   moduleName,
   onCancel,
   onRemove,
+  onReturnToActions,
   onStartMove,
   onStartReplace,
   selectedSlot
@@ -308,21 +430,19 @@ function OccupiedModuleActions({
   const rackLabel = selectedSlot.rack.toLocaleUpperCase("en-US");
 
   return (
-    <aside className="fitting-panel fitting-item-browser" aria-labelledby="item-library-title">
-      <div className="fitting-panel-heading">
-        <div>
-          <h2 className="section-title" id="item-library-title">
-            Item Library
-          </h2>
-          <div className="fitting-library-context">
-            {rackLabel} SLOT {selectedSlot.index + 1}
-          </div>
-        </div>
-        <button className="fitting-library-back" onClick={onCancel} type="button">
-          Cancel
+    <section className="fitting-selected-context" aria-label="Selected module actions">
+      <div className="fitting-browser-context-bar" data-tone="occupied">
+        <span>
+          {actionMode === "replace" ? "REPLACE " : ""}
+          {rackLabel} SLOT {selectedSlot.index + 1}
+        </span>
+        <button
+          onClick={actionMode === "replace" ? onReturnToActions : onCancel}
+          type="button"
+        >
+          {actionMode === "replace" ? "Actions" : "Clear"}
         </button>
       </div>
-
       <div className="fitting-selected-module">
         <EveModuleIcon typeId={module.typeId} typeName={moduleName} />
         <div className="fitting-hull-result-copy">
@@ -330,8 +450,7 @@ function OccupiedModuleActions({
           <span>Type {module.typeId}</span>
         </div>
       </div>
-
-      <div className="fitting-module-actions" aria-label="Fitted module actions">
+      <div className="fitting-module-actions">
         <button
           disabled={isRemoving}
           onClick={() => {
@@ -343,7 +462,12 @@ function OccupiedModuleActions({
         >
           {isRemoving ? "Removing..." : "Remove"}
         </button>
-        <button disabled={isRemoving} onClick={onStartReplace} type="button">
+        <button
+          data-active={actionMode === "replace"}
+          disabled={isRemoving}
+          onClick={onStartReplace}
+          type="button"
+        >
           Replace
         </button>
         <button
@@ -355,59 +479,67 @@ function OccupiedModuleActions({
           Move
         </button>
       </div>
-
       {actionMode === "move" ? (
         <div className="fitting-empty-note" data-tone="active">
-          Select an empty {selectedSlot.rack} slot. The module instance will move
-          without changing fitting resources.
+          Select an empty {selectedSlot.rack} slot to move this module instance.
         </div>
-      ) : (
-        <div className="fitting-empty-note">
-          Remove the module, replace it through the rack-scoped browser, or move
-          this exact instance within the same rack.
+      ) : null}
+      {actionMode === "replace" ? (
+        <div className="fitting-empty-note" data-tone="active">
+          Choose a replacement from the locked {selectedSlot.rack} module rack.
         </div>
-      )}
-
-      <div aria-live="polite">
-        {error ? (
-          <div className="fitting-empty-note" data-tone="error">
-            {error}
-          </div>
-        ) : null}
-      </div>
-    </aside>
+      ) : null}
+      {error ? (
+        <div className="fitting-empty-note" data-tone="error" aria-live="polite">
+          {error}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
 type ModuleBrowserProps = {
   action: "fit" | "replace";
-  draggingModuleTypeId?: number | null;
-  onAutoFitModule?: (
+  active: boolean;
+  collapsedGroups: Set<string>;
+  draggingModuleTypeId: number | null;
+  onAutoFitModule: (
     module: FittingModuleSearchResult
   ) => Promise<FitModuleAttemptResult>;
-  onBack: () => void;
   onChooseModule: (typeId: number) => Promise<FitModuleAttemptResult>;
   onModuleDragEnd: () => void;
   onModuleDragStart: (module: FittingModuleSearchResult) => void;
-  selectedSlot: SelectedFittingSlot;
+  onToggleGroup: (groupKey: string) => void;
+  query: string;
+  rack: BrowsableFittingRack;
+  selectedSlot: SelectedFittingSlot | null;
+  setQuery: (query: string) => void;
 };
 
 type ModuleSearchState =
   | { status: "loading" }
-  | { message: string; status: "error" }
-  | { results: FittingModuleSearchResult[]; status: "ready" };
+  | { message: string; requestKey: string; status: "error" }
+  | {
+      requestKey: string;
+      results: FittingModuleSearchResult[];
+      status: "ready";
+    };
 
 function ModuleBrowser({
   action,
-  draggingModuleTypeId = null,
+  active,
+  collapsedGroups,
+  draggingModuleTypeId,
   onAutoFitModule,
-  onBack,
   onChooseModule,
   onModuleDragEnd,
   onModuleDragStart,
-  selectedSlot
+  onToggleGroup,
+  query,
+  rack,
+  selectedSlot,
+  setQuery
 }: ModuleBrowserProps) {
-  const [query, setQuery] = useState("");
   const [searchState, setSearchState] = useState<ModuleSearchState>({
     status: "loading"
   });
@@ -418,16 +550,28 @@ function ModuleBrowser({
   } | null>(null);
   const [isFitting, startFittingTransition] = useTransition();
   const singleClickTimeoutRef = useRef<number | null>(null);
-  const rackLabel = selectedSlot.rack.toLocaleUpperCase("en-US");
-  const actionLabel = action === "replace" ? "Replace" : "Fit";
+  const requestKey = `${rack}:${query}`;
+  const currentSearchState =
+    searchState.status !== "loading" && searchState.requestKey === requestKey
+      ? searchState
+      : ({ status: "loading" } as const);
+  const rackLabel = rack.toLocaleUpperCase("en-US");
+  const groupedModules =
+    currentSearchState.status === "ready"
+      ? groupModules(currentSearchState.results)
+      : [];
 
   useEffect(() => {
+    if (!active) {
+      return;
+    }
+
     const abortController = new AbortController();
     const timeoutId = window.setTimeout(async () => {
       const searchParams = new URLSearchParams({
         limit: String(moduleResultLimit),
         q: query,
-        rack: selectedSlot.rack
+        rack
       });
 
       try {
@@ -447,7 +591,11 @@ function ModuleBrowser({
           );
         }
 
-        setSearchState({ results: payload.results, status: "ready" });
+        setSearchState({
+          requestKey,
+          results: payload.results,
+          status: "ready"
+        });
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
@@ -458,16 +606,17 @@ function ModuleBrowser({
             error instanceof Error
               ? error.message
               : "Module search is temporarily unavailable.",
+          requestKey,
           status: "error"
         });
       }
-    }, moduleSearchDebounceMs);
+    }, searchDebounceMs);
 
     return () => {
       window.clearTimeout(timeoutId);
       abortController.abort();
     };
-  }, [query, selectedSlot.rack]);
+  }, [active, query, rack, requestKey]);
 
   useEffect(
     () => () => {
@@ -494,7 +643,7 @@ function ModuleBrowser({
     startFittingTransition(async () => {
       try {
         const result =
-          mode === "auto" && onAutoFitModule
+          mode === "auto"
             ? await onAutoFitModule(module)
             : await onChooseModule(module.typeId);
 
@@ -515,7 +664,7 @@ function ModuleBrowser({
     module: FittingModuleSearchResult,
     clickDetail: number
   ) {
-    if (action !== "fit" || !onAutoFitModule || clickDetail === 0) {
+    if (action !== "fit" || clickDetail === 0) {
       handleChooseModule(module);
       return;
     }
@@ -531,7 +680,7 @@ function ModuleBrowser({
   }
 
   function handleModuleDoubleClick(module: FittingModuleSearchResult) {
-    if (action !== "fit" || !onAutoFitModule) {
+    if (action !== "fit") {
       return;
     }
 
@@ -544,106 +693,119 @@ function ModuleBrowser({
   }
 
   return (
-    <aside className="fitting-panel fitting-item-browser" aria-labelledby="item-library-title">
-      <div className="fitting-panel-heading">
-        <div>
-          <h2 className="section-title" id="item-library-title">
-            Item Library
-          </h2>
-          <div className="fitting-library-context">
-            {action === "replace" ? "REPLACE " : ""}{rackLabel} SLOT {selectedSlot.index + 1}
-          </div>
-        </div>
-        <button className="fitting-library-back" onClick={onBack} type="button">
-          {action === "replace" ? "Actions" : "Ships"}
-        </button>
-      </div>
-
+    <div className="fitting-browser-index">
       <label className="field-stack">
-        <span className="field-label">Search modules</span>
+        <span className="field-label">Search {rackLabel} modules</span>
         <input
-          autoFocus
           className="text-input fitting-search-input"
-          placeholder={`Search ${rackLabel.toLocaleLowerCase("en-US")} slot modules...`}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setSearchState({ status: "loading" });
-          }}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={`Search ${rack} modules or groups...`}
           type="search"
           value={query}
         />
       </label>
 
-      <section
-        className="fitting-module-results"
-        aria-label={`${rackLabel} module search results`}
-      >
-        <div className="fitting-panel-heading">
-          <h3 className="fit-stat-title">{rackLabel} Modules</h3>
-          <span className="card-copy">Up to {moduleResultLimit}</span>
-        </div>
-        <div aria-live="polite">
-          {searchState.status === "loading" ? (
-            <div className="fitting-empty-note">Searching module cache...</div>
-          ) : null}
-          {searchState.status === "error" ? (
-            <div className="fitting-empty-note" data-tone="error">
-              {searchState.message}
-            </div>
-          ) : null}
-          {searchState.status === "ready" ? (
-            searchState.results.length ? (
-              <div className="fitting-module-list">
-                {searchState.results.map((module) => (
-                  <button
-                    aria-label={`${actionLabel} ${module.typeName} in ${rackLabel} slot ${selectedSlot.index + 1}`}
-                    className="fitting-module-result"
-                    data-dragging={draggingModuleTypeId === module.typeId}
-                    data-pending={isFitting && pendingModule?.typeId === module.typeId}
-                    disabled={isFitting}
-                    draggable={action === "fit" && !isFitting}
-                    key={module.typeId}
-                    onClick={(event) => handleModuleClick(module, event.detail)}
-                    onDoubleClick={() => handleModuleDoubleClick(module)}
-                    onDragEnd={onModuleDragEnd}
-                    onDragStart={(event) => {
-                      if (action !== "fit") {
-                        event.preventDefault();
-                        return;
-                      }
+      <div className="fitting-browser-result-heading">
+        <span>
+          {action === "replace"
+            ? `Replacement for ${rackLabel} slot ${(selectedSlot?.index ?? 0) + 1}`
+            : selectedSlot
+              ? `Target ${rackLabel} slot ${selectedSlot.index + 1}`
+              : `${rackLabel} module index`}
+        </span>
+        <small>Up to {moduleResultLimit}</small>
+      </div>
 
-                      event.dataTransfer.effectAllowed = "copy";
-                      event.dataTransfer.setData(
-                        "text/plain",
-                        `fitting-module:${module.typeId}`
-                      );
-                      onModuleDragStart(module);
-                    }}
-                    title={
-                      action === "fit"
-                        ? `Click to fit slot ${selectedSlot.index + 1}; double-click to auto-fit the first valid ${selectedSlot.rack} slot; drag to choose an exact socket.`
-                        : undefined
-                    }
-                    type="button"
+      <div aria-live="polite">
+        {currentSearchState.status === "loading" ? (
+          <div className="fitting-empty-note">Searching module cache...</div>
+        ) : null}
+        {currentSearchState.status === "error" ? (
+          <div className="fitting-empty-note" data-tone="error">
+            {currentSearchState.message}
+          </div>
+        ) : null}
+        {currentSearchState.status === "ready" ? (
+          groupedModules.length ? (
+            <div className="fitting-browser-groups">
+              {groupedModules.map((group) => {
+                const groupKey = `module:${rack}:${group.groupId}`;
+                const collapsed = collapsedGroups.has(groupKey);
+
+                return (
+                  <BrowserResultGroup
+                    collapsed={collapsed}
+                    count={group.items.length}
+                    groupKey={groupKey}
+                    key={groupKey}
+                    label={group.groupName}
+                    onToggle={onToggleGroup}
                   >
-                    <EveModuleIcon typeId={module.typeId} typeName={module.typeName} />
-                    <div className="fitting-hull-result-copy">
-                      <strong>{module.typeName}</strong>
-                      <span>{formatModuleMetadata(module)}</span>
+                    <div className="fitting-module-list">
+                      {group.items.map((module) => (
+                        <button
+                          aria-label={getModuleActionLabel(
+                            action,
+                            module,
+                            selectedSlot
+                          )}
+                          className="fitting-module-result"
+                          data-dragging={draggingModuleTypeId === module.typeId}
+                          data-pending={
+                            isFitting && pendingModule?.typeId === module.typeId
+                          }
+                          disabled={isFitting}
+                          draggable={action === "fit" && !isFitting}
+                          key={module.typeId}
+                          onClick={(event) =>
+                            handleModuleClick(module, event.detail)
+                          }
+                          onDoubleClick={() => handleModuleDoubleClick(module)}
+                          onDragEnd={onModuleDragEnd}
+                          onDragStart={(event) => {
+                            if (action !== "fit") {
+                              event.preventDefault();
+                              return;
+                            }
+
+                            event.dataTransfer.effectAllowed = "copy";
+                            event.dataTransfer.setData(
+                              "text/plain",
+                              `fitting-module:${module.typeId}`
+                            );
+                            onModuleDragStart(module);
+                          }}
+                          title={
+                            action === "fit"
+                              ? "Click for the selected socket, double-click to auto-fit, or drag to an exact socket."
+                              : "Use as the selected socket replacement."
+                          }
+                          type="button"
+                        >
+                          <EveModuleIcon
+                            typeId={module.typeId}
+                            typeName={module.typeName}
+                          />
+                          <span className="fitting-hull-result-copy">
+                            <strong>{module.typeName}</strong>
+                            <span>{formatModuleMetadata(module)}</span>
+                          </span>
+                        </button>
+                      ))}
                     </div>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="fitting-empty-note">
-                {query.trim()
-                  ? `No ${rackLabel.toLocaleLowerCase("en-US")} modules match this search.`
-                  : `No ${rackLabel.toLocaleLowerCase("en-US")} modules are available. The module cache may be empty.`}
-              </div>
-            )
-          ) : null}
-        </div>
-      </section>
+                  </BrowserResultGroup>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="fitting-empty-note">
+              {query.trim()
+                ? `No ${rack} modules match this search.`
+                : `No ${rack} modules are available. The module cache may be empty.`}
+            </div>
+          )
+        ) : null}
+      </div>
 
       <div aria-live="polite">
         {isFitting && pendingModule ? (
@@ -655,23 +817,314 @@ function ModuleBrowser({
           </div>
         ) : null}
       </div>
-
-      <div className="fitting-empty-note">
-        Hard fitting restrictions are enforced. CPU, powergrid, and calibration
-        are shown as base / unmodified warnings and do not block placement.
-      </div>
-    </aside>
+    </div>
   );
+}
+
+type ChargeBrowserProps = {
+  active: boolean;
+  collapsedGroups: Set<string>;
+  onToggleGroup: (groupKey: string) => void;
+  query: string;
+  selectedModule: FittedModule | null;
+  setQuery: (query: string) => void;
+};
+
+type ChargeSearchState =
+  | { status: "idle" }
+  | { requestKey: string; status: "loading" }
+  | { message: string; requestKey: string; status: "error" }
+  | {
+      requestKey: string;
+      response: FittingChargeSearchResponse;
+      status: "ready";
+    };
+
+function ChargeBrowser({
+  active,
+  collapsedGroups,
+  onToggleGroup,
+  query,
+  selectedModule,
+  setQuery
+}: ChargeBrowserProps) {
+  const [searchState, setSearchState] = useState<ChargeSearchState>({
+    status: "idle"
+  });
+  const moduleTypeId = selectedModule?.typeId ?? null;
+  const requestKey = moduleTypeId ? `${moduleTypeId}:${query}` : "idle";
+  const currentSearchState =
+    searchState.status !== "idle" && searchState.requestKey === requestKey
+      ? searchState
+      : moduleTypeId
+        ? ({ requestKey, status: "loading" } as const)
+        : ({ status: "idle" } as const);
+  const groupedCharges =
+    currentSearchState.status === "ready"
+      ? groupCharges(currentSearchState.response.results)
+      : [];
+
+  useEffect(() => {
+    if (!active || !moduleTypeId) {
+      return;
+    }
+
+    const abortController = new AbortController();
+    const timeoutId = window.setTimeout(async () => {
+      const searchParams = new URLSearchParams({
+        limit: String(chargeResultLimit),
+        moduleTypeId: String(moduleTypeId),
+        q: query
+      });
+
+      try {
+        const response = await fetch(`/api/fitting/charges?${searchParams}`, {
+          cache: "no-store",
+          signal: abortController.signal
+        });
+        const payload = (await response.json()) as
+          | FittingChargeSearchResponse
+          | { error?: string };
+
+        if (!response.ok || !("results" in payload)) {
+          throw new Error(
+            "error" in payload && payload.error
+              ? payload.error
+              : "Charge search is temporarily unavailable."
+          );
+        }
+
+        setSearchState({ requestKey, response: payload, status: "ready" });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        setSearchState({
+          message:
+            error instanceof Error
+              ? error.message
+              : "Charge search is temporarily unavailable.",
+          requestKey,
+          status: "error"
+        });
+      }
+    }, searchDebounceMs);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      abortController.abort();
+    };
+  }, [active, moduleTypeId, query, requestKey]);
+
+  if (!selectedModule) {
+    return (
+      <div className="fitting-empty-note">
+        Select a fitted, charge-capable module to browse compatible charges.
+      </div>
+    );
+  }
+
+  return (
+    <div className="fitting-browser-index">
+      <label className="field-stack">
+        <span className="field-label">Search compatible charges</span>
+        <input
+          className="text-input fitting-search-input"
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search charge name, group, or market group..."
+          type="search"
+          value={query}
+        />
+      </label>
+
+      <div aria-live="polite">
+        {currentSearchState.status === "loading" ? (
+          <div className="fitting-empty-note">Resolving module compatibility...</div>
+        ) : null}
+        {currentSearchState.status === "error" ? (
+          <div className="fitting-empty-note" data-tone="error">
+            {currentSearchState.message}
+          </div>
+        ) : null}
+        {currentSearchState.status === "ready" ? (
+          !currentSearchState.response.module.chargeCapable ? (
+            <div className="fitting-empty-note">
+              {currentSearchState.response.module.typeName} does not accept
+              reloadable charges.
+            </div>
+          ) : (
+            <>
+              <div className="fitting-browser-result-heading">
+                <span>{currentSearchState.response.module.typeName}</span>
+                <small>
+                  Capacity {formatVolume(currentSearchState.response.module.capacity)}
+                </small>
+              </div>
+              {groupedCharges.length ? (
+                <div className="fitting-browser-groups">
+                  {groupedCharges.map((group) => {
+                    const groupKey = `charge:${group.groupId}`;
+                    const collapsed = collapsedGroups.has(groupKey);
+
+                    return (
+                      <BrowserResultGroup
+                        collapsed={collapsed}
+                        count={group.items.length}
+                        groupKey={groupKey}
+                        key={groupKey}
+                        label={group.groupName}
+                        onToggle={onToggleGroup}
+                      >
+                        <div className="fitting-charge-list">
+                          {group.items.map((charge) => (
+                            <article
+                              className="fitting-charge-result"
+                              key={charge.typeId}
+                            >
+                              <EveModuleIcon
+                                typeId={charge.typeId}
+                                typeName={charge.typeName}
+                              />
+                              <span className="fitting-hull-result-copy">
+                                <strong>{charge.typeName}</strong>
+                                <span>{formatChargeMetadata(charge)}</span>
+                              </span>
+                            </article>
+                          ))}
+                        </div>
+                      </BrowserResultGroup>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="fitting-empty-note">
+                  {query.trim()
+                    ? "No compatible charges match this search."
+                    : "No compatible charges fit this module's authoritative group, size, and capacity constraints."}
+                </div>
+              )}
+            </>
+          )
+        ) : null}
+      </div>
+
+      <div className="fitting-browser-readonly-note">
+        Browse only — charge loading and fitted quantity are deferred.
+      </div>
+    </div>
+  );
+}
+
+type BrowserResultGroupProps = {
+  children: React.ReactNode;
+  collapsed: boolean;
+  count: number;
+  groupKey: string;
+  label: string;
+  onToggle: (groupKey: string) => void;
+};
+
+function BrowserResultGroup({
+  children,
+  collapsed,
+  count,
+  groupKey,
+  label,
+  onToggle
+}: BrowserResultGroupProps) {
+  return (
+    <section className="fitting-browser-result-group">
+      <button
+        aria-expanded={!collapsed}
+        className="fitting-browser-group-toggle"
+        onClick={() => onToggle(groupKey)}
+        type="button"
+      >
+        <span>{collapsed ? "+" : "−"}</span>
+        <strong>{label}</strong>
+        <small>{count}</small>
+      </button>
+      <div hidden={collapsed}>{children}</div>
+    </section>
+  );
+}
+
+function groupModules(modules: FittingModuleSearchResult[]) {
+  return groupResults(modules);
+}
+
+function groupCharges(charges: FittingChargeSearchResult[]) {
+  return groupResults(charges);
+}
+
+function groupResults<T extends { groupId: number; groupName: string }>(
+  results: T[]
+) {
+  const groups = new Map<
+    number,
+    { groupId: number; groupName: string; items: T[] }
+  >();
+
+  for (const result of results) {
+    const group = groups.get(result.groupId);
+
+    if (group) {
+      group.items.push(result);
+    } else {
+      groups.set(result.groupId, {
+        groupId: result.groupId,
+        groupName: result.groupName,
+        items: [result]
+      });
+    }
+  }
+
+  return Array.from(groups.values());
+}
+
+function getModuleActionLabel(
+  action: "fit" | "replace",
+  module: FittingModuleSearchResult,
+  selectedSlot: SelectedFittingSlot | null
+) {
+  if (action === "replace" && selectedSlot) {
+    return `Replace the module in ${selectedSlot.rack} slot ${selectedSlot.index + 1} with ${module.typeName}`;
+  }
+
+  if (selectedSlot) {
+    return `Fit ${module.typeName} in ${selectedSlot.rack} slot ${selectedSlot.index + 1}`;
+  }
+
+  return `Select ${module.typeName}; double-click to auto-fit`;
 }
 
 function formatModuleMetadata(module: FittingModuleSearchResult) {
   return [
-    module.groupName,
+    module.marketGroupName,
     module.metaGroupName,
     module.techLevel ? `Tech ${module.techLevel}` : null
   ]
     .filter(Boolean)
     .join(" / ");
+}
+
+function formatChargeMetadata(charge: FittingChargeSearchResult) {
+  return [
+    charge.marketGroupName,
+    charge.metaGroupName,
+    charge.techLevel ? `Tech ${charge.techLevel}` : null,
+    `Size ${charge.chargeSize ?? "default 0"}`,
+    `Volume ${formatVolume(charge.volume)}`
+  ]
+    .filter(Boolean)
+    .join(" / ");
+}
+
+function formatVolume(value: number | null) {
+  return value === null
+    ? "unavailable"
+    : value.toLocaleString("en-US", { maximumFractionDigits: 6 });
 }
 
 function normalizeSearchText(value: string) {

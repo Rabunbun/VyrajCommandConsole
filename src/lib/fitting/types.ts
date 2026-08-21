@@ -38,6 +38,28 @@ export type FittingModuleSearchResponse = {
   results: FittingModuleSearchResult[];
 };
 
+export type FittingChargeSearchResult = {
+  chargeSize: number | null;
+  groupId: number;
+  groupName: string;
+  marketGroupName: string | null;
+  metaGroupName: string | null;
+  techLevel: number | null;
+  typeId: number;
+  typeName: string;
+  volume: number;
+};
+
+export type FittingChargeSearchResponse = {
+  module: {
+    capacity: number | null;
+    chargeCapable: boolean;
+    typeId: number;
+    typeName: string;
+  };
+  results: FittingChargeSearchResult[];
+};
+
 export type ResolvedFittingModule = {
   rack: BrowsableFittingRack;
   typeId: number;
