@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { EveModuleIcon } from "@/components/fitting/eve-module-icon";
 import type {
   ModuleActionMode,
@@ -53,6 +53,9 @@ type ItemBrowserProps = {
   draggingModuleTypeId: number | null;
   hulls: FittingHullSummary[];
   manipulationError: string | null;
+  onAutoFitModule: (
+    module: FittingModuleSearchResult
+  ) => Promise<FitModuleAttemptResult>;
   onClearSelectedSlot: () => void;
   onFitModule: (typeId: number) => Promise<FitModuleAttemptResult>;
   onModuleDragEnd: () => void;
@@ -74,6 +77,7 @@ export function ItemBrowser({
   draggingModuleTypeId,
   hulls,
   manipulationError,
+  onAutoFitModule,
   onClearSelectedSlot,
   onFitModule,
   onModuleDragEnd,
@@ -127,6 +131,7 @@ export function ItemBrowser({
         action="fit"
         key={`fit:${selectedSlot.rack}:${selectedSlot.index}`}
         onBack={onClearSelectedSlot}
+        onAutoFitModule={onAutoFitModule}
         onChooseModule={onFitModule}
         draggingModuleTypeId={draggingModuleTypeId}
         onModuleDragEnd={onModuleDragEnd}
@@ -377,6 +382,9 @@ function OccupiedModuleActions({
 type ModuleBrowserProps = {
   action: "fit" | "replace";
   draggingModuleTypeId?: number | null;
+  onAutoFitModule?: (
+    module: FittingModuleSearchResult
+  ) => Promise<FitModuleAttemptResult>;
   onBack: () => void;
   onChooseModule: (typeId: number) => Promise<FitModuleAttemptResult>;
   onModuleDragEnd: () => void;
@@ -392,6 +400,7 @@ type ModuleSearchState =
 function ModuleBrowser({
   action,
   draggingModuleTypeId = null,
+  onAutoFitModule,
   onBack,
   onChooseModule,
   onModuleDragEnd,
@@ -408,6 +417,7 @@ function ModuleBrowser({
     typeId: number;
   } | null>(null);
   const [isFitting, startFittingTransition] = useTransition();
+  const singleClickTimeoutRef = useRef<number | null>(null);
   const rackLabel = selectedSlot.rack.toLocaleUpperCase("en-US");
   const actionLabel = action === "replace" ? "Replace" : "Fit";
 
@@ -459,16 +469,34 @@ function ModuleBrowser({
     };
   }, [query, selectedSlot.rack]);
 
-  function handleChooseModule(module: FittingModuleSearchResult) {
+  useEffect(
+    () => () => {
+      if (singleClickTimeoutRef.current !== null) {
+        window.clearTimeout(singleClickTimeoutRef.current);
+      }
+    },
+    []
+  );
+
+  function handleChooseModule(
+    module: FittingModuleSearchResult,
+    mode: "auto" | "targeted" = "targeted"
+  ) {
     setPlacementError(null);
     setPendingModule({
-      message: `${action === "replace" ? "Replacing with" : "Fitting"} ${module.typeName}...`,
+      message:
+        mode === "auto"
+          ? `Auto-fitting ${module.typeName}...`
+          : `${action === "replace" ? "Replacing with" : "Fitting"} ${module.typeName}...`,
       typeId: module.typeId
     });
 
     startFittingTransition(async () => {
       try {
-        const result = await onChooseModule(module.typeId);
+        const result =
+          mode === "auto" && onAutoFitModule
+            ? await onAutoFitModule(module)
+            : await onChooseModule(module.typeId);
 
         if (!result.ok) {
           setPlacementError(result.message);
@@ -481,6 +509,38 @@ function ModuleBrowser({
         setPendingModule(null);
       }
     });
+  }
+
+  function handleModuleClick(
+    module: FittingModuleSearchResult,
+    clickDetail: number
+  ) {
+    if (action !== "fit" || !onAutoFitModule || clickDetail === 0) {
+      handleChooseModule(module);
+      return;
+    }
+
+    if (singleClickTimeoutRef.current !== null) {
+      window.clearTimeout(singleClickTimeoutRef.current);
+    }
+
+    singleClickTimeoutRef.current = window.setTimeout(() => {
+      singleClickTimeoutRef.current = null;
+      handleChooseModule(module);
+    }, 220);
+  }
+
+  function handleModuleDoubleClick(module: FittingModuleSearchResult) {
+    if (action !== "fit" || !onAutoFitModule) {
+      return;
+    }
+
+    if (singleClickTimeoutRef.current !== null) {
+      window.clearTimeout(singleClickTimeoutRef.current);
+      singleClickTimeoutRef.current = null;
+    }
+
+    handleChooseModule(module, "auto");
   }
 
   return (
@@ -543,7 +603,8 @@ function ModuleBrowser({
                     disabled={isFitting}
                     draggable={action === "fit" && !isFitting}
                     key={module.typeId}
-                    onClick={() => handleChooseModule(module)}
+                    onClick={(event) => handleModuleClick(module, event.detail)}
+                    onDoubleClick={() => handleModuleDoubleClick(module)}
                     onDragEnd={onModuleDragEnd}
                     onDragStart={(event) => {
                       if (action !== "fit") {
@@ -558,6 +619,11 @@ function ModuleBrowser({
                       );
                       onModuleDragStart(module);
                     }}
+                    title={
+                      action === "fit"
+                        ? `Click to fit slot ${selectedSlot.index + 1}; double-click to auto-fit the first valid ${selectedSlot.rack} slot; drag to choose an exact socket.`
+                        : undefined
+                    }
                     type="button"
                   >
                     <EveModuleIcon typeId={module.typeId} typeName={module.typeName} />

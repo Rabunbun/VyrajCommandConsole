@@ -2705,6 +2705,8 @@ hr {
   align-items: center;
   display: grid;
   justify-items: center;
+  position: relative;
+  z-index: 2;
 }
 
 .fitting-rack {
@@ -2761,6 +2763,7 @@ hr {
 
 .fitting-slot-list li {
   display: grid;
+  position: relative;
   transition: transform 140ms ease;
 }
 
@@ -2818,6 +2821,7 @@ hr {
   opacity: 0.58;
   padding: 0;
   place-items: center;
+  position: relative;
   transition:
     border-color 140ms ease,
     box-shadow 140ms ease,
@@ -2919,6 +2923,152 @@ button.fitting-slot[data-occupied="true"] {
     inset 0 0 0 2px rgba(0, 0, 0, 0.5),
     0 0 16px rgb(var(--rack-rgb) / 0.19);
   opacity: 1;
+}
+
+button.fitting-slot[data-occupied="true"]:not(:disabled) {
+  cursor: grab;
+}
+
+button.fitting-slot[data-occupied="true"]:not(:disabled):active {
+  cursor: grabbing;
+}
+
+.fitting-slot-drag-handle {
+  background: rgba(5, 6, 9, 0.88);
+  border: 1px solid rgb(var(--rack-rgb) / 0.42);
+  border-radius: 2px;
+  bottom: 1px;
+  color: rgba(232, 244, 241, 0.88);
+  font-family: var(--font-command);
+  font-size: 0.38rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  opacity: 0;
+  padding: 1px 2px;
+  pointer-events: none;
+  position: absolute;
+  right: 1px;
+  text-transform: uppercase;
+  transition: opacity 120ms ease;
+}
+
+.fitting-slot[data-occupied="true"]:hover .fitting-slot-drag-handle,
+.fitting-slot[data-occupied="true"]:focus-visible .fitting-slot-drag-handle {
+  opacity: 1;
+}
+
+.fitting-slot-actions {
+  align-items: stretch;
+  background: rgba(7, 8, 11, 0.96);
+  border: 1px solid rgb(var(--rack-rgb) / 0.34);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.42);
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+  padding: 3px;
+  pointer-events: none;
+  position: absolute;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+  visibility: hidden;
+  z-index: 12;
+}
+
+.fitting-slot-actions button {
+  border: 1px solid rgb(var(--rack-rgb) / 0.24);
+  background: rgb(var(--rack-rgb) / 0.055);
+  color: rgba(236, 242, 244, 0.86);
+  cursor: pointer;
+  font-family: var(--font-command);
+  font-size: 0.46rem;
+  font-weight: 800;
+  letter-spacing: 0.035em;
+  min-height: 22px;
+  padding: 3px 5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.fitting-slot-actions button:hover,
+.fitting-slot-actions button:focus-visible {
+  border-color: rgb(var(--rack-rgb) / 0.68);
+  background: rgb(var(--rack-rgb) / 0.14);
+  color: #f7fbfa;
+  outline: none;
+}
+
+.fitting-slot-actions button:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
+.fitting-slot-item:hover > .fitting-slot-actions,
+.fitting-slot-item:focus-within > .fitting-slot-actions {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.fitting-rack[data-layout="upper"] .fitting-slot-actions {
+  left: 50%;
+  top: calc(100% + 5px);
+  transform: translate(-50%, -2px);
+}
+
+.fitting-rack[data-layout="upper"]
+  .fitting-slot-item:hover
+  > .fitting-slot-actions,
+.fitting-rack[data-layout="upper"]
+  .fitting-slot-item:focus-within
+  > .fitting-slot-actions {
+  transform: translate(-50%, 0);
+}
+
+.fitting-rack[data-layout="lower"] .fitting-slot-actions {
+  bottom: calc(100% + 5px);
+  left: 50%;
+  transform: translate(-50%, 2px);
+}
+
+.fitting-rack[data-layout="lower"]
+  .fitting-slot-item:hover
+  > .fitting-slot-actions,
+.fitting-rack[data-layout="lower"]
+  .fitting-slot-item:focus-within
+  > .fitting-slot-actions {
+  transform: translate(-50%, 0);
+}
+
+.fitting-rack[data-layout="left"] .fitting-slot-actions,
+.fitting-rack[data-layout="right"] .fitting-slot-actions {
+  flex-direction: column;
+  top: 50%;
+}
+
+.fitting-rack[data-layout="left"] .fitting-slot-actions {
+  left: calc(100% + 5px);
+  transform: translate(-2px, -50%);
+}
+
+.fitting-rack[data-layout="right"] .fitting-slot-actions {
+  right: calc(100% + 5px);
+  transform: translate(2px, -50%);
+}
+
+.fitting-rack[data-layout="left"]
+  .fitting-slot-item:hover
+  > .fitting-slot-actions,
+.fitting-rack[data-layout="left"]
+  .fitting-slot-item:focus-within
+  > .fitting-slot-actions,
+.fitting-rack[data-layout="right"]
+  .fitting-slot-item:hover
+  > .fitting-slot-actions,
+.fitting-rack[data-layout="right"]
+  .fitting-slot-item:focus-within
+  > .fitting-slot-actions {
+  transform: translate(0, -50%);
 }
 
 .fitting-slot-module-icon,

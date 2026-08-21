@@ -1,10 +1,13 @@
-import type { CSSProperties } from "react";
+"use client";
+
+import { useState, type CSSProperties } from "react";
 import { EveModuleIcon } from "@/components/fitting/eve-module-icon";
 import type {
   FittingDragSource,
   SelectedFittingSlot
 } from "@/components/fitting/fitting-ui-types";
 import type { FittingSlot as FittingSlotState } from "@/lib/fitting/fit-state";
+import type { FitOperationAttemptResult } from "@/components/fitting/use-fitting-state";
 
 type FittingRackProps = {
   dragOverSlot: SelectedFittingSlot | null;
@@ -21,7 +24,12 @@ type FittingRackProps = {
     source: Extract<FittingDragSource, { kind: "fitted-module" }>
   ) => void;
   onMoveTarget: (slot: SelectedFittingSlot) => void;
+  onRemoveModule: (
+    slot: SelectedFittingSlot
+  ) => Promise<FitOperationAttemptResult>;
   onSelectSlot: (slot: SelectedFittingSlot) => void;
+  onStartMove: (slot: SelectedFittingSlot) => void;
+  onStartReplace: (slot: SelectedFittingSlot) => void;
   rack: "high" | "low" | "mid" | "rig";
   selectedSlot: SelectedFittingSlot | null;
   slots: FittingSlotState[];
@@ -40,11 +48,16 @@ export function FittingRack({
   onDropOnSlot,
   onFittedModuleDragStart,
   onMoveTarget,
+  onRemoveModule,
   onSelectSlot,
+  onStartMove,
+  onStartReplace,
   rack,
   selectedSlot,
   slots
 }: FittingRackProps) {
+  const [removingSlotIndex, setRemovingSlotIndex] = useState<number | null>(null);
+
   return (
     <section
       className="fitting-rack"
@@ -82,7 +95,11 @@ export function FittingRack({
               dragOverSlot?.rack === rack && dragOverSlot.index === slot.index;
 
             return (
-              <li key={slot.index} style={getSlotArcStyle(slot.index, slots.length)}>
+              <li
+                className="fitting-slot-item"
+                key={slot.index}
+                style={getSlotArcStyle(slot.index, slots.length)}
+              >
                 <button
                   aria-label={
                     isMoveTarget
@@ -182,7 +199,52 @@ export function FittingRack({
                       variant="slot"
                     />
                   ) : null}
+                  {slot.module ? (
+                    <span className="fitting-slot-drag-handle" aria-hidden="true">
+                      Drag
+                    </span>
+                  ) : null}
                 </button>
+                {occupied && !dragSource && !moveSource ? (
+                  <div
+                    aria-label={`${moduleName ?? "Fitted module"} contextual actions`}
+                    className="fitting-slot-actions"
+                    role="group"
+                  >
+                    <button
+                      aria-label={`Remove ${moduleName ?? "fitted module"} from ${label} slot ${slot.index + 1}`}
+                      disabled={removingSlotIndex !== null}
+                      onClick={() => {
+                        setRemovingSlotIndex(slot.index);
+                        void onRemoveModule(address).finally(() => {
+                          setRemovingSlotIndex(null);
+                        });
+                      }}
+                      title="Remove module"
+                      type="button"
+                    >
+                      {removingSlotIndex === slot.index ? "..." : "Remove"}
+                    </button>
+                    <button
+                      aria-label={`Replace ${moduleName ?? "fitted module"} in ${label} slot ${slot.index + 1}`}
+                      disabled={removingSlotIndex !== null}
+                      onClick={() => onStartReplace(address)}
+                      title="Replace module"
+                      type="button"
+                    >
+                      Replace
+                    </button>
+                    <button
+                      aria-label={`Move ${moduleName ?? "fitted module"} from ${label} slot ${slot.index + 1}`}
+                      disabled={removingSlotIndex !== null}
+                      onClick={() => onStartMove(address)}
+                      title="Move module"
+                      type="button"
+                    >
+                      Move
+                    </button>
+                  </div>
+                ) : null}
               </li>
             );
           })}

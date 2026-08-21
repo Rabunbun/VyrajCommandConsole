@@ -22,6 +22,7 @@ import type {
   FittingAnalysisResponse,
   FittingHullSummary,
   FittingModulePlacementResponse,
+  FitValidationIssueCode,
   FitValidationIssue,
   ResolvedFittingModule
 } from "@/lib/fitting/types";
@@ -38,6 +39,7 @@ type FitModuleOptions = {
 
 export type FitModuleAttemptResult =
   | {
+      code?: FitValidationIssueCode;
       message: string;
       ok: false;
     }
@@ -119,7 +121,10 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
       const rejection = validateFitModulePlacement(fitState, input);
 
       if (rejection) {
+        const code = getPlacementRejectionCode(rejection);
+
         return {
+          ...(code ? { code } : {}),
           message: getPlacementRejectionMessage(rejection),
           ok: false
         };
@@ -276,10 +281,16 @@ async function requestModulePlacement(input: {
       | null;
 
     if (!response.ok) {
+      const validationIssue =
+        isPlacementResponse(payload) && payload.errors[0]
+          ? payload.errors[0]
+          : null;
+
       return {
+        ...(validationIssue ? { code: validationIssue.code } : {}),
         message:
-          isPlacementResponse(payload) && payload.errors[0]
-            ? payload.errors[0].message
+          validationIssue
+            ? validationIssue.message
             : payload && "error" in payload && typeof payload.error === "string"
             ? payload.error
             : "The selected module could not be validated.",
@@ -451,6 +462,19 @@ function getPlacementRejectionMessage(rejection: FitModuleRejection) {
       return "Choose a different target socket.";
     case "invalid-module":
       return "The fitted-module instance is invalid.";
+  }
+}
+
+function getPlacementRejectionCode(
+  rejection: FitModuleRejection
+): FitValidationIssueCode | undefined {
+  switch (rejection) {
+    case "occupied-slot":
+      return "SLOT_OCCUPIED";
+    case "missing-slot":
+      return "INVALID_SLOT";
+    default:
+      return undefined;
   }
 }
 

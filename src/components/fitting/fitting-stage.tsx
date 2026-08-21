@@ -6,6 +6,7 @@ import type {
 import { ShipCore } from "@/components/fitting/ship-core";
 import type { FittingSlot, FittingSlots } from "@/lib/fitting/fit-state";
 import type { BaseFitAnalysis, FittingHullSummary } from "@/lib/fitting/types";
+import type { FitOperationAttemptResult } from "@/components/fitting/use-fitting-state";
 
 type FittingStageProps = {
   analysis: BaseFitAnalysis;
@@ -23,8 +24,13 @@ type FittingStageProps = {
     source: Extract<FittingDragSource, { kind: "fitted-module" }>
   ) => void;
   onMoveTarget: (slot: SelectedFittingSlot) => void;
+  onRemoveModule: (
+    slot: SelectedFittingSlot
+  ) => Promise<FitOperationAttemptResult>;
   onRemoveDragOverChange: (isOver: boolean) => void;
   onSelectSlot: (slot: SelectedFittingSlot) => void;
+  onStartMove: (slot: SelectedFittingSlot) => void;
+  onStartReplace: (slot: SelectedFittingSlot) => void;
   selectedHull: FittingHullSummary | null;
   selectedSlot: SelectedFittingSlot | null;
   slots: FittingSlots;
@@ -44,8 +50,11 @@ export function FittingStage({
   onDropOnSlot,
   onFittedModuleDragStart,
   onMoveTarget,
+  onRemoveModule,
   onRemoveDragOverChange,
   onSelectSlot,
+  onStartMove,
+  onStartReplace,
   selectedHull,
   selectedSlot,
   slots
@@ -57,7 +66,10 @@ export function FittingStage({
     onDragEnd,
     onDragOverSlot,
     onDropOnSlot,
-    onFittedModuleDragStart
+    onFittedModuleDragStart,
+    onRemoveModule,
+    onStartMove,
+    onStartReplace
   };
 
   return (

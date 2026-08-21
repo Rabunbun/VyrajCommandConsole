@@ -116,6 +116,47 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
     },
     [fitModuleAtSlot, selectedSlot]
   );
+  const handleAutoFitModule = useCallback(
+    async (
+      module: FittingModuleSearchResult
+    ): Promise<FitModuleAttemptResult> => {
+      const emptySlots = fitState.slots[module.rack]
+        .filter((slot) => !slot.module)
+        .map((slot) => ({ index: slot.index, rack: module.rack }))
+        .sort((left, right) => left.index - right.index);
+
+      if (!emptySlots.length) {
+        return {
+          message: `No empty ${module.rack} slots are available.`,
+          ok: false
+        };
+      }
+
+      let lastSlotError: FitModuleAttemptResult | null = null;
+
+      for (const targetSlot of emptySlots) {
+        const result = await fitModuleAtSlot(targetSlot, module.typeId);
+
+        if (result.ok) {
+          return result;
+        }
+
+        if (result.code !== "SLOT_OCCUPIED" && result.code !== "INVALID_SLOT") {
+          return result;
+        }
+
+        lastSlotError = result;
+      }
+
+      return (
+        lastSlotError ?? {
+          message: `No empty ${module.rack} slot can accept ${module.typeName}.`,
+          ok: false
+        }
+      );
+    },
+    [fitModuleAtSlot, fitState.slots]
+  );
   const handleReplaceModule = useCallback(
     async (typeId: number): Promise<FitModuleAttemptResult> => {
       const targetSlot = selectedSlot;
@@ -141,6 +182,41 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
     },
     [clearSelectedSlot, replaceModule, selectedModule, selectedSlot]
   );
+  const handleRemoveModuleAt = useCallback(
+    async (slot: SelectedFittingSlot): Promise<FitOperationAttemptResult> => {
+      const fittedModule = fitState.slots[slot.rack].find(
+        (candidate) => candidate.index === slot.index
+      )?.module;
+
+      if (!fittedModule) {
+        return {
+          message: "Select a fitted module before removing it.",
+          ok: false
+        };
+      }
+
+      const result = await removeModule(slot);
+
+      if (result.ok) {
+        setDragError(null);
+
+        if (
+          selectedSlot?.rack === slot.rack &&
+          selectedSlot.index === slot.index
+        ) {
+          clearSelectedSlot();
+        } else {
+          setManipulationError(null);
+        }
+      } else {
+        setDragError(result.message);
+        setManipulationError(result.message);
+      }
+
+      return result;
+    },
+    [clearSelectedSlot, fitState.slots, removeModule, selectedSlot]
+  );
   const handleRemoveModule = useCallback(async (): Promise<FitOperationAttemptResult> => {
     if (!selectedSlot || !selectedModule) {
       return {
@@ -149,16 +225,20 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
       };
     }
 
-    const result = await removeModule(selectedSlot);
-
-    if (result.ok) {
-      clearSelectedSlot();
-    } else {
-      setManipulationError(result.message);
-    }
-
-    return result;
-  }, [clearSelectedSlot, removeModule, selectedModule, selectedSlot]);
+    return handleRemoveModuleAt(selectedSlot);
+  }, [handleRemoveModuleAt, selectedModule, selectedSlot]);
+  const handleStartMoveAt = useCallback((slot: SelectedFittingSlot) => {
+    setDragError(null);
+    setManipulationError(null);
+    setSelectedSlot(slot);
+    setModuleActionMode("move");
+  }, []);
+  const handleStartReplaceAt = useCallback((slot: SelectedFittingSlot) => {
+    setDragError(null);
+    setManipulationError(null);
+    setSelectedSlot(slot);
+    setModuleActionMode("replace");
+  }, []);
   const handleMoveTarget = useCallback(
     (target: SelectedFittingSlot) => {
       if (!selectedSlot || moduleActionMode !== "move") {
@@ -282,6 +362,7 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
           }
           hulls={hulls}
           manipulationError={manipulationError}
+          onAutoFitModule={handleAutoFitModule}
           onClearSelectedSlot={clearSelectedSlot}
           onFitModule={handleFitModule}
           onModuleDragEnd={clearDragState}
@@ -294,12 +375,14 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
           }}
           onSelectHull={handleSelectHull}
           onStartMove={() => {
-            setManipulationError(null);
-            setModuleActionMode("move");
+            if (selectedSlot) {
+              handleStartMoveAt(selectedSlot);
+            }
           }}
           onStartReplace={() => {
-            setManipulationError(null);
-            setModuleActionMode("replace");
+            if (selectedSlot) {
+              handleStartReplaceAt(selectedSlot);
+            }
           }}
           selectedHull={selectedHull}
           selectedModule={selectedModule}
@@ -320,8 +403,11 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
           onDropOnSlot={handleDropOnSlot}
           onFittedModuleDragStart={handleFittedModuleDragStart}
           onMoveTarget={handleMoveTarget}
+          onRemoveModule={handleRemoveModuleAt}
           onRemoveDragOverChange={setIsRemoveDragOver}
           onSelectSlot={handleSelectSlot}
+          onStartMove={handleStartMoveAt}
+          onStartReplace={handleStartReplaceAt}
           selectedHull={selectedHull}
           selectedSlot={selectedSlot}
           slots={fitState.slots}
