@@ -10,6 +10,7 @@ import type { FittingSlot as FittingSlotState } from "@/lib/fitting/fit-state";
 import type { FitOperationAttemptResult } from "@/components/fitting/use-fitting-state";
 
 type FittingRackProps = {
+  chargeNamesByTypeId: Readonly<Record<number, string>>;
   dragOverSlot: SelectedFittingSlot | null;
   dragSource: FittingDragSource | null;
   enabled: boolean;
@@ -36,6 +37,7 @@ type FittingRackProps = {
 };
 
 export function FittingRack({
+  chargeNamesByTypeId,
   dragOverSlot,
   dragSource,
   enabled,
@@ -73,6 +75,10 @@ export function FittingRack({
               ? moduleNamesByTypeId[slot.module.typeId] ??
                 `Module type ${slot.module.typeId}`
               : null;
+            const chargeName = slot.module?.charge
+              ? chargeNamesByTypeId[slot.module.charge.typeId] ??
+                `Charge type ${slot.module.charge.typeId}`
+              : null;
             const occupied = Boolean(slot.module);
             const selected =
               selectedSlot?.rack === rack &&
@@ -105,7 +111,11 @@ export function FittingRack({
                     isMoveTarget
                       ? `${label} empty slot ${slot.index + 1}, valid move target`
                       : occupied
-                      ? `${label} slot ${slot.index + 1}, fitted with ${moduleName}`
+                      ? `${label} slot ${slot.index + 1}, fitted with ${moduleName}${
+                          slot.module?.charge
+                            ? `, loaded with ${slot.module.charge.quantity} ${chargeName}`
+                            : ""
+                        }`
                       : `${label} empty slot ${slot.index + 1}`
                   }
                   aria-pressed={selected}
@@ -189,7 +199,15 @@ export function FittingRack({
                     event.preventDefault();
                     void onDropOnSlot(address);
                   }}
-                  title={moduleName ?? `${label} empty slot ${slot.index + 1}`}
+                  title={
+                    moduleName
+                      ? `${moduleName}${
+                          slot.module?.charge
+                            ? ` — ${slot.module.charge.quantity.toLocaleString("en-US")} × ${chargeName}`
+                            : ""
+                        }`
+                      : `${label} empty slot ${slot.index + 1}`
+                  }
                   type="button"
                 >
                   {slot.module ? (
@@ -202,6 +220,19 @@ export function FittingRack({
                   {slot.module ? (
                     <span className="fitting-slot-drag-handle" aria-hidden="true">
                       Drag
+                    </span>
+                  ) : null}
+                  {slot.module?.charge ? (
+                    <span
+                      aria-hidden="true"
+                      className="fitting-slot-charge-indicator"
+                    >
+                      <EveModuleIcon
+                        typeId={slot.module.charge.typeId}
+                        typeName={chargeName ?? `Charge type ${slot.module.charge.typeId}`}
+                        variant="charge"
+                      />
+                      <span>{formatCompactQuantity(slot.module.charge.quantity)}</span>
                     </span>
                   ) : null}
                 </button>
@@ -254,6 +285,12 @@ export function FittingRack({
       )}
     </section>
   );
+}
+
+function formatCompactQuantity(quantity: number) {
+  return quantity > 999
+    ? Intl.NumberFormat("en-US", { notation: "compact" }).format(quantity)
+    : quantity.toLocaleString("en-US");
 }
 
 type FittingSlotArcStyle = CSSProperties & {

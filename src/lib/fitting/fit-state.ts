@@ -1,6 +1,12 @@
 export type RackType = "high" | "mid" | "low" | "rig" | "subsystem";
 
+export type LoadedCharge = {
+  quantity: number;
+  typeId: number;
+};
+
 export type FittedModule = {
+  charge: LoadedCharge | null;
   instanceId: string;
   typeId: number;
 };

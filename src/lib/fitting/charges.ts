@@ -1,7 +1,14 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
 import { getDb, isDatabaseConfigured } from "@/lib/db";
-import type { FittingChargeSearchResponse } from "@/lib/fitting/types";
+import {
+  calculateMaximumChargeQuantity,
+  isChargeSizeCompatible
+} from "@/lib/fitting/charge-compatibility";
+import type {
+  FittingChargeLoadResponse,
+  FittingChargeSearchResponse
+} from "@/lib/fitting/types";
 
 type SearchCompatibleFittingChargesOptions = {
   limit: number;
@@ -13,6 +20,13 @@ export type CompatibleChargeSearchResult =
   | { status: "module-not-found" }
   | { message: string; status: "capacity-unavailable" }
   | ({ status: "ready" } & FittingChargeSearchResponse);
+
+export type FittingChargeLoadValidationResult =
+  | { message: string; status: "capacity-unavailable" }
+  | { message: string; status: "charge-not-found" }
+  | { message: string; status: "incompatible" }
+  | { message: string; status: "module-not-found" }
+  | ({ status: "ready" } & FittingChargeLoadResponse);
 
 export async function searchCompatibleFittingCharges({
   limit,
@@ -128,6 +142,121 @@ export async function searchCompatibleFittingCharges({
       typeName: fittingModule.typeName
     },
     results: charges,
+    status: "ready"
+  };
+}
+
+export async function validateFittingChargeLoad(
+  moduleTypeId: number,
+  chargeTypeId: number
+): Promise<FittingChargeLoadValidationResult> {
+  if (!isDatabaseConfigured()) {
+    throw new Error("The fitting charge cache is unavailable.");
+  }
+
+  const [fittingModule, fittingCharge] = await Promise.all([
+    getDb().fittingModule.findUnique({
+      select: {
+        capacity: true,
+        chargeGroupIds: true,
+        chargeSize: true,
+        typeId: true,
+        typeName: true
+      },
+      where: { typeId: moduleTypeId }
+    }),
+    getDb().fittingCharge.findUnique({
+      select: {
+        chargeSize: true,
+        groupId: true,
+        typeId: true,
+        typeName: true,
+        volume: true
+      },
+      where: { typeId: chargeTypeId }
+    })
+  ]);
+
+  if (!fittingModule) {
+    return {
+      message: "The fitted module is not available in the authoritative module cache.",
+      status: "module-not-found"
+    };
+  }
+
+  if (!fittingCharge) {
+    return {
+      message: "The requested charge is not available in the authoritative charge cache.",
+      status: "charge-not-found"
+    };
+  }
+
+  if (!fittingModule.chargeGroupIds.includes(fittingCharge.groupId)) {
+    return {
+      message: `${fittingCharge.typeName} is not in a charge group accepted by ${fittingModule.typeName}.`,
+      status: "incompatible"
+    };
+  }
+
+  const effectiveChargeSize = fittingCharge.chargeSize ?? 0;
+
+  if (!isChargeSizeCompatible(fittingModule.chargeSize, fittingCharge.chargeSize)) {
+    return {
+      message: `${fittingCharge.typeName} has charge size ${effectiveChargeSize}, but ${fittingModule.typeName} requires size ${fittingModule.chargeSize}.`,
+      status: "incompatible"
+    };
+  }
+
+  if (fittingModule.capacity === null) {
+    return {
+      message: `${fittingModule.typeName} has no authoritative module capacity in the fitting cache. The charge cannot be loaded safely.`,
+      status: "capacity-unavailable"
+    };
+  }
+
+  if (!Number.isFinite(fittingModule.capacity) || fittingModule.capacity <= 0) {
+    return {
+      message: `${fittingModule.typeName} does not have a positive authoritative charge capacity.`,
+      status: "incompatible"
+    };
+  }
+
+  if (!Number.isFinite(fittingCharge.volume) || fittingCharge.volume <= 0) {
+    return {
+      message: `${fittingCharge.typeName} does not have a positive authoritative volume.`,
+      status: "incompatible"
+    };
+  }
+
+  if (fittingCharge.volume > fittingModule.capacity) {
+    return {
+      message: `${fittingCharge.typeName} is too large for ${fittingModule.typeName}'s charge capacity.`,
+      status: "incompatible"
+    };
+  }
+
+  const quantity = calculateMaximumChargeQuantity(
+    fittingModule.capacity,
+    fittingCharge.volume
+  );
+
+  if (quantity < 1) {
+    return {
+      message: `${fittingCharge.typeName} does not fit in ${fittingModule.typeName}'s charge capacity.`,
+      status: "incompatible"
+    };
+  }
+
+  return {
+    charge: {
+      quantity,
+      typeId: fittingCharge.typeId,
+      typeName: fittingCharge.typeName
+    },
+    module: {
+      typeId: fittingModule.typeId,
+      typeName: fittingModule.typeName
+    },
     status: "ready"
   };
 }

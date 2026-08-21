@@ -7,7 +7,7 @@ import { ModuleIcon } from "@/components/module-visuals";
 type EveModuleIconProps = {
   typeId: number;
   typeName: string;
-  variant?: "result" | "slot";
+  variant?: "charge" | "result" | "slot";
 };
 
 export function EveModuleIcon({
@@ -16,13 +16,9 @@ export function EveModuleIcon({
   variant = "result"
 }: EveModuleIconProps) {
   const [failedTypeId, setFailedTypeId] = useState<number | null>(null);
-  const iconSize = variant === "slot" ? 32 : 44;
-  const iconClassName =
-    variant === "slot" ? "fitting-slot-module-icon" : "fitting-module-icon";
-  const fallbackClassName =
-    variant === "slot"
-      ? "fitting-slot-module-icon-fallback"
-      : "fitting-module-icon-fallback";
+  const iconSize = variant === "charge" ? 14 : variant === "slot" ? 32 : 44;
+  const iconClassName = getIconClassName(variant, false);
+  const fallbackClassName = getIconClassName(variant, true);
 
   if (failedTypeId === typeId) {
     return (
@@ -31,7 +27,10 @@ export function EveModuleIcon({
         className={fallbackClassName}
         role="img"
       >
-        <ModuleIcon name="doctrine" size={variant === "slot" ? 16 : 20} />
+        <ModuleIcon
+          name="doctrine"
+          size={variant === "charge" ? 8 : variant === "slot" ? 16 : 20}
+        />
       </span>
     );
   }
@@ -46,4 +45,23 @@ export function EveModuleIcon({
       width={iconSize}
     />
   );
+}
+
+function getIconClassName(
+  variant: NonNullable<EveModuleIconProps["variant"]>,
+  fallback: boolean
+) {
+  if (variant === "charge") {
+    return fallback
+      ? "fitting-slot-charge-icon-fallback"
+      : "fitting-slot-charge-icon";
+  }
+
+  if (variant === "slot") {
+    return fallback
+      ? "fitting-slot-module-icon-fallback"
+      : "fitting-slot-module-icon";
+  }
+
+  return fallback ? "fitting-module-icon-fallback" : "fitting-module-icon";
 }

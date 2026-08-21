@@ -1,10 +1,12 @@
 import { useCallback, useMemo, useReducer, useRef, useState } from "react";
 import {
   fittingReducer,
+  validateLoadCharge,
   validateMoveModule,
   validateRemoveModule,
   validateReplaceModule,
   validateFitModulePlacement,
+  validateUnloadCharge,
   type FitModuleInput,
   type FitModuleRejection,
   type MoveModuleInput
@@ -20,6 +22,7 @@ import type {
   BrowsableFittingRack,
   FittedModuleAddress,
   FittingAnalysisResponse,
+  FittingChargeLoadResponse,
   FittingHullSummary,
   FittingModulePlacementResponse,
   FitValidationIssueCode,
@@ -54,6 +57,16 @@ export type FitOperationAttemptResult =
       ok: false;
     }
   | {
+      ok: true;
+    };
+
+export type LoadChargeAttemptResult =
+  | {
+      message: string;
+      ok: false;
+    }
+  | {
+      charge: FittingChargeLoadResponse["charge"];
       ok: true;
     };
 
@@ -112,6 +125,7 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
       const input: FitModuleInput = {
         index,
         module: {
+          charge: null,
           instanceId: crypto.randomUUID(),
           typeId: validation.response.module.typeId
         },
@@ -197,6 +211,7 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
       const input: FitModuleInput = {
         index,
         module: {
+          charge: null,
           instanceId: crypto.randomUUID(),
           typeId: validation.response.module.typeId
         },
@@ -235,6 +250,71 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
     },
     [fitState]
   );
+  const loadCharge = useCallback(
+    async (
+      address: FittingSlotAddress,
+      chargeTypeId: number
+    ): Promise<LoadChargeAttemptResult> => {
+      const fittedModule = findFittedModule(fitState, address);
+
+      if (!fittedModule) {
+        return {
+          message: "Select a fitted module before loading a charge.",
+          ok: false
+        };
+      }
+
+      const validationEpoch = ++validationEpochRef.current;
+      const result = await requestChargeLoad({
+        chargeTypeId,
+        moduleTypeId: fittedModule.typeId
+      });
+
+      if (!result.ok) {
+        return result;
+      }
+
+      if (validationEpoch !== validationEpochRef.current) {
+        return hullChangedRejection();
+      }
+
+      const input = {
+        ...address,
+        charge: {
+          quantity: result.response.charge.quantity,
+          typeId: result.response.charge.typeId
+        }
+      };
+      const rejection = validateLoadCharge(fitState, input);
+
+      if (rejection) {
+        return rejectedOperation(rejection);
+      }
+
+      dispatch({ ...input, type: "load-charge" });
+
+      return {
+        charge: result.response.charge,
+        ok: true
+      };
+    },
+    [fitState]
+  );
+  const unloadCharge = useCallback(
+    (address: FittingSlotAddress): FitOperationAttemptResult => {
+      validationEpochRef.current += 1;
+      const rejection = validateUnloadCharge(fitState, address);
+
+      if (rejection) {
+        return rejectedOperation(rejection);
+      }
+
+      dispatch({ ...address, type: "unload-charge" });
+
+      return { ok: true };
+    },
+    [fitState]
+  );
 
   return {
     analysis,
@@ -242,12 +322,61 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
     fitModule,
     fitWarnings,
     fitState,
+    loadCharge,
     moveModule,
     removeModule,
     replaceModule,
     selectHull,
-    selectedHull
+    selectedHull,
+    unloadCharge
   };
+}
+
+async function requestChargeLoad(input: {
+  chargeTypeId: number;
+  moduleTypeId: number;
+}): Promise<
+  | { message: string; ok: false }
+  | { ok: true; response: FittingChargeLoadResponse }
+> {
+  try {
+    const response = await fetch("/api/fitting/charges", {
+      body: JSON.stringify(input),
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      method: "POST"
+    });
+    const payload = (await response.json().catch(() => null)) as
+      | FittingChargeLoadResponse
+      | { error?: unknown }
+      | null;
+
+    if (!response.ok) {
+      return {
+        message:
+          payload && "error" in payload && typeof payload.error === "string"
+            ? payload.error
+            : "The selected charge could not be validated.",
+        ok: false
+      };
+    }
+
+    if (!isChargeLoadResponse(payload, input)) {
+      return {
+        message: "The charge validation response was invalid.",
+        ok: false
+      };
+    }
+
+    return { ok: true, response: payload };
+  } catch {
+    return {
+      message: "Charge validation is temporarily unavailable.",
+      ok: false
+    };
+  }
 }
 
 async function requestModulePlacement(input: {
@@ -444,10 +573,49 @@ function isResolvedModule(
   );
 }
 
+function isChargeLoadResponse(
+  value: unknown,
+  expected: { chargeTypeId: number; moduleTypeId: number }
+): value is FittingChargeLoadResponse {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    !("charge" in value) ||
+    !("module" in value)
+  ) {
+    return false;
+  }
+
+  const { charge, module } = value;
+
+  return (
+    charge !== null &&
+    typeof charge === "object" &&
+    "quantity" in charge &&
+    "typeId" in charge &&
+    "typeName" in charge &&
+    charge.typeId === expected.chargeTypeId &&
+    typeof charge.quantity === "number" &&
+    Number.isInteger(charge.quantity) &&
+    charge.quantity > 0 &&
+    typeof charge.typeName === "string" &&
+    Boolean(charge.typeName.trim()) &&
+    module !== null &&
+    typeof module === "object" &&
+    "typeId" in module &&
+    "typeName" in module &&
+    module.typeId === expected.moduleTypeId &&
+    typeof module.typeName === "string" &&
+    Boolean(module.typeName.trim())
+  );
+}
+
 function getPlacementRejectionMessage(rejection: FitModuleRejection) {
   switch (rejection) {
     case "empty-slot":
       return "The source socket is empty.";
+    case "invalid-charge":
+      return "The loaded-charge instance is invalid.";
     case "missing-hull":
       return "Select a hull before fitting modules.";
     case "missing-rack":
@@ -521,6 +689,12 @@ function addressesMatch(
   right: FittingSlotAddress
 ) {
   return left.rack === right.rack && left.index === right.index;
+}
+
+function findFittedModule(fitState: FitState, address: FittingSlotAddress) {
+  return fitState.slots[address.rack].find(
+    (slot) => slot.index === address.index
+  )?.module ?? null;
 }
 
 function createEmptyAnalysis(): BaseFitAnalysis {

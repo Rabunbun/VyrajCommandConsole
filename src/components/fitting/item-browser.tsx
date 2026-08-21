@@ -13,7 +13,8 @@ import type {
 } from "@/components/fitting/fitting-ui-types";
 import type {
   FitModuleAttemptResult,
-  FitOperationAttemptResult
+  FitOperationAttemptResult,
+  LoadChargeAttemptResult
 } from "@/components/fitting/use-fitting-state";
 import { ModuleIcon } from "@/components/module-visuals";
 import type { FittedModule } from "@/lib/fitting/fit-state";
@@ -49,6 +50,7 @@ type ItemBrowserProps = {
   ) => Promise<FitModuleAttemptResult>;
   onClearSelectedSlot: () => void;
   onFitModule: (typeId: number) => Promise<FitModuleAttemptResult>;
+  onLoadCharge: (typeId: number) => Promise<LoadChargeAttemptResult>;
   onModuleDragEnd: () => void;
   onModuleDragStart: (module: FittingModuleSearchResult) => void;
   onModuleRackChange: (rack: BrowsableFittingRack) => void;
@@ -59,8 +61,10 @@ type ItemBrowserProps = {
   onStartMove: () => void;
   onStartReplace: () => void;
   onToggleSection: (section: FittingBrowserSection) => void;
+  onUnloadCharge: () => FitOperationAttemptResult;
   openSections: Record<FittingBrowserSection, boolean>;
   selectedHull: FittingHullSummary | null;
+  selectedChargeName: string | null;
   selectedModule: FittedModule | null;
   selectedModuleName: string | null;
   selectedSlot: SelectedFittingSlot | null;
@@ -75,6 +79,7 @@ export function ItemBrowser({
   onAutoFitModule,
   onClearSelectedSlot,
   onFitModule,
+  onLoadCharge,
   onModuleDragEnd,
   onModuleDragStart,
   onModuleRackChange,
@@ -85,8 +90,10 @@ export function ItemBrowser({
   onStartMove,
   onStartReplace,
   onToggleSection,
+  onUnloadCharge,
   openSections,
   selectedHull,
+  selectedChargeName,
   selectedModule,
   selectedModuleName,
   selectedSlot
@@ -233,10 +240,13 @@ export function ItemBrowser({
         <ChargeBrowser
           active={openSections.charges}
           collapsedGroups={collapsedChargeGroups}
+          onLoadCharge={onLoadCharge}
           onToggleGroup={(groupKey) =>
             toggleCollapsedGroup(setCollapsedChargeGroups, groupKey)
           }
+          onUnloadCharge={onUnloadCharge}
           query={chargeQuery}
+          selectedChargeName={selectedChargeName}
           selectedModule={selectedModule}
           setQuery={setChargeQuery}
         />
@@ -824,8 +834,11 @@ function ModuleBrowser({
 type ChargeBrowserProps = {
   active: boolean;
   collapsedGroups: Set<string>;
+  onLoadCharge: (typeId: number) => Promise<LoadChargeAttemptResult>;
   onToggleGroup: (groupKey: string) => void;
+  onUnloadCharge: () => FitOperationAttemptResult;
   query: string;
+  selectedChargeName: string | null;
   selectedModule: FittedModule | null;
   setQuery: (query: string) => void;
 };
@@ -843,14 +856,27 @@ type ChargeSearchState =
 function ChargeBrowser({
   active,
   collapsedGroups,
+  onLoadCharge,
   onToggleGroup,
+  onUnloadCharge,
   query,
+  selectedChargeName,
   selectedModule,
   setQuery
 }: ChargeBrowserProps) {
   const [searchState, setSearchState] = useState<ChargeSearchState>({
     status: "idle"
   });
+  const [pendingChargeTypeId, setPendingChargeTypeId] = useState<number | null>(
+    null
+  );
+  const [chargeFeedback, setChargeFeedback] = useState<
+    {
+      message: string;
+      moduleTypeId: number;
+      tone: "error" | "success";
+    } | null
+  >(null);
   const moduleTypeId = selectedModule?.typeId ?? null;
   const requestKey = moduleTypeId ? `${moduleTypeId}:${query}` : "idle";
   const currentSearchState =
@@ -863,6 +889,8 @@ function ChargeBrowser({
     currentSearchState.status === "ready"
       ? groupCharges(currentSearchState.response.results)
       : [];
+  const currentChargeFeedback =
+    chargeFeedback?.moduleTypeId === moduleTypeId ? chargeFeedback : null;
 
   useEffect(() => {
     if (!active || !moduleTypeId) {
@@ -925,8 +953,72 @@ function ChargeBrowser({
     );
   }
 
+  const handleLoadCharge = async (charge: FittingChargeSearchResult) => {
+    setPendingChargeTypeId(charge.typeId);
+    setChargeFeedback(null);
+    const result = await onLoadCharge(charge.typeId);
+
+    setPendingChargeTypeId(null);
+    setChargeFeedback(
+      result.ok
+        ? {
+            message: `Loaded ${result.charge.quantity.toLocaleString("en-US")} × ${result.charge.typeName}.`,
+            moduleTypeId: selectedModule.typeId,
+            tone: "success"
+          }
+        : {
+            message: result.message,
+            moduleTypeId: selectedModule.typeId,
+            tone: "error"
+          }
+    );
+  };
+
+  const handleUnloadCharge = () => {
+    const result = onUnloadCharge();
+
+    setChargeFeedback(
+      result.ok
+        ? {
+            message: "Charge unloaded.",
+            moduleTypeId: selectedModule.typeId,
+            tone: "success"
+          }
+        : {
+            message: result.message,
+            moduleTypeId: selectedModule.typeId,
+            tone: "error"
+          }
+    );
+  };
+
   return (
     <div className="fitting-browser-index">
+      {selectedModule.charge ? (
+        <div className="fitting-loaded-charge-summary">
+          <EveModuleIcon
+            typeId={selectedModule.charge.typeId}
+            typeName={selectedChargeName ?? `Charge type ${selectedModule.charge.typeId}`}
+          />
+          <span>
+            <small>Loaded charge</small>
+            <strong>
+              {selectedChargeName ?? `Charge type ${selectedModule.charge.typeId}`}
+            </strong>
+            <span>
+              {selectedModule.charge.quantity.toLocaleString("en-US")} rounds
+            </span>
+          </span>
+          <button
+            disabled={pendingChargeTypeId !== null}
+            onClick={handleUnloadCharge}
+            type="button"
+          >
+            Unload
+          </button>
+        </div>
+      ) : null}
+
       <label className="field-stack">
         <span className="field-label">Search compatible charges</span>
         <input
@@ -980,6 +1072,9 @@ function ChargeBrowser({
                           {group.items.map((charge) => (
                             <article
                               className="fitting-charge-result"
+                              data-loaded={
+                                selectedModule.charge?.typeId === charge.typeId
+                              }
                               key={charge.typeId}
                             >
                               <EveModuleIcon
@@ -990,6 +1085,18 @@ function ChargeBrowser({
                                 <strong>{charge.typeName}</strong>
                                 <span>{formatChargeMetadata(charge)}</span>
                               </span>
+                              <button
+                                aria-label={`Load ${charge.typeName} into ${currentSearchState.response.module.typeName}`}
+                                disabled={pendingChargeTypeId !== null}
+                                onClick={() => void handleLoadCharge(charge)}
+                                type="button"
+                              >
+                                {pendingChargeTypeId === charge.typeId
+                                  ? "Loading..."
+                                  : selectedModule.charge?.typeId === charge.typeId
+                                    ? "Reload"
+                                    : "Load"}
+                              </button>
                             </article>
                           ))}
                         </div>
@@ -1009,8 +1116,15 @@ function ChargeBrowser({
         ) : null}
       </div>
 
-      <div className="fitting-browser-readonly-note">
-        Browse only — charge loading and fitted quantity are deferred.
+      <div aria-live="polite">
+        {currentChargeFeedback ? (
+          <div
+            className="fitting-empty-note"
+            data-tone={currentChargeFeedback.tone}
+          >
+            {currentChargeFeedback.message}
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -60,6 +60,20 @@ export type FittingChargeSearchResponse = {
   results: FittingChargeSearchResult[];
 };
 
+export type ResolvedFittingCharge = {
+  quantity: number;
+  typeId: number;
+  typeName: string;
+};
+
+export type FittingChargeLoadResponse = {
+  charge: ResolvedFittingCharge;
+  module: {
+    typeId: number;
+    typeName: string;
+  };
+};
+
 export type ResolvedFittingModule = {
   rack: BrowsableFittingRack;
   typeId: number;

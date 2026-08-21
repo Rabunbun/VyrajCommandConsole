@@ -5,6 +5,7 @@ import {
   type FittingSlotAddress,
   type FittingTopology,
   type FitState,
+  type LoadedCharge,
   type RackType
 } from "@/lib/fitting/fit-state";
 
@@ -17,6 +18,7 @@ export type FitModuleInput = {
 
 export type FitModuleRejection =
   | "empty-slot"
+  | "invalid-charge"
   | "invalid-module"
   | "missing-hull"
   | "missing-rack"
@@ -33,6 +35,12 @@ export type MoveModuleInput = {
   from: FittingSlotAddress;
   to: FittingSlotAddress;
 };
+
+export type LoadChargeInput = FittingSlotAddress & {
+  charge: LoadedCharge;
+};
+
+export type UnloadChargeInput = FittingSlotAddress;
 
 export type FitAction =
   | {
@@ -54,6 +62,12 @@ export type FitAction =
     })
   | (MoveModuleInput & {
       type: "move-module";
+    })
+  | (LoadChargeInput & {
+      type: "load-charge";
+    })
+  | (UnloadChargeInput & {
+      type: "unload-charge";
     });
 
 export function validateFitModulePlacement(
@@ -230,11 +244,86 @@ export function moveModule(state: FitState, input: MoveModuleInput): FitState {
     }
 
     if (slot.index === input.to.index) {
-      return { ...slot, module: { ...sourceModule } };
+      return {
+        ...slot,
+        module: {
+          ...sourceModule,
+          charge: sourceModule.charge ? { ...sourceModule.charge } : null
+        }
+      };
     }
 
     return slot;
   });
+}
+
+export function validateLoadCharge(
+  state: FitState,
+  input: LoadChargeInput
+): FitModuleRejection | null {
+  const targetSlot = resolveSlot(state, input);
+
+  if (typeof targetSlot === "string") {
+    return targetSlot;
+  }
+
+  if (!targetSlot.module) {
+    return "empty-slot";
+  }
+
+  return isValidLoadedCharge(input.charge) ? null : "invalid-charge";
+}
+
+export function loadCharge(state: FitState, input: LoadChargeInput): FitState {
+  if (validateLoadCharge(state, input)) {
+    return state;
+  }
+
+  return updateRack(state, input.rack, (slot) =>
+    slot.index === input.index && slot.module
+      ? {
+          ...slot,
+          module: {
+            ...slot.module,
+            charge: { ...input.charge }
+          }
+        }
+      : slot
+  );
+}
+
+export function validateUnloadCharge(
+  state: FitState,
+  input: UnloadChargeInput
+): FitModuleRejection | null {
+  const targetSlot = resolveSlot(state, input);
+
+  if (typeof targetSlot === "string") {
+    return targetSlot;
+  }
+
+  return targetSlot.module ? null : "empty-slot";
+}
+
+export function unloadCharge(
+  state: FitState,
+  input: UnloadChargeInput
+): FitState {
+  if (validateUnloadCharge(state, input)) {
+    return state;
+  }
+
+  return updateRack(state, input.rack, (slot) =>
+    slot.index === input.index && slot.module
+      ? {
+          ...slot,
+          module: {
+            ...slot.module,
+            charge: null
+          }
+        }
+      : slot
+  );
 }
 
 export function fittingReducer(state: FitState, action: FitAction): FitState {
@@ -254,6 +343,10 @@ export function fittingReducer(state: FitState, action: FitAction): FitState {
       return replaceModule(state, action);
     case "move-module":
       return moveModule(state, action);
+    case "load-charge":
+      return loadCharge(state, action);
+    case "unload-charge":
+      return unloadCharge(state, action);
     default:
       return state;
   }
@@ -294,6 +387,22 @@ function isValidFittedModule(module: FittedModule) {
     typeof module.instanceId === "string" &&
     Boolean(module.instanceId.trim()) &&
     Number.isInteger(module.typeId) &&
-    module.typeId > 0
+    module.typeId > 0 &&
+    (module.charge === null || isValidLoadedCharge(module.charge))
+  );
+}
+
+function isValidLoadedCharge(charge: unknown): charge is LoadedCharge {
+  return (
+    charge !== null &&
+    typeof charge === "object" &&
+    "typeId" in charge &&
+    "quantity" in charge &&
+    typeof charge.typeId === "number" &&
+    Number.isInteger(charge.typeId) &&
+    charge.typeId > 0 &&
+    typeof charge.quantity === "number" &&
+    Number.isInteger(charge.quantity) &&
+    charge.quantity > 0
   );
 }

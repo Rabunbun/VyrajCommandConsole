@@ -10,6 +10,7 @@ import type { FitOperationAttemptResult } from "@/components/fitting/use-fitting
 
 type FittingStageProps = {
   analysis: BaseFitAnalysis;
+  chargeNamesByTypeId: Readonly<Record<number, string>>;
   dragError: string | null;
   dragOverSlot: SelectedFittingSlot | null;
   dragSource: FittingDragSource | null;
@@ -38,6 +39,7 @@ type FittingStageProps = {
 
 export function FittingStage({
   analysis,
+  chargeNamesByTypeId,
   dragError,
   dragOverSlot,
   dragSource,
@@ -61,6 +63,7 @@ export function FittingStage({
 }: FittingStageProps) {
   const displaySlots = selectedHull ? slots : createEmptyVisualSlots();
   const dragProps = {
+    chargeNamesByTypeId,
     dragOverSlot,
     dragSource,
     onDragEnd,

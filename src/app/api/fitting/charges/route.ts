@@ -1,4 +1,7 @@
-import { searchCompatibleFittingCharges } from "@/lib/fitting/charges";
+import {
+  searchCompatibleFittingCharges,
+  validateFittingChargeLoad
+} from "@/lib/fitting/charges";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +56,57 @@ export async function GET(request: Request) {
   }
 }
 
+export async function POST(request: Request) {
+  let body: unknown;
+
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "A valid JSON body is required." }, { status: 400 });
+  }
+
+  if (!body || typeof body !== "object") {
+    return Response.json({ error: "A valid JSON body is required." }, { status: 400 });
+  }
+
+  const moduleTypeId = parsePositiveNumberProperty(body, "moduleTypeId");
+  const chargeTypeId = parsePositiveNumberProperty(body, "chargeTypeId");
+
+  if (!moduleTypeId || !chargeTypeId) {
+    return Response.json(
+      { error: "Valid moduleTypeId and chargeTypeId values are required." },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const result = await validateFittingChargeLoad(moduleTypeId, chargeTypeId);
+
+    if (result.status !== "ready") {
+      const status =
+        result.status === "module-not-found" || result.status === "charge-not-found"
+          ? 404
+          : 409;
+
+      return Response.json({ error: result.message }, { status });
+    }
+
+    return Response.json(
+      { charge: result.charge, module: result.module },
+      { headers: { "Cache-Control": "no-store" } }
+    );
+  } catch {
+    console.warn(
+      "Fitting charge validation unavailable. Run migrations and refresh fitting static data."
+    );
+
+    return Response.json(
+      { error: "Charge validation is temporarily unavailable." },
+      { status: 503 }
+    );
+  }
+}
+
 function parsePositiveInteger(value: string | null) {
   if (!value) {
     return null;
@@ -71,4 +125,21 @@ function parseLimit(value: string | null) {
   }
 
   return Math.min(maximumResultLimit, Math.max(1, parsedValue));
+}
+
+function parsePositiveNumberProperty(
+  value: object,
+  property: "chargeTypeId" | "moduleTypeId"
+) {
+  if (!(property in value)) {
+    return null;
+  }
+
+  const propertyValue = (value as Record<string, unknown>)[property];
+
+  return typeof propertyValue === "number" &&
+    Number.isInteger(propertyValue) &&
+    propertyValue > 0
+    ? propertyValue
+    : null;
 }
