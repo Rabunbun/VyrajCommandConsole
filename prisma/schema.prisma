@@ -697,3 +697,29 @@ model FittingCharge {
   @@index([marketGroupId])
   @@index([lastRefreshedAt])
 }
+
+model FittingDrone {
+  id                   String   @id @default(uuid()) @db.Uuid
+  typeId               Int      @unique
+  typeName             String
+  groupId              Int
+  groupName            String
+  marketGroupId        Int?
+  marketGroupName      String?
+  marketGroupPathIds   Int[]    @default([])
+  marketGroupPathNames String[] @default([])
+  metaGroupId          Int?
+  metaGroupName        String?
+  metaLevel            Int?
+  techLevel            Int?
+  volume               Float?
+  bandwidthUsed        Float?
+  lastRefreshedAt      DateTime
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([groupId, typeName])
+  @@index([marketGroupId])
+  @@index([metaGroupId])
+  @@index([lastRefreshedAt])
+}

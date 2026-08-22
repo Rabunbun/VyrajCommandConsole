@@ -20,6 +20,7 @@
     "eve:refresh-fitting-hulls": "tsx scripts/refresh-fitting-hulls.ts",
     "eve:refresh-fitting-modules": "tsx scripts/refresh-fitting-modules.ts",
     "eve:refresh-fitting-charges": "tsx scripts/refresh-fitting-charges.ts",
+    "eve:refresh-fitting-drones": "tsx scripts/refresh-fitting-drones.ts",
     "db:studio": "prisma studio"
   },
   "dependencies": {
