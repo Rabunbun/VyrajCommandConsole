@@ -27,6 +27,8 @@ import type {
   FittingDroneSearchResponse,
   FittingDroneSearchResult,
   FittingHullSummary,
+  FittingModuleHierarchyNode,
+  FittingModuleHierarchyResponse,
   FittingModuleSearchResponse,
   FittingModuleSearchResult
 } from "@/lib/fitting/types";
@@ -797,6 +799,20 @@ type ModuleSearchState =
       status: "ready";
     };
 
+type ModuleHierarchyState =
+  | { status: "loading" }
+  | { message: string; rack: BrowsableFittingRack; status: "error" }
+  | {
+      rack: BrowsableFittingRack;
+      response: FittingModuleHierarchyResponse;
+      status: "ready";
+    };
+
+type ModuleBranchState =
+  | { status: "loading" }
+  | { message: string; status: "error" }
+  | { results: FittingModuleSearchResult[]; status: "ready" };
+
 function ModuleBrowser({
   action,
   active,
@@ -815,6 +831,15 @@ function ModuleBrowser({
   const [searchState, setSearchState] = useState<ModuleSearchState>({
     status: "loading"
   });
+  const [hierarchyState, setHierarchyState] = useState<ModuleHierarchyState>({
+    status: "loading"
+  });
+  const [branchStates, setBranchStates] = useState<
+    Record<string, ModuleBranchState>
+  >({});
+  const [expandedHierarchyBranches, setExpandedHierarchyBranches] = useState<
+    Set<string>
+  >(() => new Set());
   const [placementError, setPlacementError] = useState<string | null>(null);
   const [pendingModule, setPendingModule] = useState<{
     message: string;
@@ -822,10 +847,15 @@ function ModuleBrowser({
   } | null>(null);
   const [isFitting, startFittingTransition] = useTransition();
   const singleClickTimeoutRef = useRef<number | null>(null);
+  const searchActive = Boolean(query.trim());
   const requestKey = `${rack}:${query}`;
   const currentSearchState =
     searchState.status !== "loading" && searchState.requestKey === requestKey
       ? searchState
+      : ({ status: "loading" } as const);
+  const currentHierarchyState =
+    hierarchyState.status !== "loading" && hierarchyState.rack === rack
+      ? hierarchyState
       : ({ status: "loading" } as const);
   const rackLabel = rack.toLocaleUpperCase("en-US");
   const groupedModules =
@@ -840,11 +870,13 @@ function ModuleBrowser({
 
     const abortController = new AbortController();
     const timeoutId = window.setTimeout(async () => {
-      const searchParams = new URLSearchParams({
-        limit: String(moduleResultLimit),
-        q: query,
-        rack
-      });
+      const searchParams = searchActive
+        ? new URLSearchParams({
+            limit: String(moduleResultLimit),
+            q: query,
+            rack
+          })
+        : new URLSearchParams({ browse: "hierarchy", rack });
 
       try {
         const response = await fetch(`/api/fitting/modules?${searchParams}`, {
@@ -852,10 +884,11 @@ function ModuleBrowser({
           signal: abortController.signal
         });
         const payload = (await response.json()) as
+          | FittingModuleHierarchyResponse
           | FittingModuleSearchResponse
           | { error?: string };
 
-        if (!response.ok || !("results" in payload)) {
+        if (!response.ok) {
           throw new Error(
             "error" in payload && payload.error
               ? payload.error
@@ -863,24 +896,38 @@ function ModuleBrowser({
           );
         }
 
-        setSearchState({
-          requestKey,
-          results: payload.results,
-          status: "ready"
-        });
+        if (searchActive) {
+          if (!("results" in payload)) {
+            throw new Error("The module search response was invalid.");
+          }
+
+          setSearchState({
+            requestKey,
+            results: payload.results,
+            status: "ready"
+          });
+        } else {
+          if (!("nodes" in payload)) {
+            throw new Error("The module hierarchy response was invalid.");
+          }
+
+          setHierarchyState({ rack, response: payload, status: "ready" });
+        }
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
         }
 
-        setSearchState({
-          message:
-            error instanceof Error
-              ? error.message
-              : "Module search is temporarily unavailable.",
-          requestKey,
-          status: "error"
-        });
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Module search is temporarily unavailable.";
+
+        if (searchActive) {
+          setSearchState({ message, requestKey, status: "error" });
+        } else {
+          setHierarchyState({ message, rack, status: "error" });
+        }
       }
     }, searchDebounceMs);
 
@@ -888,7 +935,7 @@ function ModuleBrowser({
       window.clearTimeout(timeoutId);
       abortController.abort();
     };
-  }, [active, query, rack, requestKey]);
+  }, [active, query, rack, requestKey, searchActive]);
 
   useEffect(
     () => () => {
@@ -964,6 +1011,123 @@ function ModuleBrowser({
     handleChooseModule(module, "auto");
   }
 
+  function handleHierarchyToggle(node: FittingModuleHierarchyNode) {
+    const branchKey = getModuleBranchKey(rack, node);
+    const expanding = !expandedHierarchyBranches.has(branchKey);
+
+    setExpandedHierarchyBranches((current) => {
+      const next = new Set(current);
+
+      if (next.has(branchKey)) {
+        next.delete(branchKey);
+      } else {
+        next.add(branchKey);
+      }
+
+      return next;
+    });
+
+    if (expanding && node.directCount > 0 && !branchStates[branchKey]) {
+      void loadHierarchyBranch(node, branchKey);
+    }
+  }
+
+  async function loadHierarchyBranch(
+    node: FittingModuleHierarchyNode,
+    branchKey: string
+  ) {
+    setBranchStates((current) => ({
+      ...current,
+      [branchKey]: { status: "loading" }
+    }));
+    const searchParams = new URLSearchParams({ browse: "branch", rack });
+
+    if (node.fallback) {
+      searchParams.set("fallback", "true");
+    } else if (node.marketGroupId !== null) {
+      searchParams.set("marketGroupId", String(node.marketGroupId));
+    }
+
+    try {
+      const response = await fetch(`/api/fitting/modules?${searchParams}`, {
+        cache: "no-store"
+      });
+      const payload = (await response.json()) as
+        | FittingModuleSearchResponse
+        | { error?: string };
+
+      if (!response.ok || !("results" in payload)) {
+        throw new Error(
+          "error" in payload && payload.error
+            ? payload.error
+            : "This module branch is temporarily unavailable."
+        );
+      }
+
+      setBranchStates((current) => ({
+        ...current,
+        [branchKey]: { results: payload.results, status: "ready" }
+      }));
+    } catch (error) {
+      setBranchStates((current) => ({
+        ...current,
+        [branchKey]: {
+          message:
+            error instanceof Error
+              ? error.message
+              : "This module branch is temporarily unavailable.",
+          status: "error"
+        }
+      }));
+    }
+  }
+
+  function renderModuleList(modules: FittingModuleSearchResult[]) {
+    return (
+      <div className="fitting-module-list">
+        {modules.map((module) => (
+          <button
+            aria-label={getModuleActionLabel(action, module, selectedSlot)}
+            className="fitting-module-result"
+            data-dragging={draggingModuleTypeId === module.typeId}
+            data-pending={isFitting && pendingModule?.typeId === module.typeId}
+            disabled={isFitting}
+            draggable={action === "fit" && !isFitting}
+            key={module.typeId}
+            onClick={(event) => handleModuleClick(module, event.detail)}
+            onDoubleClick={() => handleModuleDoubleClick(module)}
+            onDragEnd={onModuleDragEnd}
+            onDragStart={(event) => {
+              if (action !== "fit") {
+                event.preventDefault();
+                return;
+              }
+
+              event.dataTransfer.effectAllowed = "copy";
+              event.dataTransfer.setData(
+                "text/plain",
+                `fitting-module:${module.typeId}`
+              );
+              onModuleDragStart(module);
+            }}
+            title={
+              action === "fit"
+                ? "Click for the selected socket, double-click to auto-fit, or drag to an exact socket."
+                : "Use as the selected socket replacement."
+            }
+            type="button"
+          >
+            <EveModuleIcon typeId={module.typeId} typeName={module.typeName} />
+            <span className="fitting-hull-result-copy">
+              <strong>{module.typeName}</strong>
+              <span>{formatModuleMetadata(module)}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="fitting-browser-index">
       <label className="field-stack">
@@ -985,98 +1149,87 @@ function ModuleBrowser({
               ? `Target ${rackLabel} slot ${selectedSlot.index + 1}`
               : `${rackLabel} module index`}
         </span>
-        <small>Up to {moduleResultLimit}</small>
+        <small>
+          {searchActive
+            ? `Up to ${moduleResultLimit}`
+            : currentHierarchyState.status === "ready"
+              ? `${currentHierarchyState.response.total} modules`
+              : "Authoritative hierarchy"}
+        </small>
       </div>
 
       <div className="fitting-browser-scroll-region" aria-live="polite">
-        {currentSearchState.status === "loading" ? (
-          <div className="fitting-empty-note">Searching module cache...</div>
-        ) : null}
-        {currentSearchState.status === "error" ? (
-          <div className="fitting-empty-note" data-tone="error">
-            {currentSearchState.message}
-          </div>
-        ) : null}
-        {currentSearchState.status === "ready" ? (
-          groupedModules.length ? (
-            <div className="fitting-browser-groups">
-              {groupedModules.map((group) => {
-                const groupKey = `module:${rack}:${group.groupId}`;
-                const collapsed = collapsedGroups.has(groupKey);
+        {searchActive ? (
+          <>
+            {currentSearchState.status === "loading" ? (
+              <div className="fitting-empty-note">Searching module cache...</div>
+            ) : null}
+            {currentSearchState.status === "error" ? (
+              <div className="fitting-empty-note" data-tone="error">
+                {currentSearchState.message}
+              </div>
+            ) : null}
+            {currentSearchState.status === "ready" ? (
+              groupedModules.length ? (
+                <div className="fitting-browser-groups">
+                  {groupedModules.map((group) => {
+                    const groupKey = `module:${rack}:${group.groupId}`;
+                    const collapsed = collapsedGroups.has(groupKey);
 
-                return (
-                  <BrowserResultGroup
-                    collapsed={collapsed}
-                    count={group.items.length}
-                    groupKey={groupKey}
-                    key={groupKey}
-                    label={group.groupName}
-                    onToggle={onToggleGroup}
-                  >
-                    <div className="fitting-module-list">
-                      {group.items.map((module) => (
-                        <button
-                          aria-label={getModuleActionLabel(
-                            action,
-                            module,
-                            selectedSlot
-                          )}
-                          className="fitting-module-result"
-                          data-dragging={draggingModuleTypeId === module.typeId}
-                          data-pending={
-                            isFitting && pendingModule?.typeId === module.typeId
-                          }
-                          disabled={isFitting}
-                          draggable={action === "fit" && !isFitting}
-                          key={module.typeId}
-                          onClick={(event) =>
-                            handleModuleClick(module, event.detail)
-                          }
-                          onDoubleClick={() => handleModuleDoubleClick(module)}
-                          onDragEnd={onModuleDragEnd}
-                          onDragStart={(event) => {
-                            if (action !== "fit") {
-                              event.preventDefault();
-                              return;
-                            }
-
-                            event.dataTransfer.effectAllowed = "copy";
-                            event.dataTransfer.setData(
-                              "text/plain",
-                              `fitting-module:${module.typeId}`
-                            );
-                            onModuleDragStart(module);
-                          }}
-                          title={
-                            action === "fit"
-                              ? "Click for the selected socket, double-click to auto-fit, or drag to an exact socket."
-                              : "Use as the selected socket replacement."
-                          }
-                          type="button"
-                        >
-                          <EveModuleIcon
-                            typeId={module.typeId}
-                            typeName={module.typeName}
-                          />
-                          <span className="fitting-hull-result-copy">
-                            <strong>{module.typeName}</strong>
-                            <span>{formatModuleMetadata(module)}</span>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </BrowserResultGroup>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="fitting-empty-note">
-              {query.trim()
-                ? `No ${rack} modules match this search.`
-                : `No ${rack} modules are available. The module cache may be empty.`}
-            </div>
-          )
-        ) : null}
+                    return (
+                      <BrowserResultGroup
+                        collapsed={collapsed}
+                        count={group.items.length}
+                        groupKey={groupKey}
+                        key={groupKey}
+                        label={group.groupName}
+                        onToggle={onToggleGroup}
+                      >
+                        {renderModuleList(group.items)}
+                      </BrowserResultGroup>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="fitting-empty-note">
+                  No {rack} modules match this search.
+                </div>
+              )
+            ) : null}
+          </>
+        ) : (
+          <>
+            {currentHierarchyState.status === "loading" ? (
+              <div className="fitting-empty-note">Loading module hierarchy...</div>
+            ) : null}
+            {currentHierarchyState.status === "error" ? (
+              <div className="fitting-empty-note" data-tone="error">
+                {currentHierarchyState.message}
+              </div>
+            ) : null}
+            {currentHierarchyState.status === "ready" ? (
+              currentHierarchyState.response.nodes.length ? (
+                <div className="fitting-module-hierarchy">
+                  {currentHierarchyState.response.nodes.map((node) => (
+                    <ModuleHierarchyBranch
+                      branchStates={branchStates}
+                      expandedBranches={expandedHierarchyBranches}
+                      key={node.key}
+                      node={node}
+                      onToggle={handleHierarchyToggle}
+                      rack={rack}
+                      renderModules={renderModuleList}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="fitting-empty-note">
+                  No {rack} modules are available. The module cache may be empty.
+                </div>
+              )
+            ) : null}
+          </>
+        )}
       </div>
 
       <div aria-live="polite">
@@ -1091,6 +1244,83 @@ function ModuleBrowser({
       </div>
     </div>
   );
+}
+
+function ModuleHierarchyBranch({
+  branchStates,
+  expandedBranches,
+  node,
+  onToggle,
+  rack,
+  renderModules
+}: {
+  branchStates: Record<string, ModuleBranchState>;
+  expandedBranches: Set<string>;
+  node: FittingModuleHierarchyNode;
+  onToggle: (node: FittingModuleHierarchyNode) => void;
+  rack: BrowsableFittingRack;
+  renderModules: (modules: FittingModuleSearchResult[]) => React.ReactNode;
+}) {
+  const branchKey = getModuleBranchKey(rack, node);
+  const expanded = expandedBranches.has(branchKey);
+  const branchState = branchStates[branchKey];
+
+  return (
+    <section
+      className="fitting-browser-result-group fitting-module-hierarchy-branch"
+      data-fallback={node.fallback}
+    >
+      <button
+        aria-expanded={expanded}
+        className="fitting-browser-group-toggle"
+        onClick={() => onToggle(node)}
+        type="button"
+      >
+        <span>{expanded ? "−" : "+"}</span>
+        <strong>{node.label}</strong>
+        <small>{node.count}</small>
+      </button>
+      {expanded ? (
+        <div className="fitting-module-hierarchy-children">
+          {node.children.map((child) => (
+            <ModuleHierarchyBranch
+              branchStates={branchStates}
+              expandedBranches={expandedBranches}
+              key={child.key}
+              node={child}
+              onToggle={onToggle}
+              rack={rack}
+              renderModules={renderModules}
+            />
+          ))}
+          {node.directCount > 0 ? (
+            branchState?.status === "ready" ? (
+              branchState.results.length ? (
+                renderModules(branchState.results)
+              ) : (
+                <div className="fitting-empty-note">
+                  This branch contains no current modules.
+                </div>
+              )
+            ) : branchState?.status === "error" ? (
+              <div className="fitting-empty-note" data-tone="error">
+                {branchState.message}
+              </div>
+            ) : (
+              <div className="fitting-empty-note">Loading branch modules...</div>
+            )
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function getModuleBranchKey(
+  rack: BrowsableFittingRack,
+  node: FittingModuleHierarchyNode
+) {
+  return `${rack}:${node.key}`;
 }
 
 type ChargeBrowserProps = {

@@ -134,7 +134,9 @@ export function FittingRack({
                   disabled={!enabled}
                   draggable={enabled && occupied}
                   onClick={() => {
-                    if (moveSource) {
+                    if (selected) {
+                      onSelectSlot(address);
+                    } else if (moveSource) {
                       onMoveTarget(address);
                     } else {
                       onSelectSlot(address);

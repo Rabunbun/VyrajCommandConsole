@@ -43,6 +43,26 @@ export type FittingModuleSearchResponse = {
   results: FittingModuleSearchResult[];
 };
 
+export type FittingModuleHierarchyNode = {
+  children: FittingModuleHierarchyNode[];
+  count: number;
+  directCount: number;
+  fallback: boolean;
+  key: string;
+  label: string;
+  marketGroupId: number | null;
+};
+
+export type FittingModuleHierarchyResponse = {
+  classified: number;
+  fallback: number;
+  nodes: FittingModuleHierarchyNode[];
+  rack: BrowsableFittingRack;
+  reachable: number;
+  total: number;
+  unreachable: number;
+};
+
 export type FittingChargeSearchResult = {
   chargeSize: number | null;
   groupId: number;

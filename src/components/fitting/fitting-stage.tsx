@@ -17,6 +17,7 @@ type FittingStageProps = {
   isRemoveDragOver: boolean;
   moduleNamesByTypeId: Readonly<Record<number, string>>;
   moveSource: SelectedFittingSlot | null;
+  onClearSelectedSlot: () => void;
   onDragEnd: () => void;
   onDragOverSlot: (slot: SelectedFittingSlot | null) => void;
   onDropOnRemove: () => void;
@@ -46,6 +47,7 @@ export function FittingStage({
   isRemoveDragOver,
   moduleNamesByTypeId,
   moveSource,
+  onClearSelectedSlot,
   onDragEnd,
   onDragOverSlot,
   onDropOnRemove,
@@ -76,7 +78,22 @@ export function FittingStage({
   };
 
   return (
-    <section className="fitting-stage" aria-labelledby="fitting-stage-title">
+    <section
+      className="fitting-stage"
+      aria-labelledby="fitting-stage-title"
+      onClick={(event) => {
+        const target = event.target;
+
+        if (
+          target instanceof Element &&
+          target.closest("button, [role='button'], a, input, select, textarea")
+        ) {
+          return;
+        }
+
+        onClearSelectedSlot();
+      }}
+    >
       <div className="fitting-stage-header">
         <div>
           <h2 className="section-title" id="fitting-stage-title">

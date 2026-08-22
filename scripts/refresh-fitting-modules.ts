@@ -167,6 +167,10 @@ type SdeNamedRecord = {
   name?: LocalizedName;
 };
 
+type SdeMarketGroup = SdeNamedRecord & {
+  parentGroupID?: number;
+};
+
 type SdeTypeDogma = {
   _key: number;
   dogmaAttributes?: Array<{
@@ -177,6 +181,17 @@ type SdeTypeDogma = {
     effectID: number;
     isDefault?: boolean;
   }>;
+};
+
+type MarketGroupRecord = {
+  marketGroupId: number;
+  marketGroupName: string;
+  parentGroupId: number | null;
+};
+
+type MarketGroupPath = {
+  ids: number[];
+  names: string[];
 };
 
 type PublishedModuleType = {
@@ -200,6 +215,8 @@ type FittingModuleRecord = PublishedModuleType & {
   cpuRequirement: number;
   lastRefreshedAt: Date;
   marketGroupName: string | null;
+  marketGroupPathIds: number[];
+  marketGroupPathNames: string[];
   maxGroupFitted: number | null;
   maxTypeFitted: number | null;
   metaGroupName: string | null;
@@ -247,12 +264,14 @@ async function main() {
       publishedModuleGroups
     );
     const typeDogma = await readModuleDogma(files.typeDogma, publishedModuleTypes);
-    const marketGroupNames = await readEnglishNames(files.marketGroups);
+    const marketGroups = await readMarketGroups(files.marketGroups);
+    const marketGroupPaths = buildMarketGroupPaths(marketGroups);
     const metaGroupNames = await readEnglishNames(files.metaGroups);
     const refreshedAt = new Date();
     const classification = buildFittingModules({
       attributeDefinitions,
-      marketGroupNames,
+      marketGroups,
+      marketGroupPaths,
       metaGroupNames,
       publishedModuleTypes,
       refreshedAt,
@@ -273,6 +292,8 @@ async function main() {
         "CCP SDE produced zero authoritative Category 7 fitting modules. Database mutation was skipped."
       );
     }
+
+    validateModuleMarketAncestry(classification.modules);
 
     const result = await synchronizeFittingModules(classification.modules);
     logImportSummary(classification.modules, result);
@@ -620,16 +641,76 @@ async function readEnglishNames(filePath: string) {
   return names;
 }
 
+async function readMarketGroups(filePath: string) {
+  const marketGroups = new Map<number, MarketGroupRecord>();
+
+  for await (const marketGroup of readJsonLines<SdeMarketGroup>(filePath)) {
+    marketGroups.set(marketGroup._key, {
+      marketGroupId: marketGroup._key,
+      marketGroupName: requireEnglishName(
+        marketGroup.name,
+        `market group ${marketGroup._key}`
+      ),
+      parentGroupId:
+        typeof marketGroup.parentGroupID === "number"
+          ? marketGroup.parentGroupID
+          : null
+    });
+  }
+
+  return marketGroups;
+}
+
+function buildMarketGroupPaths(marketGroups: Map<number, MarketGroupRecord>) {
+  const paths = new Map<number, MarketGroupPath>();
+
+  for (const marketGroupId of marketGroups.keys()) {
+    const reversedPath: MarketGroupRecord[] = [];
+    const visited = new Set<number>();
+    let currentId: number | null = marketGroupId;
+
+    while (currentId !== null) {
+      if (visited.has(currentId)) {
+        throw new Error(
+          `CCP market group ancestry contains a cycle at market group ${currentId}. Database mutation was skipped.`
+        );
+      }
+
+      visited.add(currentId);
+      const current = marketGroups.get(currentId);
+
+      if (!current) {
+        throw new Error(
+          `CCP market group ancestry references missing market group ${currentId}. Database mutation was skipped.`
+        );
+      }
+
+      reversedPath.push(current);
+      currentId = current.parentGroupId;
+    }
+
+    const pathRecords = reversedPath.reverse();
+    paths.set(marketGroupId, {
+      ids: pathRecords.map((record) => record.marketGroupId),
+      names: pathRecords.map((record) => record.marketGroupName)
+    });
+  }
+
+  return paths;
+}
+
 function buildFittingModules({
   attributeDefinitions,
-  marketGroupNames,
+  marketGroups,
+  marketGroupPaths,
   metaGroupNames,
   publishedModuleTypes,
   refreshedAt,
   typeDogma
 }: {
   attributeDefinitions: Map<number, SdeDogmaAttribute>;
-  marketGroupNames: Map<number, string>;
+  marketGroups: Map<number, MarketGroupRecord>;
+  marketGroupPaths: Map<number, MarketGroupPath>;
   metaGroupNames: Map<number, string>;
   publishedModuleTypes: Map<number, PublishedModuleType>;
   refreshedAt: Date;
@@ -652,6 +733,21 @@ function buildFittingModules({
   );
 
   for (const moduleType of publishedModuleTypes.values()) {
+    const marketGroup =
+      moduleType.marketGroupId === null
+        ? null
+        : marketGroups.get(moduleType.marketGroupId) ?? null;
+    const marketGroupPath =
+      moduleType.marketGroupId === null
+        ? null
+        : marketGroupPaths.get(moduleType.marketGroupId) ?? null;
+
+    if (moduleType.marketGroupId !== null && (!marketGroup || !marketGroupPath)) {
+      throw new Error(
+        `Published module ${moduleType.typeId}/${moduleType.typeName} references missing market group ${moduleType.marketGroupId}. Database mutation was skipped.`
+      );
+    }
+
     const dogma = typeDogma.get(moduleType.typeId);
     const rackClassification = classifyModuleRack(dogma?.dogmaEffects);
 
@@ -732,10 +828,9 @@ function buildFittingModules({
         `${moduleType.typeName} CPU requirement`
       ),
       lastRefreshedAt: refreshedAt,
-      marketGroupName:
-        moduleType.marketGroupId === null
-          ? null
-          : marketGroupNames.get(moduleType.marketGroupId) ?? null,
+      marketGroupName: marketGroup?.marketGroupName ?? null,
+      marketGroupPathIds: marketGroupPath?.ids ?? [],
+      marketGroupPathNames: marketGroupPath?.names ?? [],
       maxGroupFitted: readPositiveIntegerOrNull(
         attributes,
         FITTING_ATTRIBUTES.maxGroupFitted.id,
@@ -923,6 +1018,38 @@ function readOptionalNonnegativeNumber(
   return value;
 }
 
+function validateModuleMarketAncestry(modules: FittingModuleRecord[]) {
+  const typeIds = new Set<number>();
+
+  for (const fittingModule of modules) {
+    if (typeIds.has(fittingModule.typeId)) {
+      throw new Error(
+        `Duplicate fitting module type ID ${fittingModule.typeId} reached synchronization. Database mutation was skipped.`
+      );
+    }
+
+    if (
+      fittingModule.marketGroupPathIds.length !==
+      fittingModule.marketGroupPathNames.length
+    ) {
+      throw new Error(
+        `Module ${fittingModule.typeId}/${fittingModule.typeName} has inconsistent market ancestry. Database mutation was skipped.`
+      );
+    }
+
+    if (
+      fittingModule.marketGroupId !== null &&
+      fittingModule.marketGroupPathIds.at(-1) !== fittingModule.marketGroupId
+    ) {
+      throw new Error(
+        `Module ${fittingModule.typeId}/${fittingModule.typeName} market ancestry does not terminate at market group ${fittingModule.marketGroupId}. Database mutation was skipped.`
+      );
+    }
+
+    typeIds.add(fittingModule.typeId);
+  }
+}
+
 async function synchronizeFittingModules(modules: FittingModuleRecord[]) {
   const existing = await prisma.fittingModule.findMany({
     select: {
@@ -937,6 +1064,8 @@ async function synchronizeFittingModules(modules: FittingModuleRecord[]) {
       groupName: true,
       marketGroupId: true,
       marketGroupName: true,
+      marketGroupPathIds: true,
+      marketGroupPathNames: true,
       maxGroupFitted: true,
       maxTypeFitted: true,
       metaGroupId: true,
@@ -1019,6 +1148,8 @@ function moduleHasChanged(
     current.rack !== incoming.rack ||
     current.marketGroupId !== incoming.marketGroupId ||
     current.marketGroupName !== incoming.marketGroupName ||
+    !arraysEqual(current.marketGroupPathIds, incoming.marketGroupPathIds) ||
+    !arraysEqual(current.marketGroupPathNames, incoming.marketGroupPathNames) ||
     current.metaGroupId !== incoming.metaGroupId ||
     current.metaGroupName !== incoming.metaGroupName ||
     current.metaLevel !== incoming.metaLevel ||
@@ -1039,7 +1170,7 @@ function moduleHasChanged(
   );
 }
 
-function arraysEqual(left: number[], right: number[]) {
+function arraysEqual<T>(left: T[], right: T[]) {
   return (
     left.length === right.length &&
     left.every((value, index) => value === right[index])
@@ -1099,6 +1230,9 @@ function logImportSummary(
   console.log(
     `Module metadata: ${modules.filter((module) => module.requiresTurretHardpoint).length} turret-hardpoint, ${modules.filter((module) => module.requiresLauncherHardpoint).length} launcher-hardpoint, ${modules.filter(isRestrictedModule).length} ship-restricted, ${modules.filter(hasChargeMetadata).length} with charge metadata, ${modules.filter((module) => module.rack === FittingRack.RIG).length} rigs.`
   );
+  console.log(
+    `Market ancestry: ${modules.filter((module) => module.marketGroupPathIds.length > 0).length} classified, ${modules.filter((module) => module.marketGroupPathIds.length === 0).length} rack-fallback.`
+  );
 }
 
 function logVerificationSamples(modules: FittingModuleRecord[]) {
@@ -1126,7 +1260,7 @@ function logVerificationSamples(modules: FittingModuleRecord[]) {
       .join("; ");
 
     console.log(
-      `- ${fittingModule.typeName}: ${fittingModule.rack}; capacity ${formatNullableValue(fittingModule.capacity)}; charge groups ${fittingModule.chargeGroupIds.join(",") || "none"}; charge size ${formatNullableValue(fittingModule.chargeSize)}; CPU ${fittingModule.cpuRequirement}; PG ${fittingModule.powergridRequirement}; calibration ${fittingModule.calibrationCost}; rig size ${formatNullableValue(fittingModule.rigSize)}; turret ${formatYesNo(fittingModule.requiresTurretHardpoint)}; launcher ${formatYesNo(fittingModule.requiresLauncherHardpoint)}; restrictions ${restrictions || "none"}.`
+      `- ${fittingModule.typeName}: ${fittingModule.rack}; market ${fittingModule.marketGroupPathNames.join(" > ") || "rack fallback"}; capacity ${formatNullableValue(fittingModule.capacity)}; charge groups ${fittingModule.chargeGroupIds.join(",") || "none"}; charge size ${formatNullableValue(fittingModule.chargeSize)}; CPU ${fittingModule.cpuRequirement}; PG ${fittingModule.powergridRequirement}; calibration ${fittingModule.calibrationCost}; rig size ${formatNullableValue(fittingModule.rigSize)}; turret ${formatYesNo(fittingModule.requiresTurretHardpoint)}; launcher ${formatYesNo(fittingModule.requiresLauncherHardpoint)}; restrictions ${restrictions || "none"}.`
     );
   }
 }

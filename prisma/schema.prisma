@@ -649,6 +649,8 @@ model FittingModule {
   rack                          FittingRack
   marketGroupId                 Int?
   marketGroupName               String?
+  marketGroupPathIds            Int[]       @default([])
+  marketGroupPathNames          String[]    @default([])
   metaGroupId                   Int?
   metaGroupName                 String?
   metaLevel                     Int?

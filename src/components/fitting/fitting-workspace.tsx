@@ -114,6 +114,14 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
   );
   const handleSelectSlot = useCallback(
     (slot: SelectedFittingSlot) => {
+      if (
+        selectedSlot?.rack === slot.rack &&
+        selectedSlot.index === slot.index
+      ) {
+        clearSelectedSlot();
+        return;
+      }
+
       const fittedModule = fitState.slots[slot.rack].find(
         (candidate) => candidate.index === slot.index
       )?.module;
@@ -132,7 +140,13 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
       setModuleActionMode(null);
       setSelectedSlot(slot);
     },
-    [fitState.slots, openBrowserSection, restoreBrowserRackAfterReplacement]
+    [
+      clearSelectedSlot,
+      fitState.slots,
+      openBrowserSection,
+      restoreBrowserRackAfterReplacement,
+      selectedSlot
+    ]
   );
   const fitModuleAtSlot = useCallback(
     async (
@@ -517,6 +531,7 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
           chargeNamesByTypeId={resolvedChargeNamesByTypeId}
           moduleNamesByTypeId={resolvedModuleNamesByTypeId}
           moveSource={moduleActionMode === "move" ? selectedSlot : null}
+          onClearSelectedSlot={clearSelectedSlot}
           onDragEnd={clearDragState}
           onDragOverSlot={handleDragOverSlot}
           onDropOnRemove={handleDropOnRemove}

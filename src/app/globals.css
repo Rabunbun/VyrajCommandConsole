@@ -2555,6 +2555,27 @@ hr {
   padding-right: 2px;
 }
 
+.fitting-module-hierarchy {
+  display: grid;
+  gap: 6px;
+  padding-right: 2px;
+}
+
+.fitting-module-hierarchy-children {
+  display: grid;
+  gap: 4px;
+}
+
+.fitting-module-hierarchy-children > .fitting-module-hierarchy-branch {
+  border-block-end: 0;
+  border-inline-end: 0;
+  margin-inline-start: 8px;
+}
+
+.fitting-module-hierarchy-branch[data-fallback="true"] {
+  border-color: rgba(181, 138, 72, 0.25);
+}
+
 .fitting-drone-branch-children {
   display: grid;
   gap: 4px;

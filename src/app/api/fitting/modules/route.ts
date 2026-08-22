@@ -1,4 +1,8 @@
-import { searchFittingModules } from "@/lib/fitting/modules";
+import {
+  browseFittingModuleBranch,
+  getFittingModuleHierarchy,
+  searchFittingModules
+} from "@/lib/fitting/modules";
 import type { RackType } from "@/lib/fitting/fit-state";
 import type {
   BrowsableFittingRack,
@@ -42,8 +46,49 @@ export async function GET(request: Request) {
 
   const query = (searchParams.get("q") ?? "").slice(0, maximumQueryLength);
   const limit = parseLimit(searchParams.get("limit"));
+  const browse = searchParams.get("browse");
 
   try {
+    if (browse === "hierarchy") {
+      const hierarchy = await getFittingModuleHierarchy(rack);
+
+      return Response.json(hierarchy, {
+        headers: { "Cache-Control": "no-store" }
+      });
+    }
+
+    if (browse === "branch") {
+      const fallback = searchParams.get("fallback") === "true";
+      const marketGroupId = parsePositiveInteger(
+        searchParams.get("marketGroupId")
+      );
+
+      if (!fallback && marketGroupId === null) {
+        return Response.json(
+          { error: "A marketGroupId or fallback=true is required." },
+          { status: 400 }
+        );
+      }
+
+      const results = await browseFittingModuleBranch({
+        fallback,
+        marketGroupId,
+        rack
+      });
+
+      return Response.json(
+        { results },
+        { headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
+    if (browse !== null) {
+      return Response.json(
+        { error: "browse must be hierarchy or branch." },
+        { status: 400 }
+      );
+    }
+
     const results = await searchFittingModules({ limit, query, rack });
 
     return Response.json(
@@ -226,6 +271,15 @@ function parseLimit(value: string | null) {
   }
 
   return Math.min(maximumResultLimit, Math.max(1, parsedValue));
+}
+
+function parsePositiveInteger(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function isRequestObject(value: unknown): value is Record<string, unknown> {

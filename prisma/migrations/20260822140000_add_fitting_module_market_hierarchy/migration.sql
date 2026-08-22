@@ -1,0 +1,3 @@
+ALTER TABLE "FittingModule"
+ADD COLUMN "marketGroupPathIds" INTEGER[] NOT NULL DEFAULT ARRAY[]::INTEGER[],
+ADD COLUMN "marketGroupPathNames" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
