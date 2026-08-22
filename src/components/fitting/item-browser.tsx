@@ -726,7 +726,7 @@ function ModuleBrowser({
         <small>Up to {moduleResultLimit}</small>
       </div>
 
-      <div aria-live="polite">
+      <div className="fitting-browser-scroll-region" aria-live="polite">
         {currentSearchState.status === "loading" ? (
           <div className="fitting-empty-note">Searching module cache...</div>
         ) : null}
@@ -1030,7 +1030,7 @@ function ChargeBrowser({
         />
       </label>
 
-      <div aria-live="polite">
+      <div className="fitting-browser-scroll-region" aria-live="polite">
         {currentSearchState.status === "loading" ? (
           <div className="fitting-empty-note">Resolving module compatibility...</div>
         ) : null}

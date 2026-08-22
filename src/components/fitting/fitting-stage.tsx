@@ -134,11 +134,6 @@ export function FittingStage({
       </div>
 
       <div className="fitting-stage-grid" aria-label="Fitting layout">
-        <div className="fitting-stage-traces" aria-hidden="true">
-          <span data-trace="vector" />
-          <span data-trace="bracket" />
-          <span data-trace="sigil" />
-        </div>
         <div className="fitting-rack-zone fitting-rack-zone-high">
           <FittingRack
             {...dragProps}
