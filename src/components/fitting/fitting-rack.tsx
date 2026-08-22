@@ -104,7 +104,7 @@ export function FittingRack({
               <li
                 className="fitting-slot-item"
                 key={slot.index}
-                style={getSlotArcStyle(slot.index, slots.length)}
+                style={getSlotClusterStyle(slot.index, slots.length, layout)}
               >
                 <button
                   aria-label={
@@ -293,21 +293,26 @@ function formatCompactQuantity(quantity: number) {
     : quantity.toLocaleString("en-US");
 }
 
-type FittingSlotArcStyle = CSSProperties & {
-  "--slot-center-offset": string;
-  "--slot-edge-offset": string;
+type FittingSlotClusterStyle = CSSProperties & {
+  "--slot-cluster-shift-x": string;
+  "--slot-cluster-shift-y": string;
 };
 
-function getSlotArcStyle(index: number, count: number): FittingSlotArcStyle {
-  const centerIndex = (count - 1) / 2;
-  const normalizedDistance = centerIndex
-    ? Math.abs(index - centerIndex) / centerIndex
-    : 0;
-  const curve = normalizedDistance ** 1.65;
+function getSlotClusterStyle(
+  index: number,
+  count: number,
+  layout: FittingRackProps["layout"]
+): FittingSlotClusterStyle {
+  const primaryCount = count > 4 ? Math.ceil(count / 2) : Math.max(count, 1);
+  const secondaryTrack = index >= primaryCount;
+  const trackIndex = secondaryTrack ? index - primaryCount : index;
+  const vertical = layout === "left" || layout === "right";
 
   return {
-    "--slot-center-offset": `${Math.round((1 - curve) * 11)}px`,
-    "--slot-edge-offset": `${Math.round(curve * 13)}px`
+    gridColumn: vertical ? (secondaryTrack ? 2 : 1) : trackIndex + 1,
+    gridRow: vertical ? trackIndex + 1 : secondaryTrack ? 2 : 1,
+    "--slot-cluster-shift-x": !vertical && secondaryTrack ? "50%" : "0px",
+    "--slot-cluster-shift-y": vertical && secondaryTrack ? "50%" : "0px"
   };
 }
 

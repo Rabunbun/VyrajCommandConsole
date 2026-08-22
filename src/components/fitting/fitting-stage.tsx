@@ -135,9 +135,9 @@ export function FittingStage({
 
       <div className="fitting-stage-grid" aria-label="Fitting layout">
         <div className="fitting-stage-traces" aria-hidden="true">
-          <span data-trace="outer" />
-          <span data-trace="middle" />
-          <span data-trace="inner" />
+          <span data-trace="vector" />
+          <span data-trace="bracket" />
+          <span data-trace="sigil" />
         </div>
         <div className="fitting-rack-zone fitting-rack-zone-high">
           <FittingRack
@@ -163,7 +163,7 @@ export function FittingStage({
             moveSource={moveSource}
             onMoveTarget={onMoveTarget}
             onSelectSlot={onSelectSlot}
-            layout="left"
+            layout="right"
             rack="mid"
             selectedSlot={selectedSlot}
             slots={displaySlots.mid}
@@ -179,7 +179,7 @@ export function FittingStage({
             moveSource={moveSource}
             onMoveTarget={onMoveTarget}
             onSelectSlot={onSelectSlot}
-            layout="right"
+            layout="lower"
             rack="low"
             selectedSlot={selectedSlot}
             slots={displaySlots.low}
@@ -194,7 +194,7 @@ export function FittingStage({
             moveSource={moveSource}
             onMoveTarget={onMoveTarget}
             onSelectSlot={onSelectSlot}
-            layout="lower"
+            layout="upper"
             rack="rig"
             selectedSlot={selectedSlot}
             slots={displaySlots.rig}
