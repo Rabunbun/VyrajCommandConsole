@@ -7,7 +7,7 @@ export type SelectedFittingSlot = {
 
 export type ModuleActionMode = "move" | "replace" | null;
 
-export type FittingBrowserSection = "charges" | "hulls" | "modules";
+export type FittingBrowserSection = "charges" | "drones" | "hulls" | "modules";
 
 export type FittingDragSource =
   | {

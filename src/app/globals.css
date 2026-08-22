@@ -2540,12 +2540,66 @@ hr {
 }
 
 .fitting-browser-result-group .fitting-module-list,
-.fitting-charge-list {
+.fitting-charge-list,
+.fitting-drone-list {
   display: grid;
   gap: 5px;
   max-block-size: none;
   overflow: visible;
   padding: 5px;
+}
+
+.fitting-drone-hierarchy {
+  display: grid;
+  gap: 6px;
+  padding-right: 2px;
+}
+
+.fitting-drone-branch-children {
+  display: grid;
+  gap: 4px;
+}
+
+.fitting-drone-branch-children > .fitting-drone-branch {
+  border-block-end: 0;
+  border-inline-end: 0;
+  margin-inline-start: 8px;
+}
+
+.fitting-drone-result {
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  background:
+    linear-gradient(135deg, rgba(63, 191, 155, 0.025), transparent 48%),
+    var(--color-void);
+  display: grid;
+  gap: 4px 9px;
+  grid-template-columns: 44px minmax(0, 1fr);
+  min-height: 62px;
+  padding: 7px;
+}
+
+.fitting-drone-result .fitting-module-icon,
+.fitting-drone-result .fitting-module-icon-fallback {
+  grid-row: 1 / span 2;
+}
+
+.fitting-drone-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  grid-column: 2;
+}
+
+.fitting-drone-badge {
+  border: 1px solid rgba(63, 191, 155, 0.18);
+  color: #a6dccc;
+  font-family: var(--font-command);
+  font-size: 0.48rem;
+  font-weight: 800;
+  letter-spacing: 0.045em;
+  padding: 2px 4px;
+  text-transform: uppercase;
 }
 
 .fitting-charge-result {

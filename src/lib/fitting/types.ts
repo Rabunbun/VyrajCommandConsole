@@ -65,6 +65,28 @@ export type FittingChargeSearchResponse = {
   results: FittingChargeSearchResult[];
 };
 
+export type FittingDroneSearchResult = {
+  bandwidthUsed: number | null;
+  groupId: number;
+  groupName: string;
+  marketGroupId: number | null;
+  marketGroupName: string | null;
+  marketGroupPathIds: number[];
+  marketGroupPathNames: string[];
+  metaGroupId: number | null;
+  metaGroupName: string | null;
+  metaLevel: number | null;
+  techLevel: number | null;
+  typeId: number;
+  typeName: string;
+  volume: number | null;
+};
+
+export type FittingDroneSearchResponse = {
+  results: FittingDroneSearchResult[];
+  total: number;
+};
+
 export type ResolvedFittingCharge = {
   quantity: number;
   typeId: number;

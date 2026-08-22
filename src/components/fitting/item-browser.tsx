@@ -22,6 +22,8 @@ import type {
   BrowsableFittingRack,
   FittingChargeSearchResponse,
   FittingChargeSearchResult,
+  FittingDroneSearchResponse,
+  FittingDroneSearchResult,
   FittingHullSummary,
   FittingModuleSearchResponse,
   FittingModuleSearchResult
@@ -29,6 +31,7 @@ import type {
 
 const moduleResultLimit = 40;
 const chargeResultLimit = 40;
+const droneResultLimit = 200;
 const searchDebounceMs = 250;
 const shipMarketRootName = "Ships";
 const specialEditionMarketGroupName = "Special Edition Ships";
@@ -105,6 +108,7 @@ export function ItemBrowser({
   const [hullQuery, setHullQuery] = useState("");
   const [moduleQuery, setModuleQuery] = useState("");
   const [chargeQuery, setChargeQuery] = useState("");
+  const [droneQuery, setDroneQuery] = useState("");
   const [collapsedModuleGroups, setCollapsedModuleGroups] = useState<Set<string>>(
     () => new Set()
   );
@@ -253,6 +257,22 @@ export function ItemBrowser({
           selectedChargeName={selectedChargeName}
           selectedModule={selectedModule}
           setQuery={setChargeQuery}
+        />
+      </PersistentBrowserSection>
+
+      <PersistentBrowserSection
+        badge="Static"
+        description="Authoritative ordinary drone index"
+        id="fitting-browser-drones"
+        onToggle={() => onToggleSection("drones")}
+        open={openSections.drones}
+        title="Drones"
+      >
+        <DroneBrowser
+          active={openSections.drones}
+          query={droneQuery}
+          selectedHull={selectedHull}
+          setQuery={setDroneQuery}
         />
       </PersistentBrowserSection>
     </aside>
@@ -1349,6 +1369,367 @@ function ChargeBrowser({
       </div>
     </div>
   );
+}
+
+type DroneBrowserProps = {
+  active: boolean;
+  query: string;
+  selectedHull: FittingHullSummary | null;
+  setQuery: (query: string) => void;
+};
+
+type DroneSearchState =
+  | { status: "loading" }
+  | { message: string; requestKey: string; status: "error" }
+  | {
+      requestKey: string;
+      response: FittingDroneSearchResponse;
+      status: "ready";
+    };
+
+function DroneBrowser({
+  active,
+  query,
+  selectedHull,
+  setQuery
+}: DroneBrowserProps) {
+  const [searchState, setSearchState] = useState<DroneSearchState>({
+    status: "loading"
+  });
+  const [expandedBranches, setExpandedBranches] = useState<Set<string>>(
+    () => new Set()
+  );
+  const requestKey = query;
+  const currentSearchState =
+    searchState.status !== "loading" && searchState.requestKey === requestKey
+      ? searchState
+      : ({ status: "loading" } as const);
+  const searchActive = Boolean(normalizeSearchText(query));
+  const hierarchy =
+    currentSearchState.status === "ready"
+      ? buildDroneHierarchy(currentSearchState.response.results)
+      : [];
+
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+
+    const abortController = new AbortController();
+    const timeoutId = window.setTimeout(async () => {
+      const searchParams = new URLSearchParams({
+        limit: String(droneResultLimit),
+        q: query
+      });
+
+      try {
+        const response = await fetch(`/api/fitting/drones?${searchParams}`, {
+          cache: "no-store",
+          signal: abortController.signal
+        });
+        const payload = (await response.json()) as
+          | FittingDroneSearchResponse
+          | { error?: string };
+
+        if (!response.ok || !("results" in payload)) {
+          throw new Error(
+            "error" in payload && payload.error
+              ? payload.error
+              : "Drone search is temporarily unavailable."
+          );
+        }
+
+        setSearchState({ requestKey, response: payload, status: "ready" });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        setSearchState({
+          message:
+            error instanceof Error
+              ? error.message
+              : "Drone search is temporarily unavailable.",
+          requestKey,
+          status: "error"
+        });
+      }
+    }, searchDebounceMs);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      abortController.abort();
+    };
+  }, [active, query, requestKey]);
+
+  function toggleBranch(branchKey: string) {
+    setExpandedBranches((current) => {
+      const next = new Set(current);
+
+      if (next.has(branchKey)) {
+        next.delete(branchKey);
+      } else {
+        next.add(branchKey);
+      }
+
+      return next;
+    });
+  }
+
+  return (
+    <div className="fitting-browser-index">
+      <label className="field-stack">
+        <span className="field-label">Search drones</span>
+        <input
+          className="text-input fitting-search-input"
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search drone, family, market group, or meta..."
+          type="search"
+          value={query}
+        />
+      </label>
+
+      <div className="fitting-browser-result-heading">
+        <span>Ordinary drone index</span>
+        <small>
+          {currentSearchState.status === "ready"
+            ? searchActive
+              ? `${currentSearchState.response.total} matches`
+              : `${currentSearchState.response.total} drones`
+            : `Up to ${droneResultLimit}`}
+        </small>
+      </div>
+
+      {selectedHull ? (
+        <div className="fitting-browser-readonly-note">
+          {selectedHull.typeName} Drone Bay: {formatVolume(selectedHull.droneCapacity)} m³
+        </div>
+      ) : null}
+
+      <div className="fitting-browser-scroll-region" aria-live="polite">
+        {currentSearchState.status === "loading" ? (
+          <div className="fitting-empty-note">Searching drone cache...</div>
+        ) : null}
+        {currentSearchState.status === "error" ? (
+          <div className="fitting-empty-note" data-tone="error">
+            {currentSearchState.message}
+          </div>
+        ) : null}
+        {currentSearchState.status === "ready" ? (
+          hierarchy.length ? (
+            <div className="fitting-drone-hierarchy">
+              {hierarchy.map((branch) => (
+                <DroneHierarchyBranch
+                  branch={branch}
+                  expandedBranches={expandedBranches}
+                  forceExpanded={searchActive}
+                  key={branch.key}
+                  onToggle={toggleBranch}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="fitting-empty-note">
+              {query.trim()
+                ? "No drones match this search."
+                : "No ordinary drones are available. The drone cache may be empty."}
+            </div>
+          )
+        ) : null}
+      </div>
+
+      <div className="fitting-browser-readonly-note">
+        Browse-only static data. Bandwidth shown is the per-drone requirement and is
+        not consumed by the current fit.
+      </div>
+    </div>
+  );
+}
+
+type DroneHierarchyBranch = {
+  children: DroneHierarchyBranch[];
+  count: number;
+  drones: FittingDroneSearchResult[];
+  fallback: boolean;
+  key: string;
+  label: string;
+};
+
+type MutableDroneHierarchyBranch = Omit<
+  DroneHierarchyBranch,
+  "children" | "count"
+> & {
+  children: Map<string, MutableDroneHierarchyBranch>;
+};
+
+function buildDroneHierarchy(drones: FittingDroneSearchResult[]) {
+  const roots = new Map<string, MutableDroneHierarchyBranch>();
+
+  for (const drone of drones) {
+    const marketPath = drone.marketGroupPathNames.map((label, index) => ({
+      key:
+        typeof drone.marketGroupPathIds[index] === "number"
+          ? `market:${drone.marketGroupPathIds[index]}`
+          : `market-name:${label}`,
+      label
+    }));
+    const visiblePath =
+      marketPath[0]?.label === "Drones" ? marketPath.slice(1) : marketPath;
+    const branchPath = visiblePath.length
+      ? visiblePath.map((branch) => ({ ...branch, fallback: false }))
+      : [{ fallback: true, key: "other-drones", label: "Other Drones" }];
+    let siblings = roots;
+    let currentBranch: MutableDroneHierarchyBranch | null = null;
+
+    for (const branch of branchPath) {
+      currentBranch = siblings.get(branch.key) ?? null;
+
+      if (!currentBranch) {
+        currentBranch = {
+          children: new Map(),
+          drones: [],
+          fallback: branch.fallback,
+          key: branch.key,
+          label: branch.label
+        };
+        siblings.set(branch.key, currentBranch);
+      }
+
+      siblings = currentBranch.children;
+    }
+
+    currentBranch?.drones.push(drone);
+  }
+
+  return finalizeDroneBranches(roots);
+}
+
+function finalizeDroneBranches(
+  branches: Map<string, MutableDroneHierarchyBranch>
+): DroneHierarchyBranch[] {
+  return Array.from(branches.values())
+    .map((branch) => {
+      const children = finalizeDroneBranches(branch.children);
+      const drones = branch.drones.toSorted((left, right) =>
+        hullHierarchyCollator.compare(left.typeName, right.typeName)
+      );
+
+      return {
+        children,
+        count:
+          drones.length +
+          children.reduce((count, child) => count + child.count, 0),
+        drones,
+        fallback: branch.fallback,
+        key: branch.key,
+        label: branch.label
+      };
+    })
+    .toSorted((left, right) => {
+      if (left.fallback !== right.fallback) {
+        return left.fallback ? 1 : -1;
+      }
+
+      return hullHierarchyCollator.compare(left.label, right.label);
+    });
+}
+
+function DroneHierarchyBranch({
+  branch,
+  expandedBranches,
+  forceExpanded,
+  onToggle
+}: {
+  branch: DroneHierarchyBranch;
+  expandedBranches: Set<string>;
+  forceExpanded: boolean;
+  onToggle: (branchKey: string) => void;
+}) {
+  const expanded = forceExpanded || expandedBranches.has(branch.key);
+
+  return (
+    <section className="fitting-browser-result-group fitting-drone-branch">
+      <button
+        aria-expanded={expanded}
+        className="fitting-browser-group-toggle"
+        onClick={() => onToggle(branch.key)}
+        type="button"
+      >
+        <span>{expanded ? "−" : "+"}</span>
+        <strong>{branch.label}</strong>
+        <small>{branch.count}</small>
+      </button>
+      {expanded ? (
+        <div className="fitting-drone-branch-children">
+          {branch.children.map((child) => (
+            <DroneHierarchyBranch
+              branch={child}
+              expandedBranches={expandedBranches}
+              forceExpanded={forceExpanded}
+              key={child.key}
+              onToggle={onToggle}
+            />
+          ))}
+          {branch.drones.length ? (
+            <div className="fitting-drone-list">
+              {branch.drones.map((drone) => (
+                <DroneResultRow drone={drone} key={drone.typeId} />
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function DroneResultRow({ drone }: { drone: FittingDroneSearchResult }) {
+  const badges = getDroneBadges(drone);
+
+  return (
+    <div className="fitting-drone-result">
+      <EveModuleIcon typeId={drone.typeId} typeName={drone.typeName} />
+      <span className="fitting-hull-result-copy">
+        <strong>{drone.typeName}</strong>
+        <span>
+          {formatVolume(drone.volume)} m³ · {formatVolume(drone.bandwidthUsed)} Mbit/s
+        </span>
+      </span>
+      {badges.length ? (
+        <span className="fitting-drone-badges" aria-label="Drone metadata">
+          {badges.map((badge) => (
+            <small className="fitting-drone-badge" key={badge}>
+              {badge}
+            </small>
+          ))}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function getDroneBadges(drone: FittingDroneSearchResult) {
+  const techBadge = formatTechLevel(drone.techLevel);
+
+  return Array.from(
+    new Set([drone.metaGroupName, techBadge].filter((value): value is string => Boolean(value)))
+  );
+}
+
+function formatTechLevel(techLevel: number | null) {
+  if (techLevel === null) {
+    return null;
+  }
+
+  if (techLevel === 1) {
+    return "Tech I";
+  }
+
+  if (techLevel === 2) {
+    return "Tech II";
+  }
+
+  return `Tech ${techLevel}`;
 }
 
 type BrowserResultGroupProps = {

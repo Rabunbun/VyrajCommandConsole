@@ -48,7 +48,7 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
   const [browserRack, setBrowserRack] = useState<BrowsableFittingRack>("high");
   const [openBrowserSections, setOpenBrowserSections] = useState<
     Record<FittingBrowserSection, boolean>
-  >({ charges: false, hulls: true, modules: false });
+  >({ charges: false, drones: false, hulls: true, modules: false });
   const [manipulationError, setManipulationError] = useState<string | null>(null);
   const [dragSource, setDragSource] = useState<FittingDragSource | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<SelectedFittingSlot | null>(null);
