@@ -6,11 +6,16 @@ export type FittingHullSummary = {
   cpuBase: number | null;
   droneBandwidth: number | null;
   droneCapacity: number | null;
+  groupId: number | null;
   groupName: string;
   highSlots: number;
   iconUrl: string;
   launcherHardpoints: number | null;
   lowSlots: number;
+  marketGroupId: number | null;
+  marketGroupName: string | null;
+  marketGroupPathIds: number[];
+  marketGroupPathNames: string[];
   midSlots: number;
   powergridBase: number | null;
   renderUrl: string;

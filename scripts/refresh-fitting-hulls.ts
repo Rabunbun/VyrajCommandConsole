@@ -18,7 +18,15 @@ const prisma = new PrismaClient();
 const sdeJsonlZipUrl =
   "https://developers.eveonline.com/static-data/eve-online-static-data-latest-jsonl.zip";
 const shipCategoryId = 6;
-const verificationShipNames = ["Merlin", "Caracal", "Drake", "Raven"];
+const verificationShipNames = [
+  "Merlin",
+  "Caracal",
+  "Drake",
+  "Raven",
+  "Freki",
+  "Anhinga",
+  "Naga"
+];
 
 const FITTING_ATTRIBUTE_IDS = {
   powergridBase: {
@@ -103,8 +111,15 @@ type SdeGroup = {
 type SdeType = {
   _key: number;
   groupID: number;
+  marketGroupID?: number;
   name?: LocalizedName;
   published?: boolean;
+};
+
+type SdeMarketGroup = {
+  _key: number;
+  name?: LocalizedName;
+  parentGroupID?: number;
 };
 
 type SdeDogmaAttribute = {
@@ -132,6 +147,10 @@ type FittingHullRecord = {
   lastRefreshedAt: Date;
   launcherHardpoints: number | null;
   lowSlots: number;
+  marketGroupId: number | null;
+  marketGroupName: string | null;
+  marketGroupPathIds: number[];
+  marketGroupPathNames: string[];
   midSlots: number;
   powergridBase: number | null;
   rigSlots: number;
@@ -164,7 +183,15 @@ async function main() {
 
     const categoryNames = await readCategoryNames(files.categories);
     const shipGroups = await readShipGroups(files.groups);
-    const publishedShips = await readPublishedShips(files.types, shipGroups, categoryNames);
+    const marketGroups = await readMarketGroups(files.marketGroups);
+    const marketGroupPaths = buildMarketGroupPaths(marketGroups);
+    const publishedShips = await readPublishedShips(
+      files.types,
+      shipGroups,
+      categoryNames,
+      marketGroups,
+      marketGroupPaths
+    );
     const hullAttributes = await readHullDogmaAttributes(files.typeDogma, publishedShips);
     const refreshedAt = new Date();
     const hulls = Array.from(publishedShips.values())
@@ -197,17 +224,21 @@ async function main() {
       `Imported ${hulls.length} published fitting hull(s): ${result.created} created, ${result.updated} updated.`
     );
     const missingSummary = summarizeMissingBaseResources(hulls);
+    const marketSummary = summarizeMarketGroupCoverage(hulls);
 
     console.log("Sample hull verification from SDE Dogma attributes:");
 
     for (const hull of verified) {
       console.log(
-        `- ${hull.typeName}: high ${hull.highSlots}, mid ${hull.midSlots}, low ${hull.lowSlots}, rig ${hull.rigSlots}, rig size ${formatNullableValue(hull.rigSize)}; CPU ${formatNullableValue(hull.cpuBase)}, PG ${formatNullableValue(hull.powergridBase)}, calibration ${formatNullableValue(hull.calibrationCapacity)}, turrets ${formatNullableValue(hull.turretHardpoints)}, launchers ${formatNullableValue(hull.launcherHardpoints)}, drone bay ${formatNullableValue(hull.droneCapacity)}, bandwidth ${formatNullableValue(hull.droneBandwidth)}`
+        `- ${hull.typeName}: ${hull.groupName}; market ${hull.marketGroupPathNames.join(" > ") || "unclassified"}; high ${hull.highSlots}, mid ${hull.midSlots}, low ${hull.lowSlots}, rig ${hull.rigSlots}, rig size ${formatNullableValue(hull.rigSize)}; CPU ${formatNullableValue(hull.cpuBase)}, PG ${formatNullableValue(hull.powergridBase)}, calibration ${formatNullableValue(hull.calibrationCapacity)}, turrets ${formatNullableValue(hull.turretHardpoints)}, launchers ${formatNullableValue(hull.launcherHardpoints)}, drone bay ${formatNullableValue(hull.droneCapacity)}, bandwidth ${formatNullableValue(hull.droneBandwidth)}`
       );
     }
 
     console.log(
       `Missing base resource values: CPU ${missingSummary.cpuBase}, PG ${missingSummary.powergridBase}, calibration ${missingSummary.calibrationCapacity}, turrets ${missingSummary.turretHardpoints}, launchers ${missingSummary.launcherHardpoints}, drone bay ${missingSummary.droneCapacity}, bandwidth ${missingSummary.droneBandwidth}.`
+    );
+    console.log(
+      `Market hierarchy coverage: ${marketSummary.classified}/${hulls.length} classified, ${marketSummary.missingMarketGroup} without market group, ${marketSummary.missingPath} without ancestry, ${marketSummary.specialEdition} under CCP Special Edition Ships.`
     );
 
     if (verified.length < 4) {
@@ -268,6 +299,7 @@ async function findRequiredSdeFiles(root: string) {
     "categories.jsonl",
     "dogmaAttributes.jsonl",
     "groups.jsonl",
+    "marketGroups.jsonl",
     "typeDogma.jsonl",
     "types.jsonl"
   ]));
@@ -276,6 +308,7 @@ async function findRequiredSdeFiles(root: string) {
     categories: requireSdeFile(discovered, "categories.jsonl"),
     dogmaAttributes: requireSdeFile(discovered, "dogmaAttributes.jsonl"),
     groups: requireSdeFile(discovered, "groups.jsonl"),
+    marketGroups: requireSdeFile(discovered, "marketGroups.jsonl"),
     typeDogma: requireSdeFile(discovered, "typeDogma.jsonl"),
     types: requireSdeFile(discovered, "types.jsonl")
   };
@@ -373,15 +406,87 @@ async function readShipGroups(filePath: string) {
   return groups;
 }
 
+type MarketGroupRecord = {
+  marketGroupId: number;
+  marketGroupName: string;
+  parentGroupId: number | null;
+};
+
+type MarketGroupPath = {
+  ids: number[];
+  names: string[];
+};
+
+async function readMarketGroups(filePath: string) {
+  const marketGroups = new Map<number, MarketGroupRecord>();
+
+  for await (const marketGroup of readJsonLines<SdeMarketGroup>(filePath)) {
+    marketGroups.set(marketGroup._key, {
+      marketGroupId: marketGroup._key,
+      marketGroupName: getEnglishName(marketGroup.name),
+      parentGroupId:
+        typeof marketGroup.parentGroupID === "number"
+          ? marketGroup.parentGroupID
+          : null
+    });
+  }
+
+  return marketGroups;
+}
+
+function buildMarketGroupPaths(marketGroups: Map<number, MarketGroupRecord>) {
+  const paths = new Map<number, MarketGroupPath>();
+
+  for (const marketGroupId of marketGroups.keys()) {
+    const reversedPath: MarketGroupRecord[] = [];
+    const visited = new Set<number>();
+    let currentId: number | null = marketGroupId;
+
+    while (currentId !== null) {
+      if (visited.has(currentId)) {
+        throw new Error(
+          `CCP market group ancestry contains a cycle at market group ${currentId}.`
+        );
+      }
+
+      visited.add(currentId);
+      const current = marketGroups.get(currentId);
+
+      if (!current) {
+        throw new Error(
+          `CCP market group ancestry references missing market group ${currentId}.`
+        );
+      }
+
+      reversedPath.push(current);
+      currentId = current.parentGroupId;
+    }
+
+    const path = reversedPath.reverse();
+    paths.set(marketGroupId, {
+      ids: path.map((marketGroup) => marketGroup.marketGroupId),
+      names: path.map((marketGroup) => marketGroup.marketGroupName)
+    });
+  }
+
+  return paths;
+}
+
 async function readPublishedShips(
   filePath: string,
   shipGroups: Map<number, { categoryId: number; groupName: string }>,
-  categoryNames: Map<number, string>
+  categoryNames: Map<number, string>,
+  marketGroups: Map<number, MarketGroupRecord>,
+  marketGroupPaths: Map<number, MarketGroupPath>
 ) {
   const ships = new Map<number, {
     categoryName: string;
     groupId: number;
     groupName: string;
+    marketGroupId: number | null;
+    marketGroupName: string | null;
+    marketGroupPathIds: number[];
+    marketGroupPathNames: string[];
     typeId: number;
     typeName: string;
   }>();
@@ -393,10 +498,27 @@ async function readPublishedShips(
       continue;
     }
 
+    const marketGroupId =
+      typeof type.marketGroupID === "number" ? type.marketGroupID : null;
+    const marketGroup =
+      marketGroupId === null ? null : marketGroups.get(marketGroupId) ?? null;
+    const marketGroupPath =
+      marketGroupId === null ? null : marketGroupPaths.get(marketGroupId) ?? null;
+
+    if (marketGroupId !== null && (!marketGroup || !marketGroupPath)) {
+      throw new Error(
+        `Published ship type ${type._key} references missing market group ${marketGroupId}.`
+      );
+    }
+
     ships.set(type._key, {
       categoryName: categoryNames.get(group.categoryId) || "Ship",
       groupId: type.groupID,
       groupName: group.groupName,
+      marketGroupId,
+      marketGroupName: marketGroup?.marketGroupName ?? null,
+      marketGroupPathIds: marketGroupPath?.ids ?? [],
+      marketGroupPathNames: marketGroupPath?.names ?? [],
       typeId: type._key,
       typeName: getEnglishName(type.name)
     });
@@ -554,6 +676,28 @@ function summarizeMissingBaseResources(hulls: FittingHullRecord[]) {
       launcherHardpoints: 0,
       powergridBase: 0,
       turretHardpoints: 0
+    }
+  );
+}
+
+function summarizeMarketGroupCoverage(hulls: FittingHullRecord[]) {
+  return hulls.reduce(
+    (summary, hull) => ({
+      classified:
+        summary.classified + Number(hull.marketGroupPathIds.length > 0),
+      missingMarketGroup:
+        summary.missingMarketGroup + Number(hull.marketGroupId === null),
+      missingPath:
+        summary.missingPath + Number(hull.marketGroupPathIds.length === 0),
+      specialEdition:
+        summary.specialEdition +
+        Number(hull.marketGroupPathNames.includes("Special Edition Ships"))
+    }),
+    {
+      classified: 0,
+      missingMarketGroup: 0,
+      missingPath: 0,
+      specialEdition: 0
     }
   );
 }

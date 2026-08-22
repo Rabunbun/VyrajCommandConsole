@@ -611,6 +611,10 @@ model FittingHull {
   typeName            String
   groupId             Int?
   groupName           String    @default("")
+  marketGroupId       Int?
+  marketGroupName     String?
+  marketGroupPathIds  Int[]     @default([])
+  marketGroupPathNames String[]  @default([])
   categoryName        String    @default("")
   highSlots           Int       @default(0)
   midSlots            Int       @default(0)
@@ -631,6 +635,7 @@ model FittingHull {
   @@index([typeName])
   @@index([groupId])
   @@index([groupName])
+  @@index([marketGroupId])
   @@index([categoryName])
   @@index([lastRefreshedAt])
 }

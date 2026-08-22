@@ -27,11 +27,15 @@ import type {
   FittingModuleSearchResult
 } from "@/lib/fitting/types";
 
-const initialHullResultLimit = 18;
-const filteredHullResultLimit = 36;
 const moduleResultLimit = 40;
 const chargeResultLimit = 40;
 const searchDebounceMs = 250;
+const shipMarketRootName = "Ships";
+const specialEditionMarketGroupName = "Special Edition Ships";
+const hullHierarchyCollator = new Intl.Collator("en-US", {
+  numeric: true,
+  sensitivity: "base"
+});
 const browserRacks: Array<{ label: string; rack: BrowsableFittingRack }> = [
   { label: "High", rack: "high" },
   { label: "Mid", rack: "mid" },
@@ -320,25 +324,52 @@ function HullBrowser({
   selectedHull,
   setQuery
 }: HullBrowserProps) {
+  const [expandedFamilies, setExpandedFamilies] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
+    () => new Set()
+  );
   const normalizedQuery = normalizeSearchText(query);
-  const searchResult = useMemo(() => {
+  const hierarchy = useMemo(() => {
     const matches = normalizedQuery
       ? hulls.filter((hull) =>
-          normalizeSearchText(`${hull.typeName} ${hull.groupName}`).includes(
-            normalizedQuery
-          )
+          normalizeSearchText(
+            [
+              hull.typeName,
+              hull.groupName,
+              hull.marketGroupName,
+              ...hull.marketGroupPathNames
+            ]
+              .filter(Boolean)
+              .join(" ")
+          ).includes(normalizedQuery)
         )
       : hulls;
-    const limit = normalizedQuery
-      ? filteredHullResultLimit
-      : initialHullResultLimit;
 
     return {
-      matchCount: matches.length,
-      visibleHulls: matches.slice(0, limit)
+      families: buildHullHierarchy(matches),
+      matchCount: matches.length
     };
   }, [hulls, normalizedQuery]);
-  const hasMoreResults = searchResult.matchCount > searchResult.visibleHulls.length;
+  const searchActive = Boolean(normalizedQuery);
+
+  function toggleExpanded(
+    setExpanded: React.Dispatch<React.SetStateAction<Set<string>>>,
+    key: string
+  ) {
+    setExpanded((current) => {
+      const next = new Set(current);
+
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+
+      return next;
+    });
+  }
 
   return (
     <>
@@ -347,7 +378,7 @@ function HullBrowser({
         <input
           className="text-input fitting-search-input"
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search ship name or group..."
+          placeholder="Search hull, class, or market family..."
           type="search"
           value={query}
         />
@@ -357,36 +388,92 @@ function HullBrowser({
         <div className="fitting-panel-heading">
           <h3 className="fit-stat-title">Ships</h3>
           <span className="card-copy">
-            Showing {searchResult.visibleHulls.length}
-            {hasMoreResults ? ` of ${searchResult.matchCount}` : ""}
+            {searchActive
+              ? `Showing ${hierarchy.matchCount} of ${hulls.length}`
+              : `${hulls.length} published hulls`}
           </span>
         </div>
         {hulls.length ? (
-          searchResult.visibleHulls.length ? (
+          hierarchy.matchCount ? (
             <div className="fitting-hull-list">
-              {searchResult.visibleHulls.map((hull) => {
-                const selected = selectedHull?.typeId === hull.typeId;
-
+              {hierarchy.families.map((family) => {
+                const familyExpanded =
+                  searchActive || expandedFamilies.has(family.key);
                 return (
-                  <button
-                    className="fitting-hull-result"
-                    data-selected={selected}
-                    key={hull.typeId}
-                    onClick={() => onSelectHull(hull)}
-                    type="button"
-                  >
-                    <span className="module-icon-block module-icon-block-small">
-                      <ModuleIcon name="ship" size={18} />
-                    </span>
-                    <span className="fitting-hull-result-copy">
-                      <strong>{hull.typeName}</strong>
-                      <span>
-                        {[hull.groupName, `Type ${hull.typeId}`]
-                          .filter(Boolean)
-                          .join(" / ")}
+                  <section className="fitting-hull-family" key={family.key}>
+                    <button
+                      aria-expanded={familyExpanded}
+                      className="fitting-hull-family-toggle"
+                      onClick={() =>
+                        toggleExpanded(setExpandedFamilies, family.key)
+                      }
+                      type="button"
+                    >
+                      <span aria-hidden="true">
+                        {familyExpanded ? "−" : "+"}
                       </span>
-                    </span>
-                  </button>
+                      <strong>{family.label}</strong>
+                      <small>{family.hullCount}</small>
+                    </button>
+                    {familyExpanded ? (
+                      <div className="fitting-hull-family-children">
+                        {family.groups.map((group) => {
+                          const groupExpanded =
+                            searchActive || expandedGroups.has(group.key);
+
+                          return (
+                            <section className="fitting-hull-group" key={group.key}>
+                              <button
+                                aria-expanded={groupExpanded}
+                                className="fitting-hull-group-toggle"
+                                onClick={() =>
+                                  toggleExpanded(setExpandedGroups, group.key)
+                                }
+                                type="button"
+                              >
+                                <span aria-hidden="true">
+                                  {groupExpanded ? "−" : "+"}
+                                </span>
+                                <strong>{group.label}</strong>
+                                <small>{group.hulls.length}</small>
+                              </button>
+                              {groupExpanded ? (
+                                <div className="fitting-hull-group-children">
+                                  {group.hulls.map((hull) => {
+                                    const selected =
+                                      selectedHull?.typeId === hull.typeId;
+
+                                    return (
+                                      <button
+                                        className="fitting-hull-result"
+                                        data-selected={selected}
+                                        key={hull.typeId}
+                                        onClick={() => onSelectHull(hull)}
+                                        type="button"
+                                      >
+                                        <EveModuleIcon
+                                          typeId={hull.typeId}
+                                          typeName={hull.typeName}
+                                        />
+                                        <span className="fitting-hull-result-copy">
+                                          <strong>{hull.typeName}</strong>
+                                          <span>
+                                            {[hull.groupName, `Type ${hull.typeId}`]
+                                              .filter(Boolean)
+                                              .join(" / ")}
+                                          </span>
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              ) : null}
+                            </section>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </section>
                 );
               })}
             </div>
@@ -409,6 +496,140 @@ function HullBrowser({
       </div>
     </>
   );
+}
+
+type HullHierarchyFamily = {
+  groups: HullHierarchyGroup[];
+  hullCount: number;
+  key: string;
+  label: string;
+  specialEdition: boolean;
+};
+
+type HullHierarchyGroup = {
+  hulls: FittingHullSummary[];
+  key: string;
+  label: string;
+};
+
+function buildHullHierarchy(hulls: FittingHullSummary[]): HullHierarchyFamily[] {
+  const families = new Map<
+    string,
+    {
+      groups: Map<string, HullHierarchyGroup>;
+      key: string;
+      label: string;
+      specialEdition: boolean;
+    }
+  >();
+
+  for (const hull of hulls) {
+    const familyIdentity = getHullFamilyIdentity(hull);
+    let family = families.get(familyIdentity.key);
+
+    if (!family) {
+      family = {
+        groups: new Map(),
+        key: familyIdentity.key,
+        label: familyIdentity.label,
+        specialEdition: familyIdentity.specialEdition
+      };
+      families.set(familyIdentity.key, family);
+    }
+
+    const groupLabel = hull.groupName || "Other Ship Class";
+    const groupIdentity = `group:${hull.groupId ?? groupLabel}`;
+    const groupKey = `${familyIdentity.key}:${groupIdentity}`;
+    let group = family.groups.get(groupKey);
+
+    if (!group) {
+      group = {
+        hulls: [],
+        key: groupKey,
+        label: groupLabel
+      };
+      family.groups.set(groupKey, group);
+    }
+
+    group.hulls.push(hull);
+  }
+
+  return Array.from(families.values())
+    .map((family) => {
+      const groups = Array.from(family.groups.values())
+        .map((group) => ({
+          ...group,
+          hulls: group.hulls.toSorted((left, right) =>
+            hullHierarchyCollator.compare(left.typeName, right.typeName)
+          )
+        }))
+        .toSorted((left, right) =>
+          hullHierarchyCollator.compare(left.label, right.label)
+        );
+
+      return {
+        groups,
+        hullCount: groups.reduce((count, group) => count + group.hulls.length, 0),
+        key: family.key,
+        label: family.label,
+        specialEdition: family.specialEdition
+      };
+    })
+    .toSorted((left, right) => {
+      if (left.specialEdition !== right.specialEdition) {
+        return left.specialEdition ? 1 : -1;
+      }
+
+      if (left.label === "Other Ships" || right.label === "Other Ships") {
+        return left.label === "Other Ships" ? 1 : -1;
+      }
+
+      return hullHierarchyCollator.compare(left.label, right.label);
+    });
+}
+
+function getHullFamilyIdentity(hull: FittingHullSummary) {
+  const specialEditionIndex = hull.marketGroupPathNames.indexOf(
+    specialEditionMarketGroupName
+  );
+
+  if (specialEditionIndex >= 0) {
+    return {
+      key: getMarketHierarchyKey(hull, specialEditionIndex),
+      label: specialEditionMarketGroupName,
+      specialEdition: true
+    };
+  }
+
+  const shipsIndex = hull.marketGroupPathNames.indexOf(shipMarketRootName);
+  const familyIndex =
+    shipsIndex >= 0 && shipsIndex + 1 < hull.marketGroupPathNames.length
+      ? shipsIndex + 1
+      : hull.marketGroupPathNames.length
+        ? 0
+        : -1;
+
+  if (familyIndex >= 0) {
+    return {
+      key: getMarketHierarchyKey(hull, familyIndex),
+      label: hull.marketGroupPathNames[familyIndex],
+      specialEdition: false
+    };
+  }
+
+  return {
+    key: "unclassified-ships",
+    label: "Other Ships",
+    specialEdition: false
+  };
+}
+
+function getMarketHierarchyKey(hull: FittingHullSummary, pathIndex: number) {
+  const marketGroupId = hull.marketGroupPathIds[pathIndex];
+
+  return typeof marketGroupId === "number"
+    ? `market:${marketGroupId}`
+    : `market-name:${hull.marketGroupPathNames[pathIndex]}`;
 }
 
 type OccupiedModuleActionsProps = {
