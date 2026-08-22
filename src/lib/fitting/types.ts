@@ -87,6 +87,43 @@ export type FittingDroneSearchResponse = {
   total: number;
 };
 
+export type DroneBayInputEntry = {
+  quantity: number;
+  typeId: number;
+};
+
+export type ResolvedDroneBayEntry = DroneBayInputEntry & {
+  typeName: string;
+  volume: number;
+};
+
+export type DroneBayAnalysis = {
+  capacity: number | null;
+  entries: ResolvedDroneBayEntry[];
+  remainingVolume: number | null;
+  usedVolume: number;
+};
+
+export type DroneBayValidationIssueCode =
+  | "BAY_CAPACITY_EXCEEDED"
+  | "DRONE_NOT_FOUND"
+  | "DRONE_VOLUME_UNAVAILABLE"
+  | "HULL_NOT_FOUND"
+  | "HULL_NOT_SELECTED"
+  | "INVALID_DRONE_BAY_STATE"
+  | "ORDINARY_DRONE_BAY_UNAVAILABLE";
+
+export type DroneBayValidationIssue = {
+  code: DroneBayValidationIssueCode;
+  message: string;
+};
+
+export type DroneBayValidationResponse = {
+  allowed: boolean;
+  analysis: DroneBayAnalysis;
+  errors: DroneBayValidationIssue[];
+};
+
 export type ResolvedFittingCharge = {
   quantity: number;
   typeId: number;

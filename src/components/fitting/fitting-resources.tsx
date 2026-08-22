@@ -6,12 +6,14 @@ import type {
 
 type FittingResourcesProps = {
   analysis: BaseFitAnalysis;
+  droneBayUsedVolume: number;
   selectedHull: FittingHullSummary | null;
   warnings: FitValidationIssue[];
 };
 
 export function FittingResources({
   analysis,
+  droneBayUsedVolume,
   selectedHull,
   warnings
 }: FittingResourcesProps) {
@@ -43,11 +45,15 @@ export function FittingResources({
     },
     {
       capacity: selectedHull?.droneCapacity ?? null,
-      label: "Drone Capacity",
-      scope: "Base Hull",
+      label: "Drone Bay",
+      scope: "Carried Volume",
       unit: "m³",
-      used: 0,
-      warning: false
+      used: droneBayUsedVolume,
+      warning:
+        selectedHull?.droneCapacity !== null &&
+        selectedHull?.droneCapacity !== undefined &&
+        selectedHull.droneCapacity > 0 &&
+        droneBayUsedVolume / selectedHull.droneCapacity >= 0.9
     }
   ];
 
@@ -70,7 +76,9 @@ export function FittingResources({
           </div>
           <div className="fitting-resource-scope-row">
             <span className="fitting-resource-scope">{resource.scope}</span>
-            {resource.warning && resource.capacity !== null ? (
+            {resource.warning &&
+            resource.capacity !== null &&
+            resource.used > resource.capacity ? (
               <span className="fitting-resource-overage">
                 {formatOverage(resource.used - resource.capacity, resource.unit)} over
               </span>

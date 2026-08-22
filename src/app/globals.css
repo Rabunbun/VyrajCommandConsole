@@ -2574,9 +2574,16 @@ hr {
     var(--color-void);
   display: grid;
   gap: 4px 9px;
-  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-columns: 44px minmax(0, 1fr) auto;
   min-height: 62px;
   padding: 7px;
+}
+
+.fitting-drone-result:hover {
+  border-color: rgba(63, 191, 155, 0.28);
+  background:
+    linear-gradient(135deg, rgba(63, 191, 155, 0.055), transparent 48%),
+    var(--color-void);
 }
 
 .fitting-drone-result .fitting-module-icon,
@@ -2589,6 +2596,133 @@ hr {
   flex-wrap: wrap;
   gap: 4px;
   grid-column: 2;
+}
+
+.fitting-drone-add,
+.fitting-drone-bay-actions button {
+  border: 1px solid rgba(63, 191, 155, 0.25);
+  background: rgba(63, 191, 155, 0.06);
+  color: #c9f4e8;
+  cursor: pointer;
+  font-family: var(--font-command);
+  font-size: 0.52rem;
+  font-weight: 800;
+  letter-spacing: 0.045em;
+  min-height: 28px;
+  padding: 5px 7px;
+  text-transform: uppercase;
+}
+
+.fitting-drone-add {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+}
+
+.fitting-drone-add:hover,
+.fitting-drone-add:focus-visible,
+.fitting-drone-bay-actions button:hover,
+.fitting-drone-bay-actions button:focus-visible {
+  border-color: rgba(63, 191, 155, 0.58);
+  background: rgba(63, 191, 155, 0.12);
+  outline: none;
+}
+
+.fitting-drone-add:disabled,
+.fitting-drone-bay-actions button:disabled {
+  cursor: wait;
+  opacity: 0.48;
+}
+
+.fitting-drone-bay {
+  border: 1px solid rgba(63, 191, 155, 0.14);
+  background:
+    linear-gradient(135deg, rgba(63, 191, 155, 0.045), transparent 55%),
+    rgba(2, 7, 9, 0.72);
+  display: grid;
+  gap: 7px;
+  padding: 9px;
+}
+
+.fitting-drone-bay-heading {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.fitting-drone-bay-heading > div {
+  display: grid;
+  gap: 1px;
+}
+
+.fitting-drone-bay-heading strong,
+.fitting-drone-bay-heading > span {
+  color: #c9f4e8;
+  font-family: var(--font-command);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.fitting-drone-bay-heading small,
+.fitting-drone-bay-remaining {
+  color: var(--color-muted);
+  font-size: 0.62rem;
+}
+
+.fitting-drone-bay-list {
+  display: grid;
+  gap: 5px;
+  max-block-size: 164px;
+  min-block-size: 48px;
+  overflow: auto;
+}
+
+.fitting-drone-bay-entry {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.018);
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  display: grid;
+  gap: 7px;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  min-height: 48px;
+  padding: 5px;
+}
+
+.fitting-drone-bay-entry .fitting-module-icon,
+.fitting-drone-bay-entry .fitting-module-icon-fallback {
+  block-size: 36px;
+  inline-size: 36px;
+}
+
+.fitting-drone-bay-entry > span:nth-child(2) {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fitting-drone-bay-entry strong {
+  color: #e0e6e5;
+  font-size: 0.69rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fitting-drone-bay-entry small {
+  color: var(--color-muted);
+  font-size: 0.62rem;
+}
+
+.fitting-drone-bay-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.fitting-drone-bay-actions button:last-child {
+  border-color: rgba(179, 38, 46, 0.28);
+  color: #e8b7ba;
 }
 
 .fitting-drone-badge {

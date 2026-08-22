@@ -1,6 +1,7 @@
 import {
   createEmptyFitState,
   createFittingSlots,
+  type DroneBayEntry,
   type FittedModule,
   type FittingSlotAddress,
   type FittingTopology,
@@ -42,6 +43,14 @@ export type LoadChargeInput = FittingSlotAddress & {
 
 export type UnloadChargeInput = FittingSlotAddress;
 
+export type AddDroneInput = DroneBayEntry;
+
+export type RemoveDroneInput = DroneBayEntry;
+
+export type SetDroneQuantityInput = DroneBayEntry;
+
+export type DroneBayRejection = "invalid-drone-type" | "invalid-quantity";
+
 export type FitAction =
   | {
       hullTypeId: number;
@@ -68,7 +77,104 @@ export type FitAction =
     })
   | (UnloadChargeInput & {
       type: "unload-charge";
-    });
+    })
+  | (AddDroneInput & {
+      type: "add-drone";
+    })
+  | (RemoveDroneInput & {
+      type: "remove-drone";
+    })
+  | (SetDroneQuantityInput & {
+      type: "set-drone-quantity";
+    })
+  | {
+      type: "clear-drones";
+    };
+
+export function addDrone(
+  state: FitState,
+  input: AddDroneInput
+): FitState {
+  if (validateDroneBayEntry(input, false)) {
+    return state;
+  }
+
+  const currentEntry = state.drones.find((entry) => entry.typeId === input.typeId);
+
+  if (currentEntry) {
+    const quantity = currentEntry.quantity + input.quantity;
+
+    if (!Number.isSafeInteger(quantity)) {
+      return state;
+    }
+
+    return {
+      ...state,
+      drones: state.drones.map((entry) =>
+        entry.typeId === input.typeId
+          ? { ...entry, quantity }
+          : entry
+      )
+    };
+  }
+
+  return {
+    ...state,
+    drones: [...state.drones, { ...input }]
+  };
+}
+
+export function removeDrone(
+  state: FitState,
+  input: RemoveDroneInput
+): FitState {
+  if (validateDroneBayEntry(input, false)) {
+    return state;
+  }
+
+  return {
+    ...state,
+    drones: state.drones.flatMap((entry) => {
+      if (entry.typeId !== input.typeId) {
+        return [entry];
+      }
+
+      const quantity = entry.quantity - input.quantity;
+      return quantity > 0 ? [{ ...entry, quantity }] : [];
+    })
+  };
+}
+
+export function setDroneQuantity(
+  state: FitState,
+  input: SetDroneQuantityInput
+): FitState {
+  if (validateDroneBayEntry(input, true)) {
+    return state;
+  }
+
+  if (input.quantity === 0) {
+    return {
+      ...state,
+      drones: state.drones.filter((entry) => entry.typeId !== input.typeId)
+    };
+  }
+
+  const existingEntry = state.drones.some((entry) => entry.typeId === input.typeId);
+
+  return {
+    ...state,
+    drones: existingEntry
+      ? state.drones.map((entry) =>
+          entry.typeId === input.typeId ? { ...entry, quantity: input.quantity } : entry
+        )
+      : [...state.drones, { ...input }]
+  };
+}
+
+export function clearDrones(state: FitState): FitState {
+  return state.drones.length ? { ...state, drones: [] } : state;
+}
 
 export function validateFitModulePlacement(
   state: FitState,
@@ -330,6 +436,7 @@ export function fittingReducer(state: FitState, action: FitAction): FitState {
   switch (action.type) {
     case "select-hull":
       return {
+        drones: [],
         hullTypeId: action.hullTypeId,
         slots: createFittingSlots(action.topology)
       };
@@ -347,9 +454,35 @@ export function fittingReducer(state: FitState, action: FitAction): FitState {
       return loadCharge(state, action);
     case "unload-charge":
       return unloadCharge(state, action);
+    case "add-drone":
+      return addDrone(state, action);
+    case "remove-drone":
+      return removeDrone(state, action);
+    case "set-drone-quantity":
+      return setDroneQuantity(state, action);
+    case "clear-drones":
+      return clearDrones(state);
     default:
       return state;
   }
+}
+
+function validateDroneBayEntry(
+  entry: DroneBayEntry,
+  allowZero: boolean
+): DroneBayRejection | null {
+  if (!Number.isInteger(entry.typeId) || entry.typeId <= 0) {
+    return "invalid-drone-type";
+  }
+
+  if (
+    !Number.isSafeInteger(entry.quantity) ||
+    entry.quantity < (allowZero ? 0 : 1)
+  ) {
+    return "invalid-quantity";
+  }
+
+  return null;
 }
 
 function resolveSlot(state: FitState, address: FittingSlotAddress) {

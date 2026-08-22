@@ -12,6 +12,7 @@ import type {
   SelectedFittingSlot
 } from "@/components/fitting/fitting-ui-types";
 import type {
+  DroneBayAttemptResult,
   FitModuleAttemptResult,
   FitOperationAttemptResult,
   LoadChargeAttemptResult
@@ -20,6 +21,7 @@ import { ModuleIcon } from "@/components/module-visuals";
 import type { FittedModule } from "@/lib/fitting/fit-state";
 import type {
   BrowsableFittingRack,
+  DroneBayAnalysis,
   FittingChargeSearchResponse,
   FittingChargeSearchResult,
   FittingDroneSearchResponse,
@@ -49,19 +51,23 @@ const browserRacks: Array<{ label: string; rack: BrowsableFittingRack }> = [
 type ItemBrowserProps = {
   actionMode: ModuleActionMode;
   browserRack: BrowsableFittingRack;
+  droneBayAnalysis: DroneBayAnalysis;
   draggingModuleTypeId: number | null;
   hulls: FittingHullSummary[];
   manipulationError: string | null;
   onAutoFitModule: (
     module: FittingModuleSearchResult
   ) => Promise<FitModuleAttemptResult>;
+  onAddDrone: (typeId: number) => Promise<DroneBayAttemptResult>;
   onClearSelectedSlot: () => void;
+  onDecrementDrone: (typeId: number) => Promise<DroneBayAttemptResult>;
   onFitModule: (typeId: number) => Promise<FitModuleAttemptResult>;
   onLoadCharge: (typeId: number) => Promise<LoadChargeAttemptResult>;
   onModuleDragEnd: () => void;
   onModuleDragStart: (module: FittingModuleSearchResult) => void;
   onModuleRackChange: (rack: BrowsableFittingRack) => void;
   onRemoveModule: () => Promise<FitOperationAttemptResult>;
+  onRemoveDrone: (typeId: number) => Promise<DroneBayAttemptResult>;
   onReplaceModule: (typeId: number) => Promise<FitModuleAttemptResult>;
   onReturnToActions: () => void;
   onSelectHull: (hull: FittingHullSummary) => void;
@@ -80,17 +86,21 @@ type ItemBrowserProps = {
 export function ItemBrowser({
   actionMode,
   browserRack,
+  droneBayAnalysis,
   draggingModuleTypeId,
   hulls,
   manipulationError,
   onAutoFitModule,
+  onAddDrone,
   onClearSelectedSlot,
+  onDecrementDrone,
   onFitModule,
   onLoadCharge,
   onModuleDragEnd,
   onModuleDragStart,
   onModuleRackChange,
   onRemoveModule,
+  onRemoveDrone,
   onReplaceModule,
   onReturnToActions,
   onSelectHull,
@@ -261,8 +271,15 @@ export function ItemBrowser({
       </PersistentBrowserSection>
 
       <PersistentBrowserSection
-        badge="Static"
-        description="Authoritative ordinary drone index"
+        badge={
+          droneBayAnalysis.entries.length
+            ? `${droneBayAnalysis.entries.reduce(
+                (total, entry) => total + entry.quantity,
+                0
+              )} Carried`
+            : "Empty"
+        }
+        description="Carried inventory and authoritative drone index"
         id="fitting-browser-drones"
         onToggle={() => onToggleSection("drones")}
         open={openSections.drones}
@@ -270,6 +287,10 @@ export function ItemBrowser({
       >
         <DroneBrowser
           active={openSections.drones}
+          analysis={droneBayAnalysis}
+          onAddDrone={onAddDrone}
+          onDecrementDrone={onDecrementDrone}
+          onRemoveDrone={onRemoveDrone}
           query={droneQuery}
           selectedHull={selectedHull}
           setQuery={setDroneQuery}
@@ -1373,6 +1394,10 @@ function ChargeBrowser({
 
 type DroneBrowserProps = {
   active: boolean;
+  analysis: DroneBayAnalysis;
+  onAddDrone: (typeId: number) => Promise<DroneBayAttemptResult>;
+  onDecrementDrone: (typeId: number) => Promise<DroneBayAttemptResult>;
+  onRemoveDrone: (typeId: number) => Promise<DroneBayAttemptResult>;
   query: string;
   selectedHull: FittingHullSummary | null;
   setQuery: (query: string) => void;
@@ -1389,6 +1414,10 @@ type DroneSearchState =
 
 function DroneBrowser({
   active,
+  analysis,
+  onAddDrone,
+  onDecrementDrone,
+  onRemoveDrone,
   query,
   selectedHull,
   setQuery
@@ -1399,6 +1428,23 @@ function DroneBrowser({
   const [expandedBranches, setExpandedBranches] = useState<Set<string>>(
     () => new Set()
   );
+  const selectedHullTypeId = selectedHull?.typeId ?? null;
+  const [pendingDroneOperation, setPendingDroneOperation] = useState<{
+    hullTypeId: number | null;
+    typeId: number;
+  } | null>(null);
+  const [feedback, setFeedback] = useState<{
+    hullTypeId: number | null;
+    message: string;
+    tone: "error" | "success";
+  } | null>(null);
+  const selectedHullTypeIdRef = useRef(selectedHullTypeId);
+  const pendingDroneTypeId =
+    pendingDroneOperation?.hullTypeId === selectedHullTypeId
+      ? pendingDroneOperation.typeId
+      : null;
+  const currentFeedback =
+    feedback?.hullTypeId === selectedHullTypeId ? feedback : null;
   const requestKey = query;
   const currentSearchState =
     searchState.status !== "loading" && searchState.requestKey === requestKey
@@ -1409,6 +1455,10 @@ function DroneBrowser({
     currentSearchState.status === "ready"
       ? buildDroneHierarchy(currentSearchState.response.results)
       : [];
+
+  useEffect(() => {
+    selectedHullTypeIdRef.current = selectedHullTypeId;
+  }, [selectedHullTypeId]);
 
   useEffect(() => {
     if (!active) {
@@ -1476,6 +1526,49 @@ function DroneBrowser({
     });
   }
 
+  async function performDroneOperation(
+    typeId: number,
+    typeName: string,
+    operation: "add" | "decrement" | "remove"
+  ) {
+    if (pendingDroneTypeId !== null) {
+      return;
+    }
+
+    const operationHullTypeId = selectedHullTypeIdRef.current;
+
+    setPendingDroneOperation({ hullTypeId: operationHullTypeId, typeId });
+    setFeedback(null);
+    const result = await (operation === "add"
+      ? onAddDrone(typeId)
+      : operation === "decrement"
+        ? onDecrementDrone(typeId)
+        : onRemoveDrone(typeId));
+
+    if (operationHullTypeId !== selectedHullTypeIdRef.current) {
+      return;
+    }
+
+    setPendingDroneOperation(null);
+
+    if (!result.ok) {
+      setFeedback({
+        hullTypeId: operationHullTypeId,
+        message: result.message,
+        tone: "error"
+      });
+      return;
+    }
+
+    const action =
+      operation === "add" ? "Added" : operation === "decrement" ? "Decremented" : "Removed";
+    setFeedback({
+      hullTypeId: operationHullTypeId,
+      message: `${action} ${typeName}.`,
+      tone: "success"
+    });
+  }
+
   return (
     <div className="fitting-browser-index">
       <label className="field-stack">
@@ -1506,6 +1599,30 @@ function DroneBrowser({
         </div>
       ) : null}
 
+      <DroneBayInventory
+        analysis={analysis}
+        onAdd={(entry) =>
+          performDroneOperation(entry.typeId, entry.typeName, "add")
+        }
+        onDecrement={(entry) =>
+          performDroneOperation(entry.typeId, entry.typeName, "decrement")
+        }
+        onRemove={(entry) =>
+          performDroneOperation(entry.typeId, entry.typeName, "remove")
+        }
+        pendingDroneTypeId={pendingDroneTypeId}
+      />
+
+      {currentFeedback ? (
+        <div
+          className="fitting-empty-note"
+          data-tone={currentFeedback.tone}
+          role="status"
+        >
+          {currentFeedback.message}
+        </div>
+      ) : null}
+
       <div className="fitting-browser-scroll-region" aria-live="polite">
         {currentSearchState.status === "loading" ? (
           <div className="fitting-empty-note">Searching drone cache...</div>
@@ -1524,7 +1641,11 @@ function DroneBrowser({
                   expandedBranches={expandedBranches}
                   forceExpanded={searchActive}
                   key={branch.key}
+                  onAddDrone={(drone) =>
+                    performDroneOperation(drone.typeId, drone.typeName, "add")
+                  }
                   onToggle={toggleBranch}
+                  pendingDroneTypeId={pendingDroneTypeId}
                 />
               ))}
             </div>
@@ -1539,8 +1660,8 @@ function DroneBrowser({
       </div>
 
       <div className="fitting-browser-readonly-note">
-        Browse-only static data. Bandwidth shown is the per-drone requirement and is
-        not consumed by the current fit.
+        Bandwidth shown is static per-drone metadata; this mission validates carried
+        bay volume only.
       </div>
     </div>
   );
@@ -1638,11 +1759,15 @@ function DroneHierarchyBranch({
   branch,
   expandedBranches,
   forceExpanded,
+  onAddDrone,
+  pendingDroneTypeId,
   onToggle
 }: {
   branch: DroneHierarchyBranch;
   expandedBranches: Set<string>;
   forceExpanded: boolean;
+  onAddDrone: (drone: FittingDroneSearchResult) => void;
+  pendingDroneTypeId: number | null;
   onToggle: (branchKey: string) => void;
 }) {
   const expanded = forceExpanded || expandedBranches.has(branch.key);
@@ -1667,13 +1792,20 @@ function DroneHierarchyBranch({
               expandedBranches={expandedBranches}
               forceExpanded={forceExpanded}
               key={child.key}
+              onAddDrone={onAddDrone}
               onToggle={onToggle}
+              pendingDroneTypeId={pendingDroneTypeId}
             />
           ))}
           {branch.drones.length ? (
             <div className="fitting-drone-list">
               {branch.drones.map((drone) => (
-                <DroneResultRow drone={drone} key={drone.typeId} />
+                <DroneResultRow
+                  drone={drone}
+                  key={drone.typeId}
+                  onAdd={() => onAddDrone(drone)}
+                  pending={pendingDroneTypeId === drone.typeId}
+                />
               ))}
             </div>
           ) : null}
@@ -1683,11 +1815,27 @@ function DroneHierarchyBranch({
   );
 }
 
-function DroneResultRow({ drone }: { drone: FittingDroneSearchResult }) {
+function DroneResultRow({
+  drone,
+  onAdd,
+  pending
+}: {
+  drone: FittingDroneSearchResult;
+  onAdd: () => void;
+  pending: boolean;
+}) {
   const badges = getDroneBadges(drone);
 
   return (
-    <div className="fitting-drone-result">
+    <div
+      className="fitting-drone-result"
+      onDoubleClick={() => {
+        if (!pending) {
+          onAdd();
+        }
+      }}
+      title={`Double-click to add ${drone.typeName} to the Drone Bay`}
+    >
       <EveModuleIcon typeId={drone.typeId} typeName={drone.typeName} />
       <span className="fitting-hull-result-copy">
         <strong>{drone.typeName}</strong>
@@ -1704,7 +1852,95 @@ function DroneResultRow({ drone }: { drone: FittingDroneSearchResult }) {
           ))}
         </span>
       ) : null}
+      <button
+        className="fitting-drone-add"
+        disabled={pending}
+        onClick={onAdd}
+        onDoubleClick={(event) => event.stopPropagation()}
+        type="button"
+      >
+        {pending ? "Adding…" : "Add"}
+      </button>
     </div>
+  );
+}
+
+function DroneBayInventory({
+  analysis,
+  onAdd,
+  onDecrement,
+  onRemove,
+  pendingDroneTypeId
+}: {
+  analysis: DroneBayAnalysis;
+  onAdd: (entry: DroneBayAnalysis["entries"][number]) => void;
+  onDecrement: (entry: DroneBayAnalysis["entries"][number]) => void;
+  onRemove: (entry: DroneBayAnalysis["entries"][number]) => void;
+  pendingDroneTypeId: number | null;
+}) {
+  return (
+    <section className="fitting-drone-bay" aria-labelledby="fitting-drone-bay-title">
+      <div className="fitting-drone-bay-heading">
+        <div>
+          <strong id="fitting-drone-bay-title">Drone Bay</strong>
+          <small>Carried inventory</small>
+        </div>
+        <span>
+          {formatVolume(analysis.usedVolume)} / {formatVolume(analysis.capacity)} m³
+        </span>
+      </div>
+      <div className="fitting-drone-bay-list">
+        {analysis.entries.length ? (
+          analysis.entries.map((entry) => {
+            const pending = pendingDroneTypeId === entry.typeId;
+
+            return (
+              <div className="fitting-drone-bay-entry" key={entry.typeId}>
+                <EveModuleIcon typeId={entry.typeId} typeName={entry.typeName} />
+                <span>
+                  <strong>{entry.typeName}</strong>
+                  <small>
+                    ×{entry.quantity} · {formatVolume(entry.volume * entry.quantity)} m³
+                  </small>
+                </span>
+                <span className="fitting-drone-bay-actions">
+                  <button
+                    aria-label={`Remove one ${entry.typeName}`}
+                    disabled={pending}
+                    onClick={() => onDecrement(entry)}
+                    type="button"
+                  >
+                    −1
+                  </button>
+                  <button
+                    aria-label={`Add one ${entry.typeName}`}
+                    disabled={pending}
+                    onClick={() => onAdd(entry)}
+                    type="button"
+                  >
+                    +1
+                  </button>
+                  <button
+                    disabled={pending}
+                    onClick={() => onRemove(entry)}
+                    type="button"
+                  >
+                    Remove
+                  </button>
+                </span>
+              </div>
+            );
+          })
+        ) : (
+          <div className="fitting-empty-note">No drones carried.</div>
+        )}
+      </div>
+      <div className="fitting-drone-bay-remaining">
+        {analysis.remainingVolume === null
+          ? "Capacity unavailable"
+          : `${formatVolume(analysis.remainingVolume)} m³ remaining`}
+      </div>
+    </section>
   );
 }
 

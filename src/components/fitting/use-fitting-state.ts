@@ -13,6 +13,7 @@ import {
 } from "@/lib/fitting/fit-reducer";
 import {
   createEmptyFitState,
+  type DroneBayEntry,
   type FittingSlotAddress,
   type FitState,
   type RackType
@@ -20,6 +21,9 @@ import {
 import type {
   BaseFitAnalysis,
   BrowsableFittingRack,
+  DroneBayAnalysis,
+  DroneBayValidationIssueCode,
+  DroneBayValidationResponse,
   FittedModuleAddress,
   FittingAnalysisResponse,
   FittingChargeLoadResponse,
@@ -70,11 +74,26 @@ export type LoadChargeAttemptResult =
       ok: true;
     };
 
+export type DroneBayAttemptResult =
+  | {
+      code?: DroneBayValidationIssueCode;
+      message: string;
+      ok: false;
+    }
+  | {
+      analysis: DroneBayAnalysis;
+      ok: true;
+    };
+
 export function useFittingState({ hulls }: UseFittingStateOptions) {
   const [fitState, dispatch] = useReducer(fittingReducer, undefined, createEmptyFitState);
   const [analysis, setAnalysis] = useState<BaseFitAnalysis>(createEmptyAnalysis);
+  const [droneBayAnalysis, setDroneBayAnalysis] = useState<DroneBayAnalysis>(
+    createEmptyDroneBayAnalysis
+  );
   const [fitWarnings, setFitWarnings] = useState<FitValidationIssue[]>([]);
   const validationEpochRef = useRef(0);
+  const droneValidationEpochRef = useRef(0);
   const hullsByTypeId = useMemo(
     () => new Map(hulls.map((hull) => [hull.typeId, hull])),
     [hulls]
@@ -87,7 +106,9 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
   }, []);
   const selectHull = useCallback((hull: FittingHullSummary) => {
     validationEpochRef.current += 1;
+    droneValidationEpochRef.current += 1;
     setAnalysis(createEmptyAnalysis());
+    setDroneBayAnalysis(createEmptyDroneBayAnalysis(hull.droneCapacity));
     setFitWarnings([]);
     dispatch({
       hullTypeId: hull.typeId,
@@ -315,21 +336,137 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
     },
     [fitState]
   );
+  const setDroneQuantity = useCallback(
+    async (typeId: number, quantity: number): Promise<DroneBayAttemptResult> => {
+      if (!Number.isInteger(typeId) || typeId <= 0) {
+        return { message: "The selected drone type is invalid.", ok: false };
+      }
+
+      if (!Number.isSafeInteger(quantity) || quantity < 0) {
+        return { message: "Drone quantity must be a nonnegative integer.", ok: false };
+      }
+
+      const targetDrones = setDroneBayEntryQuantity(fitState.drones, typeId, quantity);
+      const validationEpoch = ++droneValidationEpochRef.current;
+      const result = await requestDroneBayValidation({
+        drones: targetDrones,
+        hullTypeId: fitState.hullTypeId
+      });
+
+      if (!result.ok) {
+        return result;
+      }
+
+      if (validationEpoch !== droneValidationEpochRef.current) {
+        return hullChangedRejection();
+      }
+
+      dispatch({ quantity, type: "set-drone-quantity", typeId });
+      setDroneBayAnalysis(result.response.analysis);
+
+      return { analysis: result.response.analysis, ok: true };
+    },
+    [fitState.drones, fitState.hullTypeId]
+  );
+  const addDrone = useCallback(
+    (typeId: number, quantity = 1): Promise<DroneBayAttemptResult> => {
+      const currentQuantity =
+        fitState.drones.find((entry) => entry.typeId === typeId)?.quantity ?? 0;
+
+      if (!Number.isSafeInteger(quantity) || quantity <= 0) {
+        return Promise.resolve({
+          message: "Drone quantity must be a positive integer.",
+          ok: false
+        });
+      }
+
+      return setDroneQuantity(typeId, currentQuantity + quantity);
+    },
+    [fitState.drones, setDroneQuantity]
+  );
+  const decrementDrone = useCallback(
+    (typeId: number): Promise<DroneBayAttemptResult> => {
+      const currentQuantity =
+        fitState.drones.find((entry) => entry.typeId === typeId)?.quantity ?? 0;
+
+      if (currentQuantity <= 0) {
+        return Promise.resolve({
+          message: "That drone is not currently in the Drone Bay.",
+          ok: false
+        });
+      }
+
+      return setDroneQuantity(typeId, currentQuantity - 1);
+    },
+    [fitState.drones, setDroneQuantity]
+  );
+  const removeDrone = useCallback(
+    (typeId: number): Promise<DroneBayAttemptResult> =>
+      setDroneQuantity(typeId, 0),
+    [setDroneQuantity]
+  );
 
   return {
+    addDrone,
     analysis,
     cancelPendingOperation,
+    decrementDrone,
+    droneBayAnalysis,
     fitModule,
     fitWarnings,
     fitState,
     loadCharge,
     moveModule,
+    removeDrone,
     removeModule,
     replaceModule,
     selectHull,
     selectedHull,
     unloadCharge
   };
+}
+
+async function requestDroneBayValidation(input: {
+  drones: DroneBayEntry[];
+  hullTypeId: number | null;
+}): Promise<
+  | { code?: DroneBayValidationIssueCode; message: string; ok: false }
+  | { ok: true; response: DroneBayValidationResponse & { allowed: true } }
+> {
+  try {
+    const response = await fetch("/api/fitting/drones", {
+      body: JSON.stringify(input),
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      method: "POST"
+    });
+    const payload = (await response.json().catch(() => null)) as
+      | DroneBayValidationResponse
+      | { error?: unknown }
+      | null;
+
+    if (!response.ok) {
+      const issue = isDroneBayValidationResponse(payload) ? payload.errors[0] : null;
+
+      return {
+        ...(issue ? { code: issue.code } : {}),
+        message:
+          issue?.message ??
+          (payload && "error" in payload && typeof payload.error === "string"
+            ? payload.error
+            : "The Drone Bay change could not be validated."),
+        ok: false
+      };
+    }
+
+    if (!isDroneBayValidationResponse(payload) || !payload.allowed) {
+      return { message: "The Drone Bay validation response was invalid.", ok: false };
+    }
+
+    return { ok: true, response: { ...payload, allowed: true } };
+  } catch {
+    return { message: "Drone Bay validation is temporarily unavailable.", ok: false };
+  }
 }
 
 async function requestChargeLoad(input: {
@@ -610,6 +747,71 @@ function isChargeLoadResponse(
   );
 }
 
+function isDroneBayValidationResponse(
+  value: unknown
+): value is DroneBayValidationResponse {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    !("allowed" in value) ||
+    !("analysis" in value) ||
+    !("errors" in value) ||
+    typeof value.allowed !== "boolean" ||
+    !Array.isArray(value.errors) ||
+    !value.errors.every(
+      (error) =>
+        error !== null &&
+        typeof error === "object" &&
+        "code" in error &&
+        "message" in error &&
+        typeof error.code === "string" &&
+        Boolean(error.code) &&
+        typeof error.message === "string" &&
+        Boolean(error.message.trim())
+    )
+  ) {
+    return false;
+  }
+
+  const analysis = value.analysis;
+
+  return (
+    analysis !== null &&
+    typeof analysis === "object" &&
+    "capacity" in analysis &&
+    "entries" in analysis &&
+    "remainingVolume" in analysis &&
+    "usedVolume" in analysis &&
+    (analysis.capacity === null || isNonnegativeFiniteNumber(analysis.capacity)) &&
+    (analysis.remainingVolume === null ||
+      (typeof analysis.remainingVolume === "number" &&
+        Number.isFinite(analysis.remainingVolume))) &&
+    isNonnegativeFiniteNumber(analysis.usedVolume) &&
+    Array.isArray(analysis.entries) &&
+    analysis.entries.every(isResolvedDroneBayEntry)
+  );
+}
+
+function isResolvedDroneBayEntry(value: unknown) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "quantity" in value &&
+    "typeId" in value &&
+    "typeName" in value &&
+    "volume" in value &&
+    typeof value.quantity === "number" &&
+    Number.isSafeInteger(value.quantity) &&
+    value.quantity > 0 &&
+    typeof value.typeId === "number" &&
+    Number.isInteger(value.typeId) &&
+    value.typeId > 0 &&
+    typeof value.typeName === "string" &&
+    Boolean(value.typeName.trim()) &&
+    isNonnegativeFiniteNumber(value.volume)
+  );
+}
+
 function getPlacementRejectionMessage(rejection: FitModuleRejection) {
   switch (rejection) {
     case "empty-slot":
@@ -705,6 +907,33 @@ function createEmptyAnalysis(): BaseFitAnalysis {
     powergridUsed: 0,
     turretHardpointsUsed: 0
   };
+}
+
+function createEmptyDroneBayAnalysis(capacity: number | null = null): DroneBayAnalysis {
+  return {
+    capacity,
+    entries: [],
+    remainingVolume: capacity,
+    usedVolume: 0
+  };
+}
+
+function setDroneBayEntryQuantity(
+  entries: DroneBayEntry[],
+  typeId: number,
+  quantity: number
+) {
+  if (quantity === 0) {
+    return entries.filter((entry) => entry.typeId !== typeId);
+  }
+
+  const existingEntry = entries.some((entry) => entry.typeId === typeId);
+
+  return existingEntry
+    ? entries.map((entry) =>
+        entry.typeId === typeId ? { ...entry, quantity } : entry
+      )
+    : [...entries, { quantity, typeId }];
 }
 
 function isNonnegativeFiniteNumber(value: unknown): value is number {

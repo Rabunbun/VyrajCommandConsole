@@ -30,13 +30,17 @@ type FittingWorkspaceProps = {
 
 export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
   const {
+    addDrone,
     analysis,
     cancelPendingOperation,
+    decrementDrone,
+    droneBayAnalysis,
     fitModule,
     fitWarnings,
     fitState,
     loadCharge,
     moveModule,
+    removeDrone,
     removeModule,
     replaceModule,
     selectHull,
@@ -456,19 +460,23 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
         <ItemBrowser
           actionMode={moduleActionMode}
           browserRack={browserRack}
+          droneBayAnalysis={droneBayAnalysis}
           draggingModuleTypeId={
             dragSource?.kind === "browser-module" ? dragSource.typeId : null
           }
           hulls={hulls}
           manipulationError={manipulationError}
           onAutoFitModule={handleAutoFitModule}
+          onAddDrone={addDrone}
           onClearSelectedSlot={clearSelectedSlot}
+          onDecrementDrone={decrementDrone}
           onFitModule={handleFitModule}
           onLoadCharge={handleLoadCharge}
           onModuleDragEnd={clearDragState}
           onModuleDragStart={handleModuleDragStart}
           onModuleRackChange={setBrowserRack}
           onRemoveModule={handleRemoveModule}
+          onRemoveDrone={removeDrone}
           onReplaceModule={handleReplaceModule}
           onReturnToActions={() => {
             restoreBrowserRackAfterReplacement();
@@ -528,6 +536,7 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
       </div>
       <FittingResources
         analysis={analysis}
+        droneBayUsedVolume={droneBayAnalysis.usedVolume}
         selectedHull={selectedHull}
         warnings={fitWarnings}
       />
