@@ -6,6 +6,7 @@ import { FittingHeader } from "@/components/fitting/fitting-header";
 import { FittingResources } from "@/components/fitting/fitting-resources";
 import { FittingStage } from "@/components/fitting/fitting-stage";
 import type {
+  BrowserFittingDragSource,
   FittingBrowserSection,
   FittingDragSource,
   ModuleActionMode,
@@ -14,6 +15,7 @@ import type {
 import { ItemBrowser } from "@/components/fitting/item-browser";
 import {
   useFittingState,
+  type BulkLoadChargeAttemptResult,
   type FitModuleAttemptResult,
   type FitOperationAttemptResult,
   type LoadChargeAttemptResult
@@ -32,6 +34,7 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
   const {
     addDrone,
     analysis,
+    bulkLoadCharge,
     cancelPendingOperation,
     decrementDrone,
     droneBayAnalysis,
@@ -57,6 +60,7 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
   const [dragSource, setDragSource] = useState<FittingDragSource | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<SelectedFittingSlot | null>(null);
   const [isRemoveDragOver, setIsRemoveDragOver] = useState(false);
+  const [isStageDragOver, setIsStageDragOver] = useState(false);
   const [dragError, setDragError] = useState<string | null>(null);
   const [resolvedModuleNamesByTypeId, setResolvedModuleNamesByTypeId] = useState<
     Record<number, string>
@@ -82,6 +86,7 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
     setDragOverSlot(null);
     setDragSource(null);
     setIsRemoveDragOver(false);
+    setIsStageDragOver(false);
   }, []);
   const openBrowserSection = useCallback((section: FittingBrowserSection) => {
     setOpenBrowserSections((current) => ({ ...current, [section]: true }));
@@ -182,7 +187,7 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
   );
   const handleAutoFitModule = useCallback(
     async (
-      module: FittingModuleSearchResult
+      module: Pick<FittingModuleSearchResult, "rack" | "typeId" | "typeName">
     ): Promise<FitModuleAttemptResult> => {
       const emptySlots = fitState.slots[module.rack]
         .filter((slot) => !slot.module)
@@ -291,16 +296,22 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
 
     return handleRemoveModuleAt(selectedSlot);
   }, [handleRemoveModuleAt, selectedModule, selectedSlot]);
-  const handleLoadCharge = useCallback(
-    async (chargeTypeId: number): Promise<LoadChargeAttemptResult> => {
-      if (!selectedSlot || !selectedModule) {
+  const handleLoadChargeAt = useCallback(
+    async (
+      targetSlot: SelectedFittingSlot,
+      chargeTypeId: number
+    ): Promise<LoadChargeAttemptResult> => {
+      const targetModule = fitState.slots[targetSlot.rack].find(
+        (slot) => slot.index === targetSlot.index
+      )?.module;
+      if (!targetModule) {
         return {
           message: "Select a fitted module before loading a charge.",
           ok: false
         };
       }
 
-      const result = await loadCharge(selectedSlot, chargeTypeId);
+      const result = await loadCharge(targetSlot, chargeTypeId);
 
       if (result.ok) {
         setResolvedChargeNamesByTypeId((currentNames) => ({
@@ -314,7 +325,20 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
 
       return result;
     },
-    [loadCharge, selectedModule, selectedSlot]
+    [fitState.slots, loadCharge]
+  );
+  const handleLoadCharge = useCallback(
+    async (chargeTypeId: number): Promise<LoadChargeAttemptResult> => {
+      if (!selectedSlot || !selectedModule) {
+        return {
+          message: "Select a fitted module before loading a charge.",
+          ok: false
+        };
+      }
+
+      return handleLoadChargeAt(selectedSlot, chargeTypeId);
+    },
+    [handleLoadChargeAt, selectedModule, selectedSlot]
   );
   const handleUnloadCharge = useCallback((): FitOperationAttemptResult => {
     if (!selectedSlot || !selectedModule) {
@@ -371,16 +395,11 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
     },
     [clearSelectedSlot, moduleActionMode, moveModule, selectedSlot]
   );
-  const handleModuleDragStart = useCallback(
-    (module: FittingModuleSearchResult) => {
+  const handleBrowserDragStart = useCallback(
+    (source: BrowserFittingDragSource) => {
       setDragError(null);
       setManipulationError(null);
-      setDragSource({
-        kind: "browser-module",
-        rack: module.rack,
-        typeId: module.typeId,
-        typeName: module.typeName
-      });
+      setDragSource(source);
     },
     []
   );
@@ -421,6 +440,20 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
         return;
       }
 
+      if (source.kind === "browser-charge") {
+        const result = await handleLoadChargeAt(target, source.typeId);
+        if (!result.ok) {
+          setDragError(result.message);
+        }
+        clearDragState();
+        return;
+      }
+
+      if (source.kind === "browser-drone") {
+        clearDragState();
+        return;
+      }
+
       const result = moveModule({ from: source.from, to: target });
 
       if (result.ok) {
@@ -430,8 +463,56 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
         clearDragState();
       }
     },
-    [clearDragState, clearSelectedSlot, dragSource, fitModuleAtSlot, moveModule]
+    [
+      clearDragState,
+      clearSelectedSlot,
+      dragSource,
+      fitModuleAtSlot,
+      handleLoadChargeAt,
+      moveModule
+    ]
   );
+  const handleDropOnStage = useCallback(async () => {
+    const source = dragSource;
+    setIsStageDragOver(false);
+    if (!source || source.kind === "fitted-module") {
+      return;
+    }
+
+    if (source.kind === "browser-module") {
+      const result = await handleAutoFitModule(source);
+      if (!result.ok) {
+        setDragError(result.message);
+        clearDragState();
+      }
+      return;
+    }
+
+    if (source.kind === "browser-charge") {
+      const result: BulkLoadChargeAttemptResult = await bulkLoadCharge(source.typeId);
+      if (result.ok) {
+        setResolvedChargeNamesByTypeId((currentNames) => ({
+          ...currentNames,
+          [result.chargeTypeId]: result.chargeTypeName
+        }));
+        setDragError(null);
+      } else {
+        setDragError(result.message);
+      }
+      clearDragState();
+      return;
+    }
+
+    const result = await addDrone(source.typeId);
+    setDragError(result.ok ? null : result.message);
+    clearDragState();
+  }, [
+    addDrone,
+    bulkLoadCharge,
+    clearDragState,
+    dragSource,
+    handleAutoFitModule
+  ]);
   const handleDropOnRemove = useCallback(async () => {
     const source = dragSource;
 
@@ -475,9 +556,7 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
           actionMode={moduleActionMode}
           browserRack={browserRack}
           droneBayAnalysis={droneBayAnalysis}
-          draggingModuleTypeId={
-            dragSource?.kind === "browser-module" ? dragSource.typeId : null
-          }
+          dragSource={dragSource}
           hulls={hulls}
           manipulationError={manipulationError}
           onAutoFitModule={handleAutoFitModule}
@@ -486,8 +565,8 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
           onDecrementDrone={decrementDrone}
           onFitModule={handleFitModule}
           onLoadCharge={handleLoadCharge}
-          onModuleDragEnd={clearDragState}
-          onModuleDragStart={handleModuleDragStart}
+          onBrowserDragEnd={clearDragState}
+          onBrowserDragStart={handleBrowserDragStart}
           onModuleRackChange={setBrowserRack}
           onRemoveModule={handleRemoveModule}
           onRemoveDrone={removeDrone}
@@ -528,6 +607,7 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
           dragOverSlot={dragOverSlot}
           dragSource={dragSource}
           isRemoveDragOver={isRemoveDragOver}
+          isStageDragOver={isStageDragOver}
           chargeNamesByTypeId={resolvedChargeNamesByTypeId}
           moduleNamesByTypeId={resolvedModuleNamesByTypeId}
           moveSource={moduleActionMode === "move" ? selectedSlot : null}
@@ -536,10 +616,12 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
           onDragOverSlot={handleDragOverSlot}
           onDropOnRemove={handleDropOnRemove}
           onDropOnSlot={handleDropOnSlot}
+          onDropOnStage={handleDropOnStage}
           onFittedModuleDragStart={handleFittedModuleDragStart}
           onMoveTarget={handleMoveTarget}
           onRemoveModule={handleRemoveModuleAt}
           onRemoveDragOverChange={setIsRemoveDragOver}
+          onStageDragOverChange={setIsStageDragOver}
           onSelectSlot={handleSelectSlot}
           onStartMove={handleStartMoveAt}
           onStartReplace={handleStartReplaceAt}

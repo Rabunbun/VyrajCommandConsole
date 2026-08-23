@@ -15,6 +15,7 @@ type FittingStageProps = {
   dragOverSlot: SelectedFittingSlot | null;
   dragSource: FittingDragSource | null;
   isRemoveDragOver: boolean;
+  isStageDragOver: boolean;
   moduleNamesByTypeId: Readonly<Record<number, string>>;
   moveSource: SelectedFittingSlot | null;
   onClearSelectedSlot: () => void;
@@ -22,6 +23,7 @@ type FittingStageProps = {
   onDragOverSlot: (slot: SelectedFittingSlot | null) => void;
   onDropOnRemove: () => void;
   onDropOnSlot: (slot: SelectedFittingSlot) => void;
+  onDropOnStage: () => void;
   onFittedModuleDragStart: (
     source: Extract<FittingDragSource, { kind: "fitted-module" }>
   ) => void;
@@ -30,6 +32,7 @@ type FittingStageProps = {
     slot: SelectedFittingSlot
   ) => Promise<FitOperationAttemptResult>;
   onRemoveDragOverChange: (isOver: boolean) => void;
+  onStageDragOverChange: (isOver: boolean) => void;
   onSelectSlot: (slot: SelectedFittingSlot) => void;
   onStartMove: (slot: SelectedFittingSlot) => void;
   onStartReplace: (slot: SelectedFittingSlot) => void;
@@ -45,6 +48,7 @@ export function FittingStage({
   dragOverSlot,
   dragSource,
   isRemoveDragOver,
+  isStageDragOver,
   moduleNamesByTypeId,
   moveSource,
   onClearSelectedSlot,
@@ -52,10 +56,12 @@ export function FittingStage({
   onDragOverSlot,
   onDropOnRemove,
   onDropOnSlot,
+  onDropOnStage,
   onFittedModuleDragStart,
   onMoveTarget,
   onRemoveModule,
   onRemoveDragOverChange,
+  onStageDragOverChange,
   onSelectSlot,
   onStartMove,
   onStartReplace,
@@ -80,7 +86,37 @@ export function FittingStage({
   return (
     <section
       className="fitting-stage"
+      data-general-drop-active={isStageDragOver}
+      data-general-drop-target={isBrowserDragSource(dragSource)}
       aria-labelledby="fitting-stage-title"
+      onDragEnter={(event) => {
+        if (isBrowserDragSource(dragSource)) {
+          event.preventDefault();
+          onStageDragOverChange(true);
+        }
+      }}
+      onDragLeave={(event) => {
+        const nextTarget = event.relatedTarget;
+        if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+          return;
+        }
+        onStageDragOverChange(false);
+      }}
+      onDragOver={(event) => {
+        if (isBrowserDragSource(dragSource)) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+          onStageDragOverChange(true);
+        }
+      }}
+      onDrop={(event) => {
+        if (!isBrowserDragSource(dragSource)) {
+          return;
+        }
+        event.preventDefault();
+        onStageDragOverChange(false);
+        void onDropOnStage();
+      }}
       onClick={(event) => {
         const target = event.target;
 
@@ -132,11 +168,13 @@ export function FittingStage({
               }}
               onDragOver={(event) => {
                 event.preventDefault();
+                event.stopPropagation();
                 event.dataTransfer.dropEffect = "move";
                 onRemoveDragOverChange(true);
               }}
               onDrop={(event) => {
                 event.preventDefault();
+                event.stopPropagation();
                 void onDropOnRemove();
               }}
               role="button"
@@ -215,6 +253,14 @@ export function FittingStage({
       </div>
     </section>
   );
+}
+
+function isBrowserDragSource(
+  source: FittingDragSource | null
+): source is Extract<FittingDragSource, { kind: `browser-${string}` }> {
+  return source?.kind === "browser-module" ||
+    source?.kind === "browser-charge" ||
+    source?.kind === "browser-drone";
 }
 
 function createEmptyVisualSlots(): FittingSlots {

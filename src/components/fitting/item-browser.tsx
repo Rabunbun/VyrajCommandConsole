@@ -7,7 +7,9 @@ import {
 } from "react";
 import { EveModuleIcon } from "@/components/fitting/eve-module-icon";
 import type {
+  BrowserFittingDragSource,
   FittingBrowserSection,
+  FittingDragSource,
   ModuleActionMode,
   SelectedFittingSlot
 } from "@/components/fitting/fitting-ui-types";
@@ -22,7 +24,9 @@ import type { FittedModule } from "@/lib/fitting/fit-state";
 import type {
   BrowsableFittingRack,
   DroneBayAnalysis,
-  FittingChargeSearchResponse,
+  FittingChargeCatalogResponse,
+  FittingChargeHierarchyNode,
+  FittingChargeHierarchyResponse,
   FittingChargeSearchResult,
   FittingDroneSearchResponse,
   FittingDroneSearchResult,
@@ -54,7 +58,7 @@ type ItemBrowserProps = {
   actionMode: ModuleActionMode;
   browserRack: BrowsableFittingRack;
   droneBayAnalysis: DroneBayAnalysis;
-  draggingModuleTypeId: number | null;
+  dragSource: FittingDragSource | null;
   hulls: FittingHullSummary[];
   manipulationError: string | null;
   onAutoFitModule: (
@@ -65,8 +69,8 @@ type ItemBrowserProps = {
   onDecrementDrone: (typeId: number) => Promise<DroneBayAttemptResult>;
   onFitModule: (typeId: number) => Promise<FitModuleAttemptResult>;
   onLoadCharge: (typeId: number) => Promise<LoadChargeAttemptResult>;
-  onModuleDragEnd: () => void;
-  onModuleDragStart: (module: FittingModuleSearchResult) => void;
+  onBrowserDragEnd: () => void;
+  onBrowserDragStart: (source: BrowserFittingDragSource) => void;
   onModuleRackChange: (rack: BrowsableFittingRack) => void;
   onRemoveModule: () => Promise<FitOperationAttemptResult>;
   onRemoveDrone: (typeId: number) => Promise<DroneBayAttemptResult>;
@@ -89,7 +93,7 @@ export function ItemBrowser({
   actionMode,
   browserRack,
   droneBayAnalysis,
-  draggingModuleTypeId,
+  dragSource,
   hulls,
   manipulationError,
   onAutoFitModule,
@@ -98,8 +102,8 @@ export function ItemBrowser({
   onDecrementDrone,
   onFitModule,
   onLoadCharge,
-  onModuleDragEnd,
-  onModuleDragStart,
+  onBrowserDragEnd,
+  onBrowserDragStart,
   onModuleRackChange,
   onRemoveModule,
   onRemoveDrone,
@@ -234,11 +238,20 @@ export function ItemBrowser({
           action={replacementActive ? "replace" : "fit"}
           active={openSections.modules}
           collapsedGroups={collapsedModuleGroups}
-          draggingModuleTypeId={draggingModuleTypeId}
+          draggingModuleTypeId={
+            dragSource?.kind === "browser-module" ? dragSource.typeId : null
+          }
           onAutoFitModule={onAutoFitModule}
           onChooseModule={replacementActive ? onReplaceModule : onFitModule}
-          onModuleDragEnd={onModuleDragEnd}
-          onModuleDragStart={onModuleDragStart}
+          onModuleDragEnd={onBrowserDragEnd}
+          onModuleDragStart={(module) =>
+            onBrowserDragStart({
+              kind: "browser-module",
+              rack: module.rack,
+              typeId: module.typeId,
+              typeName: module.typeName
+            })
+          }
           onToggleGroup={(groupKey) =>
             toggleCollapsedGroup(setCollapsedModuleGroups, groupKey)
           }
@@ -250,8 +263,8 @@ export function ItemBrowser({
       </PersistentBrowserSection>
 
       <PersistentBrowserSection
-        badge={selectedModule ? "Context" : "Select module"}
-        description="Compatible reloadable charges"
+        badge={selectedModule ? "Context" : "Catalog"}
+        description="Persistent charge and ammunition index"
         id="fitting-browser-charges"
         onToggle={() => onToggleSection("charges")}
         open={openSections.charges}
@@ -260,6 +273,17 @@ export function ItemBrowser({
         <ChargeBrowser
           active={openSections.charges}
           collapsedGroups={collapsedChargeGroups}
+          draggingChargeTypeId={
+            dragSource?.kind === "browser-charge" ? dragSource.typeId : null
+          }
+          onChargeDragEnd={onBrowserDragEnd}
+          onChargeDragStart={(charge) =>
+            onBrowserDragStart({
+              kind: "browser-charge",
+              typeId: charge.typeId,
+              typeName: charge.typeName
+            })
+          }
           onLoadCharge={onLoadCharge}
           onToggleGroup={(groupKey) =>
             toggleCollapsedGroup(setCollapsedChargeGroups, groupKey)
@@ -290,8 +314,19 @@ export function ItemBrowser({
         <DroneBrowser
           active={openSections.drones}
           analysis={droneBayAnalysis}
+          draggingDroneTypeId={
+            dragSource?.kind === "browser-drone" ? dragSource.typeId : null
+          }
           onAddDrone={onAddDrone}
           onDecrementDrone={onDecrementDrone}
+          onDroneDragEnd={onBrowserDragEnd}
+          onDroneDragStart={(drone) =>
+            onBrowserDragStart({
+              kind: "browser-drone",
+              typeId: drone.typeId,
+              typeName: drone.typeName
+            })
+          }
           onRemoveDrone={onRemoveDrone}
           query={droneQuery}
           selectedHull={selectedHull}
@@ -1326,6 +1361,9 @@ function getModuleBranchKey(
 type ChargeBrowserProps = {
   active: boolean;
   collapsedGroups: Set<string>;
+  draggingChargeTypeId: number | null;
+  onChargeDragEnd: () => void;
+  onChargeDragStart: (charge: FittingChargeSearchResult) => void;
   onLoadCharge: (typeId: number) => Promise<LoadChargeAttemptResult>;
   onToggleGroup: (groupKey: string) => void;
   onUnloadCharge: () => FitOperationAttemptResult;
@@ -1341,13 +1379,26 @@ type ChargeSearchState =
   | { message: string; requestKey: string; status: "error" }
   | {
       requestKey: string;
-      response: FittingChargeSearchResponse;
+      response: FittingChargeCatalogResponse;
       status: "ready";
     };
+
+type ChargeHierarchyState =
+  | { status: "idle" | "loading" }
+  | { message: string; status: "error" }
+  | { response: FittingChargeHierarchyResponse; status: "ready" };
+
+type ChargeBranchState =
+  | { status: "loading" }
+  | { message: string; status: "error" }
+  | { results: FittingChargeSearchResult[]; status: "ready" };
 
 function ChargeBrowser({
   active,
   collapsedGroups,
+  draggingChargeTypeId,
+  onChargeDragEnd,
+  onChargeDragStart,
   onLoadCharge,
   onToggleGroup,
   onUnloadCharge,
@@ -1359,33 +1410,82 @@ function ChargeBrowser({
   const [searchState, setSearchState] = useState<ChargeSearchState>({
     status: "idle"
   });
+  const [hierarchyState, setHierarchyState] = useState<ChargeHierarchyState>({
+    status: "idle"
+  });
+  const [expandedBranches, setExpandedBranches] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [branchStates, setBranchStates] = useState<
+    Record<string, ChargeBranchState>
+  >({});
   const [pendingChargeTypeId, setPendingChargeTypeId] = useState<number | null>(
     null
   );
   const [chargeFeedback, setChargeFeedback] = useState<
     {
       message: string;
-      moduleTypeId: number;
       tone: "error" | "success";
     } | null
   >(null);
-  const moduleTypeId = selectedModule?.typeId ?? null;
-  const requestKey = moduleTypeId ? `${moduleTypeId}:${query}` : "idle";
+  const normalizedQuery = query.trim();
+  const requestKey = normalizedQuery || "idle";
   const currentSearchState =
     searchState.status !== "idle" && searchState.requestKey === requestKey
       ? searchState
-      : moduleTypeId
+      : normalizedQuery
         ? ({ requestKey, status: "loading" } as const)
         : ({ status: "idle" } as const);
   const groupedCharges =
     currentSearchState.status === "ready"
       ? groupCharges(currentSearchState.response.results)
       : [];
-  const currentChargeFeedback =
-    chargeFeedback?.moduleTypeId === moduleTypeId ? chargeFeedback : null;
+  const currentChargeFeedback = chargeFeedback;
 
   useEffect(() => {
-    if (!active || !moduleTypeId) {
+    if (!active || hierarchyState.status !== "idle") {
+      return;
+    }
+
+    const abortController = new AbortController();
+    void fetch("/api/fitting/charges?browse=hierarchy", {
+      cache: "no-store",
+      signal: abortController.signal
+    })
+      .then(async (response) => {
+        const payload = (await response.json()) as
+          | FittingChargeHierarchyResponse
+          | { error?: string };
+
+        if (!response.ok || !("nodes" in payload)) {
+          throw new Error(
+            "error" in payload && payload.error
+              ? payload.error
+              : "Charge hierarchy is temporarily unavailable."
+          );
+        }
+
+        setHierarchyState({ response: payload, status: "ready" });
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        setHierarchyState({
+          message:
+            error instanceof Error
+              ? error.message
+              : "Charge hierarchy is temporarily unavailable.",
+          status: "error"
+        });
+      });
+
+    return () => abortController.abort();
+  }, [active, hierarchyState.status]);
+
+  useEffect(() => {
+    if (!active || !normalizedQuery) {
       return;
     }
 
@@ -1393,7 +1493,6 @@ function ChargeBrowser({
     const timeoutId = window.setTimeout(async () => {
       const searchParams = new URLSearchParams({
         limit: String(chargeResultLimit),
-        moduleTypeId: String(moduleTypeId),
         q: query
       });
 
@@ -1403,7 +1502,7 @@ function ChargeBrowser({
           signal: abortController.signal
         });
         const payload = (await response.json()) as
-          | FittingChargeSearchResponse
+          | FittingChargeCatalogResponse
           | { error?: string };
 
         if (!response.ok || !("results" in payload)) {
@@ -1435,14 +1534,62 @@ function ChargeBrowser({
       window.clearTimeout(timeoutId);
       abortController.abort();
     };
-  }, [active, moduleTypeId, query, requestKey]);
+  }, [active, normalizedQuery, query, requestKey]);
 
-  if (!selectedModule) {
-    return (
-      <div className="fitting-empty-note">
-        Select a fitted, charge-capable module to browse compatible charges.
-      </div>
-    );
+  async function toggleHierarchyBranch(node: FittingChargeHierarchyNode) {
+    const expanding = !expandedBranches.has(node.key);
+    setExpandedBranches((current) => {
+      const next = new Set(current);
+      if (expanding) next.add(node.key);
+      else next.delete(node.key);
+      return next;
+    });
+
+    if (!expanding || !node.directCount || branchStates[node.key]) {
+      return;
+    }
+
+    setBranchStates((current) => ({
+      ...current,
+      [node.key]: { status: "loading" }
+    }));
+    const searchParams = new URLSearchParams({ browse: "branch" });
+    if (node.fallback) searchParams.set("fallback", "true");
+    if (node.groupId !== null) searchParams.set("groupId", String(node.groupId));
+    if (node.marketGroupId !== null) {
+      searchParams.set("marketGroupId", String(node.marketGroupId));
+    }
+
+    try {
+      const response = await fetch(`/api/fitting/charges?${searchParams}`, {
+        cache: "no-store"
+      });
+      const payload = (await response.json()) as
+        | FittingChargeCatalogResponse
+        | { error?: string };
+      if (!response.ok || !("results" in payload)) {
+        throw new Error(
+          "error" in payload && payload.error
+            ? payload.error
+            : "Charge branch is temporarily unavailable."
+        );
+      }
+      setBranchStates((current) => ({
+        ...current,
+        [node.key]: { results: payload.results, status: "ready" }
+      }));
+    } catch (error) {
+      setBranchStates((current) => ({
+        ...current,
+        [node.key]: {
+          message:
+            error instanceof Error
+              ? error.message
+              : "Charge branch is temporarily unavailable.",
+          status: "error"
+        }
+      }));
+    }
   }
 
   const handleLoadCharge = async (charge: FittingChargeSearchResult) => {
@@ -1455,30 +1602,29 @@ function ChargeBrowser({
       result.ok
         ? {
             message: `Loaded ${result.charge.quantity.toLocaleString("en-US")} × ${result.charge.typeName}.`,
-            moduleTypeId: selectedModule.typeId,
             tone: "success"
           }
         : {
             message: result.message,
-            moduleTypeId: selectedModule.typeId,
             tone: "error"
           }
     );
   };
 
   const handleUnloadCharge = () => {
+    if (!selectedModule) {
+      return;
+    }
     const result = onUnloadCharge();
 
     setChargeFeedback(
       result.ok
         ? {
             message: "Charge unloaded.",
-            moduleTypeId: selectedModule.typeId,
             tone: "success"
           }
         : {
             message: result.message,
-            moduleTypeId: selectedModule.typeId,
             tone: "error"
           }
     );
@@ -1486,7 +1632,7 @@ function ChargeBrowser({
 
   return (
     <div className="fitting-browser-index">
-      {selectedModule.charge ? (
+      {selectedModule?.charge ? (
         <div className="fitting-loaded-charge-summary">
           <EveModuleIcon
             typeId={selectedModule.charge.typeId}
@@ -1512,7 +1658,7 @@ function ChargeBrowser({
       ) : null}
 
       <label className="field-stack">
-        <span className="field-label">Search compatible charges</span>
+        <span className="field-label">Search charges</span>
         <input
           className="text-input fitting-search-input"
           onChange={(event) => setQuery(event.target.value)}
@@ -1523,27 +1669,19 @@ function ChargeBrowser({
       </label>
 
       <div className="fitting-browser-scroll-region" aria-live="polite">
-        {currentSearchState.status === "loading" ? (
-          <div className="fitting-empty-note">Resolving module compatibility...</div>
+        {normalizedQuery && currentSearchState.status === "loading" ? (
+          <div className="fitting-empty-note">Searching charge cache...</div>
         ) : null}
         {currentSearchState.status === "error" ? (
           <div className="fitting-empty-note" data-tone="error">
             {currentSearchState.message}
           </div>
         ) : null}
-        {currentSearchState.status === "ready" ? (
-          !currentSearchState.response.module.chargeCapable ? (
-            <div className="fitting-empty-note">
-              {currentSearchState.response.module.typeName} does not accept
-              reloadable charges.
-            </div>
-          ) : (
+        {normalizedQuery && currentSearchState.status === "ready" ? (
             <>
               <div className="fitting-browser-result-heading">
-                <span>{currentSearchState.response.module.typeName}</span>
-                <small>
-                  Capacity {formatVolume(currentSearchState.response.module.capacity)}
-                </small>
+                <span>Charge search</span>
+                <small>Up to {chargeResultLimit} matches</small>
               </div>
               {groupedCharges.length ? (
                 <div className="fitting-browser-groups">
@@ -1562,34 +1700,18 @@ function ChargeBrowser({
                       >
                         <div className="fitting-charge-list">
                           {group.items.map((charge) => (
-                            <article
-                              className="fitting-charge-result"
-                              data-loaded={
-                                selectedModule.charge?.typeId === charge.typeId
+                            <ChargeResultRow
+                              charge={charge}
+                              loaded={
+                                selectedModule?.charge?.typeId === charge.typeId
                               }
+                              dragging={draggingChargeTypeId === charge.typeId}
                               key={charge.typeId}
-                            >
-                              <EveModuleIcon
-                                typeId={charge.typeId}
-                                typeName={charge.typeName}
-                              />
-                              <span className="fitting-hull-result-copy">
-                                <strong>{charge.typeName}</strong>
-                                <span>{formatChargeMetadata(charge)}</span>
-                              </span>
-                              <button
-                                aria-label={`Load ${charge.typeName} into ${currentSearchState.response.module.typeName}`}
-                                disabled={pendingChargeTypeId !== null}
-                                onClick={() => void handleLoadCharge(charge)}
-                                type="button"
-                              >
-                                {pendingChargeTypeId === charge.typeId
-                                  ? "Loading..."
-                                  : selectedModule.charge?.typeId === charge.typeId
-                                    ? "Reload"
-                                    : "Load"}
-                              </button>
-                            </article>
+                              onDragEnd={onChargeDragEnd}
+                              onDragStart={onChargeDragStart}
+                              onLoad={selectedModule ? handleLoadCharge : null}
+                              pending={pendingChargeTypeId === charge.typeId}
+                            />
                           ))}
                         </div>
                       </BrowserResultGroup>
@@ -1599,11 +1721,50 @@ function ChargeBrowser({
               ) : (
                 <div className="fitting-empty-note">
                   {query.trim()
-                    ? "No compatible charges match this search."
-                    : "No compatible charges fit this module's authoritative group, size, and capacity constraints."}
+                    ? "No charges match this search."
+                    : "No charges are available."}
                 </div>
               )}
             </>
+        ) : null}
+        {!normalizedQuery &&
+        (hierarchyState.status === "idle" || hierarchyState.status === "loading") ? (
+          <div className="fitting-empty-note">Loading charge hierarchy...</div>
+        ) : null}
+        {!normalizedQuery && hierarchyState.status === "error" ? (
+          <div className="fitting-empty-note" data-tone="error">
+            {hierarchyState.message}
+          </div>
+        ) : null}
+        {!normalizedQuery && hierarchyState.status === "ready" ? (
+          hierarchyState.response.nodes.length ? (
+            <>
+              <div className="fitting-browser-result-heading">
+                <span>Authoritative charge index</span>
+                <small>{hierarchyState.response.total} charges</small>
+              </div>
+              <div className="fitting-module-hierarchy">
+                {hierarchyState.response.nodes.map((node) => (
+                  <ChargeHierarchyBranch
+                    branchStates={branchStates}
+                    draggingChargeTypeId={draggingChargeTypeId}
+                    expandedBranches={expandedBranches}
+                    key={node.key}
+                    node={node}
+                    onChargeDragEnd={onChargeDragEnd}
+                    onChargeDragStart={onChargeDragStart}
+                    onLoadCharge={selectedModule ? handleLoadCharge : null}
+                    onToggle={toggleHierarchyBranch}
+                    pendingChargeTypeId={pendingChargeTypeId}
+                    selectedChargeTypeId={selectedModule?.charge?.typeId ?? null}
+                  />
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="fitting-empty-note">
+              No charges are available. The charge cache may be empty.
+            </div>
           )
         ) : null}
       </div>
@@ -1622,11 +1783,150 @@ function ChargeBrowser({
   );
 }
 
+function ChargeHierarchyBranch({
+  branchStates,
+  draggingChargeTypeId,
+  expandedBranches,
+  node,
+  onChargeDragEnd,
+  onChargeDragStart,
+  onLoadCharge,
+  onToggle,
+  pendingChargeTypeId,
+  selectedChargeTypeId
+}: {
+  branchStates: Record<string, ChargeBranchState>;
+  draggingChargeTypeId: number | null;
+  expandedBranches: Set<string>;
+  node: FittingChargeHierarchyNode;
+  onChargeDragEnd: () => void;
+  onChargeDragStart: (charge: FittingChargeSearchResult) => void;
+  onLoadCharge: ((charge: FittingChargeSearchResult) => Promise<void>) | null;
+  onToggle: (node: FittingChargeHierarchyNode) => void;
+  pendingChargeTypeId: number | null;
+  selectedChargeTypeId: number | null;
+}) {
+  const expanded = expandedBranches.has(node.key);
+  const branchState = branchStates[node.key];
+
+  return (
+    <section className="fitting-browser-result-group fitting-module-branch">
+      <button
+        aria-expanded={expanded}
+        className="fitting-browser-group-toggle"
+        onClick={() => void onToggle(node)}
+        type="button"
+      >
+        <span>{expanded ? "−" : "+"}</span>
+        <strong>{node.label}</strong>
+        <small>{node.count}</small>
+      </button>
+      {expanded ? (
+        <div className="fitting-module-branch-children">
+          {node.children.map((child) => (
+            <ChargeHierarchyBranch
+              branchStates={branchStates}
+              draggingChargeTypeId={draggingChargeTypeId}
+              expandedBranches={expandedBranches}
+              key={child.key}
+              node={child}
+              onChargeDragEnd={onChargeDragEnd}
+              onChargeDragStart={onChargeDragStart}
+              onLoadCharge={onLoadCharge}
+              onToggle={onToggle}
+              pendingChargeTypeId={pendingChargeTypeId}
+              selectedChargeTypeId={selectedChargeTypeId}
+            />
+          ))}
+          {node.directCount ? (
+            branchState?.status === "ready" ? (
+              <div className="fitting-charge-list">
+                {branchState.results.map((charge) => (
+                  <ChargeResultRow
+                    charge={charge}
+                    loaded={selectedChargeTypeId === charge.typeId}
+                    dragging={draggingChargeTypeId === charge.typeId}
+                    key={charge.typeId}
+                    onDragEnd={onChargeDragEnd}
+                    onDragStart={onChargeDragStart}
+                    onLoad={onLoadCharge}
+                    pending={pendingChargeTypeId === charge.typeId}
+                  />
+                ))}
+              </div>
+            ) : branchState?.status === "error" ? (
+              <div className="fitting-empty-note" data-tone="error">
+                {branchState.message}
+              </div>
+            ) : (
+              <div className="fitting-empty-note">Loading branch charges...</div>
+            )
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function ChargeResultRow({
+  charge,
+  loaded,
+  dragging,
+  onDragEnd,
+  onDragStart,
+  onLoad,
+  pending
+}: {
+  charge: FittingChargeSearchResult;
+  loaded: boolean;
+  dragging: boolean;
+  onDragEnd: () => void;
+  onDragStart: (charge: FittingChargeSearchResult) => void;
+  onLoad: ((charge: FittingChargeSearchResult) => Promise<void>) | null;
+  pending: boolean;
+}) {
+  return (
+    <article
+      className="fitting-charge-result"
+      data-dragging={dragging}
+      data-loaded={loaded}
+      draggable
+      onDragEnd={onDragEnd}
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = "copy";
+        event.dataTransfer.setData("text/plain", `fitting-charge:${charge.typeId}`);
+        onDragStart(charge);
+      }}
+    >
+      <EveModuleIcon typeId={charge.typeId} typeName={charge.typeName} />
+      <span className="fitting-hull-result-copy">
+        <strong>{charge.typeName}</strong>
+        <span>{formatChargeMetadata(charge)}</span>
+      </span>
+      {onLoad ? (
+        <button
+          aria-label={`Load ${charge.typeName} into the selected module`}
+          disabled={pending}
+          onClick={() => void onLoad(charge)}
+          type="button"
+        >
+          {pending ? "Loading..." : loaded ? "Reload" : "Load"}
+        </button>
+      ) : (
+        <small className="fitting-charge-drag-note">Drag to fit</small>
+      )}
+    </article>
+  );
+}
+
 type DroneBrowserProps = {
   active: boolean;
   analysis: DroneBayAnalysis;
+  draggingDroneTypeId: number | null;
   onAddDrone: (typeId: number) => Promise<DroneBayAttemptResult>;
   onDecrementDrone: (typeId: number) => Promise<DroneBayAttemptResult>;
+  onDroneDragEnd: () => void;
+  onDroneDragStart: (drone: FittingDroneSearchResult) => void;
   onRemoveDrone: (typeId: number) => Promise<DroneBayAttemptResult>;
   query: string;
   selectedHull: FittingHullSummary | null;
@@ -1645,8 +1945,11 @@ type DroneSearchState =
 function DroneBrowser({
   active,
   analysis,
+  draggingDroneTypeId,
   onAddDrone,
   onDecrementDrone,
+  onDroneDragEnd,
+  onDroneDragStart,
   onRemoveDrone,
   query,
   selectedHull,
@@ -1868,12 +2171,15 @@ function DroneBrowser({
               {hierarchy.map((branch) => (
                 <DroneHierarchyBranch
                   branch={branch}
+                  draggingDroneTypeId={draggingDroneTypeId}
                   expandedBranches={expandedBranches}
                   forceExpanded={searchActive}
                   key={branch.key}
                   onAddDrone={(drone) =>
                     performDroneOperation(drone.typeId, drone.typeName, "add")
                   }
+                  onDroneDragEnd={onDroneDragEnd}
+                  onDroneDragStart={onDroneDragStart}
                   onToggle={toggleBranch}
                   pendingDroneTypeId={pendingDroneTypeId}
                 />
@@ -1987,16 +2293,22 @@ function finalizeDroneBranches(
 
 function DroneHierarchyBranch({
   branch,
+  draggingDroneTypeId,
   expandedBranches,
   forceExpanded,
   onAddDrone,
+  onDroneDragEnd,
+  onDroneDragStart,
   pendingDroneTypeId,
   onToggle
 }: {
   branch: DroneHierarchyBranch;
+  draggingDroneTypeId: number | null;
   expandedBranches: Set<string>;
   forceExpanded: boolean;
   onAddDrone: (drone: FittingDroneSearchResult) => void;
+  onDroneDragEnd: () => void;
+  onDroneDragStart: (drone: FittingDroneSearchResult) => void;
   pendingDroneTypeId: number | null;
   onToggle: (branchKey: string) => void;
 }) {
@@ -2019,10 +2331,13 @@ function DroneHierarchyBranch({
           {branch.children.map((child) => (
             <DroneHierarchyBranch
               branch={child}
+              draggingDroneTypeId={draggingDroneTypeId}
               expandedBranches={expandedBranches}
               forceExpanded={forceExpanded}
               key={child.key}
               onAddDrone={onAddDrone}
+              onDroneDragEnd={onDroneDragEnd}
+              onDroneDragStart={onDroneDragStart}
               onToggle={onToggle}
               pendingDroneTypeId={pendingDroneTypeId}
             />
@@ -2031,9 +2346,12 @@ function DroneHierarchyBranch({
             <div className="fitting-drone-list">
               {branch.drones.map((drone) => (
                 <DroneResultRow
+                  dragging={draggingDroneTypeId === drone.typeId}
                   drone={drone}
                   key={drone.typeId}
                   onAdd={() => onAddDrone(drone)}
+                  onDragEnd={onDroneDragEnd}
+                  onDragStart={() => onDroneDragStart(drone)}
                   pending={pendingDroneTypeId === drone.typeId}
                 />
               ))}
@@ -2046,12 +2364,18 @@ function DroneHierarchyBranch({
 }
 
 function DroneResultRow({
+  dragging,
   drone,
   onAdd,
+  onDragEnd,
+  onDragStart,
   pending
 }: {
+  dragging: boolean;
   drone: FittingDroneSearchResult;
   onAdd: () => void;
+  onDragEnd: () => void;
+  onDragStart: () => void;
   pending: boolean;
 }) {
   const badges = getDroneBadges(drone);
@@ -2059,6 +2383,14 @@ function DroneResultRow({
   return (
     <div
       className="fitting-drone-result"
+      data-dragging={dragging}
+      draggable
+      onDragEnd={onDragEnd}
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = "copy";
+        event.dataTransfer.setData("text/plain", `fitting-drone:${drone.typeId}`);
+        onDragStart();
+      }}
       onDoubleClick={() => {
         if (!pending) {
           onAdd();

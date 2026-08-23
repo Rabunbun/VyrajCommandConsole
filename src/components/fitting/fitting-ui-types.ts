@@ -17,8 +17,23 @@ export type FittingDragSource =
       typeName: string;
     }
   | {
+      kind: "browser-charge";
+      typeId: number;
+      typeName: string;
+    }
+  | {
+      kind: "browser-drone";
+      typeId: number;
+      typeName: string;
+    }
+  | {
       from: SelectedFittingSlot;
       instanceId: string;
       kind: "fitted-module";
       typeId: number;
     };
+
+export type BrowserFittingDragSource = Extract<
+  FittingDragSource,
+  { kind: "browser-charge" | "browser-drone" | "browser-module" }
+>;

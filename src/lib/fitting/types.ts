@@ -85,6 +85,30 @@ export type FittingChargeSearchResponse = {
   results: FittingChargeSearchResult[];
 };
 
+export type FittingChargeCatalogResponse = {
+  results: FittingChargeSearchResult[];
+};
+
+export type FittingChargeHierarchyNode = {
+  children: FittingChargeHierarchyNode[];
+  count: number;
+  directCount: number;
+  fallback: boolean;
+  groupId: number | null;
+  key: string;
+  label: string;
+  marketGroupId: number | null;
+};
+
+export type FittingChargeHierarchyResponse = {
+  classified: number;
+  fallback: number;
+  nodes: FittingChargeHierarchyNode[];
+  reachable: number;
+  total: number;
+  unreachable: number;
+};
+
 export type FittingDroneSearchResult = {
   bandwidthUsed: number | null;
   groupId: number;
@@ -156,6 +180,13 @@ export type FittingChargeLoadResponse = {
     typeId: number;
     typeName: string;
   };
+};
+
+export type FittingChargeBulkLoadResponse = {
+  chargeTypeId: number;
+  chargeTypeName: string;
+  loads: FittingChargeLoadResponse[];
+  missingModuleTypeIds: number[];
 };
 
 export type ResolvedFittingModule = {

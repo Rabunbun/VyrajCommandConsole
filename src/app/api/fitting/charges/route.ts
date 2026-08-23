@@ -1,5 +1,9 @@
 import {
+  browseFittingChargeBranch,
+  getFittingChargeHierarchy,
+  searchFittingCharges,
   searchCompatibleFittingCharges,
+  validateFittingChargeBulkLoad,
   validateFittingChargeLoad
 } from "@/lib/fitting/charges";
 
@@ -11,24 +15,48 @@ const maximumQueryLength = 120;
 
 export async function GET(request: Request) {
   const searchParams = new URL(request.url).searchParams;
-  const moduleTypeId = parsePositiveInteger(searchParams.get("moduleTypeId"));
-
-  if (!moduleTypeId) {
-    return Response.json(
-      { error: "A valid moduleTypeId is required." },
-      { status: 400 }
-    );
-  }
-
-  const query = (searchParams.get("q") ?? "").slice(0, maximumQueryLength);
-  const limit = parseLimit(searchParams.get("limit"));
+  const browse = searchParams.get("browse");
 
   try {
-    const result = await searchCompatibleFittingCharges({
-      limit,
-      moduleTypeId,
-      query
-    });
+    if (browse === "hierarchy") {
+      return Response.json(await getFittingChargeHierarchy(), {
+        headers: { "Cache-Control": "no-store" }
+      });
+    }
+
+    if (browse === "branch") {
+      const fallback = searchParams.get("fallback") === "true";
+      const groupId = parsePositiveInteger(searchParams.get("groupId"));
+      const marketGroupId = parsePositiveInteger(searchParams.get("marketGroupId"));
+      const results = await browseFittingChargeBranch({
+        fallback,
+        groupId,
+        marketGroupId
+      });
+
+      return Response.json({ results }, {
+        headers: { "Cache-Control": "no-store" }
+      });
+    }
+
+    if (browse) {
+      return Response.json(
+        { error: "browse must be hierarchy or branch." },
+        { status: 400 }
+      );
+    }
+
+    const moduleTypeId = parsePositiveInteger(searchParams.get("moduleTypeId"));
+    const query = (searchParams.get("q") ?? "").slice(0, maximumQueryLength);
+    const limit = parseLimit(searchParams.get("limit"));
+
+    if (!moduleTypeId) {
+      return Response.json(await searchFittingCharges({ limit, query }), {
+        headers: { "Cache-Control": "no-store" }
+      });
+    }
+
+    const result = await searchCompatibleFittingCharges({ limit, moduleTypeId, query });
 
     if (result.status === "module-not-found") {
       return Response.json(
@@ -67,6 +95,40 @@ export async function POST(request: Request) {
 
   if (!body || typeof body !== "object") {
     return Response.json({ error: "A valid JSON body is required." }, { status: 400 });
+  }
+
+  if ("moduleTypeIds" in body) {
+    const chargeTypeId = parsePositiveNumberProperty(body, "chargeTypeId");
+    const moduleTypeIds = parsePositiveIntegerArrayProperty(body, "moduleTypeIds");
+
+    if (!chargeTypeId || !moduleTypeIds) {
+      return Response.json(
+        { error: "Valid chargeTypeId and moduleTypeIds values are required." },
+        { status: 400 }
+      );
+    }
+
+    try {
+      const result = await validateFittingChargeBulkLoad(
+        moduleTypeIds,
+        chargeTypeId
+      );
+      if (result.status !== "ready") {
+        return Response.json({ error: result.message }, { status: 404 });
+      }
+
+      return Response.json(result, {
+        headers: { "Cache-Control": "no-store" }
+      });
+    } catch {
+      console.warn(
+        "Fitting bulk charge validation unavailable. Run migrations and refresh fitting static data."
+      );
+      return Response.json(
+        { error: "Charge validation is temporarily unavailable." },
+        { status: 503 }
+      );
+    }
   }
 
   const moduleTypeId = parsePositiveNumberProperty(body, "moduleTypeId");
@@ -141,5 +203,25 @@ function parsePositiveNumberProperty(
     Number.isInteger(propertyValue) &&
     propertyValue > 0
     ? propertyValue
+    : null;
+}
+
+function parsePositiveIntegerArrayProperty(
+  value: object,
+  property: "moduleTypeIds"
+) {
+  if (!(property in value)) {
+    return null;
+  }
+
+  const propertyValue = (value as Record<string, unknown>)[property];
+  if (!Array.isArray(propertyValue) || propertyValue.length > 256) {
+    return null;
+  }
+
+  return propertyValue.every(
+    (entry) => typeof entry === "number" && Number.isInteger(entry) && entry > 0
+  )
+    ? propertyValue as number[]
     : null;
 }

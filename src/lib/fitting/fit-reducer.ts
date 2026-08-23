@@ -41,6 +41,14 @@ export type LoadChargeInput = FittingSlotAddress & {
   charge: LoadedCharge;
 };
 
+export type BulkLoadChargeEntry = LoadChargeInput & {
+  moduleTypeId: number;
+};
+
+export type LoadChargesInput = {
+  entries: BulkLoadChargeEntry[];
+};
+
 export type UnloadChargeInput = FittingSlotAddress;
 
 export type AddDroneInput = DroneBayEntry;
@@ -74,6 +82,9 @@ export type FitAction =
     })
   | (LoadChargeInput & {
       type: "load-charge";
+    })
+  | (LoadChargesInput & {
+      type: "load-charges";
     })
   | (UnloadChargeInput & {
       type: "unload-charge";
@@ -398,6 +409,63 @@ export function loadCharge(state: FitState, input: LoadChargeInput): FitState {
   );
 }
 
+export function validateLoadCharges(
+  state: FitState,
+  input: LoadChargesInput
+): FitModuleRejection | null {
+  if (!input.entries.length) {
+    return "invalid-charge";
+  }
+
+  const addresses = new Set<string>();
+  for (const entry of input.entries) {
+    const address = `${entry.rack}:${entry.index}`;
+    if (addresses.has(address)) {
+      return "invalid-charge";
+    }
+    addresses.add(address);
+
+    const rejection = validateLoadCharge(state, entry);
+    if (rejection) {
+      return rejection;
+    }
+
+    const targetSlot = state.slots[entry.rack].find(
+      (slot) => slot.index === entry.index
+    );
+    if (targetSlot?.module?.typeId !== entry.moduleTypeId) {
+      return "invalid-module";
+    }
+  }
+
+  return null;
+}
+
+export function loadCharges(state: FitState, input: LoadChargesInput): FitState {
+  if (validateLoadCharges(state, input)) {
+    return state;
+  }
+
+  const chargeByAddress = new Map(
+    input.entries.map((entry) => [`${entry.rack}:${entry.index}`, entry.charge])
+  );
+  const slots = { ...state.slots };
+
+  for (const rack of ["high", "mid", "low", "rig", "subsystem"] as const) {
+    slots[rack] = state.slots[rack].map((slot) => {
+      const charge = chargeByAddress.get(`${rack}:${slot.index}`);
+      return charge && slot.module
+        ? {
+            ...slot,
+            module: { ...slot.module, charge: { ...charge } }
+          }
+        : slot;
+    });
+  }
+
+  return { ...state, slots };
+}
+
 export function validateUnloadCharge(
   state: FitState,
   input: UnloadChargeInput
@@ -452,6 +520,8 @@ export function fittingReducer(state: FitState, action: FitAction): FitState {
       return moveModule(state, action);
     case "load-charge":
       return loadCharge(state, action);
+    case "load-charges":
+      return loadCharges(state, action);
     case "unload-charge":
       return unloadCharge(state, action);
     case "add-drone":

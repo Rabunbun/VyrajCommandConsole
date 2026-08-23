@@ -103,6 +103,7 @@ export function FittingRack({
             return (
               <li
                 className="fitting-slot-item"
+                data-interaction-active={selected}
                 key={slot.index}
                 style={getSlotClusterStyle(slot.index, slots.length, layout)}
               >
@@ -167,12 +168,13 @@ export function FittingRack({
                       return;
                     }
 
+                    event.stopPropagation();
                     onDragOverSlot(address);
 
                     if (isValidDropTarget) {
                       event.preventDefault();
                       event.dataTransfer.dropEffect =
-                        dragSource.kind === "browser-module" ? "copy" : "move";
+                        dragSource.kind === "fitted-module" ? "move" : "copy";
                     }
                   }}
                   onDragStart={(event) => {
@@ -194,11 +196,15 @@ export function FittingRack({
                     });
                   }}
                   onDrop={(event) => {
-                    if (!dragSource || !isValidDropTarget) {
+                    if (!dragSource) {
                       return;
                     }
 
                     event.preventDefault();
+                    event.stopPropagation();
+                    if (!isValidDropTarget) {
+                      return;
+                    }
                     void onDropOnSlot(address);
                   }}
                   title={
@@ -329,6 +335,14 @@ function isStructurallyValidDropTarget(
 
   if (source.kind === "browser-module") {
     return source.rack === target.rack;
+  }
+
+  if (source.kind === "browser-charge") {
+    return occupied;
+  }
+
+  if (source.kind === "browser-drone") {
+    return false;
   }
 
   return (

@@ -2,6 +2,7 @@ import { useCallback, useMemo, useReducer, useRef, useState } from "react";
 import {
   fittingReducer,
   validateLoadCharge,
+  validateLoadCharges,
   validateMoveModule,
   validateRemoveModule,
   validateReplaceModule,
@@ -26,6 +27,7 @@ import type {
   DroneBayValidationResponse,
   FittedModuleAddress,
   FittingAnalysisResponse,
+  FittingChargeBulkLoadResponse,
   FittingChargeLoadResponse,
   FittingHullSummary,
   FittingModulePlacementResponse,
@@ -71,6 +73,18 @@ export type LoadChargeAttemptResult =
     }
   | {
       charge: FittingChargeLoadResponse["charge"];
+      ok: true;
+    };
+
+export type BulkLoadChargeAttemptResult =
+  | {
+      message: string;
+      ok: false;
+    }
+  | {
+      chargeTypeId: number;
+      chargeTypeName: string;
+      loadedModuleCount: number;
       ok: true;
     };
 
@@ -321,6 +335,64 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
     },
     [fitState]
   );
+  const bulkLoadCharge = useCallback(
+    async (chargeTypeId: number): Promise<BulkLoadChargeAttemptResult> => {
+      const fittedModules = getFittedModuleAddresses(fitState);
+      if (!fittedModules.length) {
+        return {
+          message: "No fitted modules are available for this charge.",
+          ok: false
+        };
+      }
+
+      const validationEpoch = ++validationEpochRef.current;
+      const result = await requestBulkChargeLoad({
+        chargeTypeId,
+        moduleTypeIds: fittedModules.map((module) => module.typeId)
+      });
+      if (!result.ok) {
+        return result;
+      }
+      if (validationEpoch !== validationEpochRef.current) {
+        return hullChangedRejection();
+      }
+
+      const loadByModuleTypeId = new Map(
+        result.response.loads.map((load) => [load.module.typeId, load.charge])
+      );
+      const entries = fittedModules.flatMap((module) => {
+        const charge = loadByModuleTypeId.get(module.typeId);
+        return charge
+          ? [{
+              ...module,
+              charge: { quantity: charge.quantity, typeId: charge.typeId },
+              moduleTypeId: module.typeId
+            }]
+          : [];
+      });
+      if (!entries.length) {
+        return {
+          message: "No fitted modules are compatible with this charge.",
+          ok: false
+        };
+      }
+
+      const input = { entries };
+      const rejection = validateLoadCharges(fitState, input);
+      if (rejection) {
+        return rejectedOperation(rejection);
+      }
+
+      dispatch({ ...input, type: "load-charges" });
+      return {
+        chargeTypeId: result.response.chargeTypeId,
+        chargeTypeName: result.response.chargeTypeName,
+        loadedModuleCount: entries.length,
+        ok: true
+      };
+    },
+    [fitState]
+  );
   const unloadCharge = useCallback(
     (address: FittingSlotAddress): FitOperationAttemptResult => {
       validationEpochRef.current += 1;
@@ -409,6 +481,7 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
   return {
     addDrone,
     analysis,
+    bulkLoadCharge,
     cancelPendingOperation,
     decrementDrone,
     droneBayAnalysis,
@@ -503,6 +576,50 @@ async function requestChargeLoad(input: {
     if (!isChargeLoadResponse(payload, input)) {
       return {
         message: "The charge validation response was invalid.",
+        ok: false
+      };
+    }
+
+    return { ok: true, response: payload };
+  } catch {
+    return {
+      message: "Charge validation is temporarily unavailable.",
+      ok: false
+    };
+  }
+}
+
+async function requestBulkChargeLoad(input: {
+  chargeTypeId: number;
+  moduleTypeIds: number[];
+}): Promise<
+  | { message: string; ok: false }
+  | { ok: true; response: FittingChargeBulkLoadResponse }
+> {
+  try {
+    const response = await fetch("/api/fitting/charges", {
+      body: JSON.stringify(input),
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      method: "POST"
+    });
+    const payload = (await response.json().catch(() => null)) as
+      | FittingChargeBulkLoadResponse
+      | { error?: unknown }
+      | null;
+
+    if (!response.ok) {
+      return {
+        message:
+          payload && "error" in payload && typeof payload.error === "string"
+            ? payload.error
+            : "The charge could not be validated against the current fit.",
+        ok: false
+      };
+    }
+    if (!isBulkChargeLoadResponse(payload, input.chargeTypeId)) {
+      return {
+        message: "The bulk charge validation response was invalid.",
         ok: false
       };
     }
@@ -744,6 +861,47 @@ function isChargeLoadResponse(
     module.typeId === expected.moduleTypeId &&
     typeof module.typeName === "string" &&
     Boolean(module.typeName.trim())
+  );
+}
+
+function isBulkChargeLoadResponse(
+  value: unknown,
+  expectedChargeTypeId: number
+): value is FittingChargeBulkLoadResponse {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    !("chargeTypeId" in value) ||
+    !("chargeTypeName" in value) ||
+    !("loads" in value) ||
+    !("missingModuleTypeIds" in value) ||
+    value.chargeTypeId !== expectedChargeTypeId ||
+    typeof value.chargeTypeName !== "string" ||
+    !value.chargeTypeName.trim() ||
+    !Array.isArray(value.loads) ||
+    !Array.isArray(value.missingModuleTypeIds)
+  ) {
+    return false;
+  }
+
+  return (
+    value.loads.every((load) =>
+      load !== null &&
+      typeof load === "object" &&
+      "module" in load &&
+      load.module !== null &&
+      typeof load.module === "object" &&
+      "typeId" in load.module &&
+      typeof load.module.typeId === "number"
+        ? isChargeLoadResponse(load, {
+            chargeTypeId: expectedChargeTypeId,
+            moduleTypeId: load.module.typeId
+          })
+        : false
+    ) &&
+    value.missingModuleTypeIds.every(
+      (typeId) => typeof typeId === "number" && Number.isInteger(typeId) && typeId > 0
+    )
   );
 }
 

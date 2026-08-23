@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test:eft": "tsx --test src/lib/fitting/eft/eft.test.ts src/lib/fitting/eft/resolve.test.ts",
+    "test:fitting": "tsx --test src/lib/fitting/fit-reducer.test.ts",
     "migration:validate": "tsx scripts/validate-v1-export.ts",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
