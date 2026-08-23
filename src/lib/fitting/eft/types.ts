@@ -1,4 +1,5 @@
 import type {
+  CargoHoldAnalysis,
   DroneBayAnalysis,
   FittingAnalysisResponse,
 } from "@/lib/fitting/types";
@@ -109,7 +110,14 @@ export type EftExportDrone = {
   quantity: number;
 };
 
+export type EftExportCargo = {
+  typeId: number;
+  typeName: string;
+  quantity: number;
+};
+
 export type EftExportDocument = {
+  cargo: EftExportCargo[];
   hullName: string;
   fitName: string;
   slots: Record<EftSupportedRack, EftExportSlot[]>;
@@ -137,13 +145,23 @@ export type EftImportDiagnosticCode =
   | "OFFLINE_UNSUPPORTED"
   | "SUBSYSTEM_UNSUPPORTED"
   | "SERVICE_UNSUPPORTED"
-  | "CARGO_UNSUPPORTED"
+  | "CARGO_UNRESOLVED"
+  | "CARGO_AMBIGUOUS"
+  | "CARGO_QUANTITY_INVALID"
+  | "CARGO_QUANTITY_OVERFLOW"
+  | "CARGO_PACKAGE_STATE_UNSUPPORTED"
+  | "CARGO_BLUEPRINT_STATE_UNSUPPORTED"
+  | "CARGO_MUTATED_STATE_UNSUPPORTED"
+  | "CARGO_VOLUME_UNAVAILABLE"
+  | "CARGO_HOLD_VALIDATION"
+  | "CARGO_HOLD_WARNING"
   | "EXTENSION_UNSUPPORTED"
   | "FIT_VALIDATION"
   | "FIT_WARNING"
   | "DRONE_BAY_VALIDATION";
 
 export type EftImportDiagnostic = {
+  candidateTypeIds?: number[];
   severity: "error" | "warning";
   code: EftImportDiagnosticCode;
   message: string;
@@ -172,12 +190,19 @@ export type ResolvedEftDrone = {
   typeId: number;
 };
 
+export type ResolvedEftCargo = {
+  quantity: number;
+  typeId: number;
+};
+
 export type ResolvedEftDraft = {
   analysis: {
+    cargoHold: CargoHoldAnalysis;
     droneBay: DroneBayAnalysis;
     fitting: FittingAnalysisResponse;
   };
   diagnostics: EftImportDiagnostic[];
+  cargo: ResolvedEftCargo[];
   drones: ResolvedEftDrone[];
   fitName: string;
   hullTypeId: number;

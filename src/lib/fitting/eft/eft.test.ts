@@ -158,6 +158,13 @@ test("Vyraj export parses back to the same supported slot structure", () => {
       { itemName: "Warrior II", quantity: 2 },
     ],
   );
+  assert.deepEqual(
+    document.cargo.map(({ itemName, quantity }) => ({ itemName, quantity })),
+    [
+      { itemName: "Mobile Depot", quantity: 1 },
+      { itemName: "Nanite Repair Paste", quantity: 100 },
+    ],
+  );
 });
 
 test("formatter rejects structurally invalid indices and quantities", () => {
@@ -175,4 +182,22 @@ test("formatter rejects structurally invalid indices and quantities", () => {
     drones: [{ typeId: 2456, typeName: "Hobgoblin II", quantity: 0 }],
   };
   assert.throws(() => formatEft(invalidQuantity), EftFormatError);
+
+  const invalidCargoQuantity: EftExportDocument = {
+    ...VYRAJ_EXPORT_FIXTURE,
+    cargo: [{ typeId: 28668, typeName: "Nanite Repair Paste", quantity: 0 }],
+  };
+  assert.throws(() => formatEft(invalidCargoQuantity), EftFormatError);
+});
+
+test("formatter aggregates repeated cargo by typeId in canonical order", () => {
+  const formatted = formatEft({
+    ...VYRAJ_EXPORT_FIXTURE,
+    cargo: [
+      { typeId: 28668, typeName: "Nanite Repair Paste", quantity: 40 },
+      { typeId: 33474, typeName: "Mobile Depot", quantity: 1 },
+      { typeId: 28668, typeName: "Nanite Repair Paste", quantity: 60 },
+    ],
+  });
+  assert.match(formatted, /Mobile Depot x1\nNanite Repair Paste x100\n$/);
 });

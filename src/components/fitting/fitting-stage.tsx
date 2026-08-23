@@ -260,7 +260,8 @@ function isBrowserDragSource(
 ): source is Extract<FittingDragSource, { kind: `browser-${string}` }> {
   return source?.kind === "browser-module" ||
     source?.kind === "browser-charge" ||
-    source?.kind === "browser-drone";
+    source?.kind === "browser-drone" ||
+    source?.kind === "browser-cargo";
 }
 
 function createEmptyVisualSlots(): FittingSlots {

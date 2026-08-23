@@ -2281,6 +2281,7 @@ hr {
 
 .fit-statistics {
   gap: 10px;
+  overflow: auto;
   padding: 14px;
 }
 
@@ -2541,7 +2542,8 @@ hr {
 
 .fitting-browser-result-group .fitting-module-list,
 .fitting-charge-list,
-.fitting-drone-list {
+.fitting-drone-list,
+.fitting-cargo-list {
   display: grid;
   gap: 5px;
   max-block-size: none;
@@ -2587,7 +2589,8 @@ hr {
   margin-inline-start: 8px;
 }
 
-.fitting-drone-result {
+.fitting-drone-result,
+.fitting-cargo-result {
   align-items: center;
   border: 1px solid rgba(255, 255, 255, 0.065);
   background:
@@ -2600,7 +2603,8 @@ hr {
   padding: 7px;
 }
 
-.fitting-drone-result:hover {
+.fitting-drone-result:hover,
+.fitting-cargo-result:hover {
   border-color: rgba(63, 191, 155, 0.28);
   background:
     linear-gradient(135deg, rgba(63, 191, 155, 0.055), transparent 48%),
@@ -2608,13 +2612,16 @@ hr {
 }
 
 .fitting-drone-result[data-dragging="true"],
-.fitting-charge-result[data-dragging="true"] {
+.fitting-charge-result[data-dragging="true"],
+.fitting-cargo-result[data-dragging="true"] {
   border-color: rgba(137, 216, 194, 0.62);
   opacity: 0.62;
 }
 
 .fitting-drone-result .fitting-module-icon,
-.fitting-drone-result .fitting-module-icon-fallback {
+.fitting-drone-result .fitting-module-icon-fallback,
+.fitting-cargo-result .fitting-module-icon,
+.fitting-cargo-result .fitting-module-icon-fallback {
   grid-row: 1 / span 2;
 }
 
@@ -3969,6 +3976,134 @@ button.fitting-slot[data-occupied="true"]:not(:disabled):active {
 .fit-stat-section-list {
   display: grid;
   gap: 7px;
+}
+
+.fitting-cargo-hold {
+  background:
+    linear-gradient(135deg, rgba(63, 191, 155, 0.045), transparent 56%),
+    rgba(7, 8, 11, 0.72);
+  border: 1px solid rgba(63, 191, 155, 0.17);
+  display: grid;
+  gap: 7px;
+  min-height: 130px;
+  padding: 9px;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.fitting-cargo-hold[data-drag-target="true"] {
+  border-style: dashed;
+  border-color: rgba(63, 191, 155, 0.48);
+}
+
+.fitting-cargo-hold[data-drag-active="true"] {
+  border-color: rgba(137, 216, 194, 0.82);
+  box-shadow: inset 0 0 22px rgba(63, 191, 155, 0.11);
+}
+
+.fitting-cargo-hold-heading {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.fitting-cargo-hold-heading > div,
+.fitting-cargo-hold-entry > span:not(.fitting-cargo-hold-actions) {
+  display: grid;
+  min-width: 0;
+}
+
+.fitting-cargo-hold-heading strong,
+.fitting-cargo-hold-entry strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fitting-cargo-hold-heading strong {
+  font-family: var(--font-command);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.fitting-cargo-hold-heading small,
+.fitting-cargo-hold-entry small,
+.fitting-cargo-note {
+  color: var(--color-muted);
+  font-size: 0.64rem;
+}
+
+.fitting-cargo-hold-heading > span {
+  color: #c9f4e8;
+  font-family: var(--font-command);
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-align: right;
+}
+
+.fitting-cargo-hold-list {
+  display: grid;
+  gap: 5px;
+  max-block-size: 178px;
+  min-block-size: 58px;
+  overflow: auto;
+}
+
+.fitting-cargo-hold-entry {
+  align-items: center;
+  background: rgba(3, 4, 6, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  padding: 5px;
+}
+
+.fitting-cargo-hold-entry .fitting-module-icon,
+.fitting-cargo-hold-entry .fitting-module-icon-fallback {
+  block-size: 34px;
+  inline-size: 34px;
+}
+
+.fitting-cargo-hold-entry strong {
+  font-size: 0.7rem;
+}
+
+.fitting-cargo-hold-actions {
+  display: flex;
+  gap: 4px;
+  grid-column: 1 / -1;
+}
+
+.fitting-cargo-hold-actions button,
+.fitting-cargo-clear {
+  background: rgba(63, 191, 155, 0.055);
+  border: 1px solid rgba(63, 191, 155, 0.2);
+  color: #c9f4e8;
+  cursor: pointer;
+  font-family: var(--font-command);
+  font-size: 0.48rem;
+  font-weight: 800;
+  min-height: 24px;
+  padding: 3px 6px;
+  text-transform: uppercase;
+}
+
+.fitting-cargo-hold-actions button:disabled,
+.fitting-cargo-clear:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
+.fitting-cargo-clear {
+  justify-self: start;
+}
+
+.fitting-cargo-warning {
+  color: #efb85b;
+  font-size: 0.65rem;
+  font-weight: 700;
 }
 
 .fit-stat-section {

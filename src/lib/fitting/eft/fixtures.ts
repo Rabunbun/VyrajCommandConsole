@@ -91,6 +91,10 @@ export const MALFORMED_QUANTITY_FIXTURE = eft([
 ]);
 
 export const VYRAJ_EXPORT_FIXTURE: EftExportDocument = {
+  cargo: [
+    { typeId: 33474, typeName: "Mobile Depot", quantity: 1 },
+    { typeId: 28668, typeName: "Nanite Repair Paste", quantity: 100 },
+  ],
   hullName: "Vexor",
   fitName: "Vyraj Structural Round Trip",
   slots: {
@@ -147,4 +151,7 @@ export const VYRAJ_EXPECTED_EFT = eft([
   "",
   "Hobgoblin II x5",
   "Warrior II x2",
+  "",
+  "Mobile Depot x1",
+  "Nanite Repair Paste x100",
 ]);

@@ -14,6 +14,7 @@ import {
 } from "@/lib/fitting/fit-reducer";
 import {
   createEmptyFitState,
+  type CargoEntry,
   type DroneBayEntry,
   type FittingSlotAddress,
   type FitState,
@@ -22,6 +23,10 @@ import {
 import type {
   BaseFitAnalysis,
   BrowsableFittingRack,
+  CargoHoldAnalysis,
+  CargoHoldValidationResponse,
+  CargoValidationIssue,
+  CargoValidationIssueCode,
   DroneBayAnalysis,
   DroneBayValidationIssueCode,
   DroneBayValidationResponse,
@@ -95,8 +100,20 @@ export type DroneBayAttemptResult =
       ok: false;
     }
   | {
-      analysis: DroneBayAnalysis;
+    analysis: DroneBayAnalysis;
+    ok: true;
+  };
+
+export type CargoHoldAttemptResult =
+  | {
+      code?: CargoValidationIssueCode;
+      message: string;
+      ok: false;
+    }
+  | {
+      analysis: CargoHoldAnalysis;
       ok: true;
+      warnings: CargoValidationIssue[];
     };
 
 export function useFittingState({ hulls }: UseFittingStateOptions) {
@@ -105,9 +122,14 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
   const [droneBayAnalysis, setDroneBayAnalysis] = useState<DroneBayAnalysis>(
     createEmptyDroneBayAnalysis
   );
+  const [cargoHoldAnalysis, setCargoHoldAnalysis] = useState<CargoHoldAnalysis>(
+    createEmptyCargoHoldAnalysis
+  );
+  const [cargoWarnings, setCargoWarnings] = useState<CargoValidationIssue[]>([]);
   const [fitWarnings, setFitWarnings] = useState<FitValidationIssue[]>([]);
   const validationEpochRef = useRef(0);
   const droneValidationEpochRef = useRef(0);
+  const cargoValidationEpochRef = useRef(0);
   const hullsByTypeId = useMemo(
     () => new Map(hulls.map((hull) => [hull.typeId, hull])),
     [hulls]
@@ -121,8 +143,11 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
   const selectHull = useCallback((hull: FittingHullSummary) => {
     validationEpochRef.current += 1;
     droneValidationEpochRef.current += 1;
+    cargoValidationEpochRef.current += 1;
     setAnalysis(createEmptyAnalysis());
     setDroneBayAnalysis(createEmptyDroneBayAnalysis(hull.droneCapacity));
+    setCargoHoldAnalysis(createEmptyCargoHoldAnalysis(hull.cargoCapacityBase));
+    setCargoWarnings([]);
     setFitWarnings([]);
     dispatch({
       hullTypeId: hull.typeId,
@@ -477,12 +502,131 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
       setDroneQuantity(typeId, 0),
     [setDroneQuantity]
   );
+  const setCargoQuantity = useCallback(
+    async (typeId: number, quantity: number): Promise<CargoHoldAttemptResult> => {
+      if (!Number.isInteger(typeId) || typeId <= 0) {
+        return { message: "The selected cargo type is invalid.", ok: false };
+      }
+
+      if (!Number.isSafeInteger(quantity) || quantity < 0) {
+        return {
+          code: "INVALID_CARGO_STATE",
+          message: "Cargo quantity must be a nonnegative safe integer.",
+          ok: false
+        };
+      }
+
+      const targetCargo = setCargoEntryQuantity(fitState.cargo, typeId, quantity);
+      const validationEpoch = ++cargoValidationEpochRef.current;
+      const result = await requestCargoHoldValidation({
+        cargo: targetCargo,
+        hullTypeId: fitState.hullTypeId
+      });
+
+      if (!result.ok) {
+        return result;
+      }
+
+      if (validationEpoch !== cargoValidationEpochRef.current) {
+        return hullChangedRejection();
+      }
+
+      dispatch({ quantity, type: "set-cargo-quantity", typeId });
+      setCargoHoldAnalysis(result.response.analysis);
+      setCargoWarnings(result.response.warnings);
+
+      return {
+        analysis: result.response.analysis,
+        ok: true,
+        warnings: result.response.warnings
+      };
+    },
+    [fitState.cargo, fitState.hullTypeId]
+  );
+  const addCargo = useCallback(
+    (typeId: number, quantity = 1): Promise<CargoHoldAttemptResult> => {
+      const currentQuantity =
+        fitState.cargo.find((entry) => entry.typeId === typeId)?.quantity ?? 0;
+
+      if (!Number.isSafeInteger(quantity) || quantity <= 0) {
+        return Promise.resolve({
+          code: "INVALID_CARGO_STATE",
+          message: "Cargo quantity must be a positive safe integer.",
+          ok: false
+        });
+      }
+
+      const nextQuantity = currentQuantity + quantity;
+
+      if (!Number.isSafeInteger(nextQuantity)) {
+        return Promise.resolve({
+          code: "INVALID_CARGO_STATE",
+          message: "The resulting cargo quantity exceeds the safe integer range.",
+          ok: false
+        });
+      }
+
+      return setCargoQuantity(typeId, nextQuantity);
+    },
+    [fitState.cargo, setCargoQuantity]
+  );
+  const decrementCargo = useCallback(
+    (typeId: number): Promise<CargoHoldAttemptResult> => {
+      const currentQuantity =
+        fitState.cargo.find((entry) => entry.typeId === typeId)?.quantity ?? 0;
+
+      if (currentQuantity <= 0) {
+        return Promise.resolve({
+          message: "That item is not currently in the Cargo Hold.",
+          ok: false
+        });
+      }
+
+      return setCargoQuantity(typeId, currentQuantity - 1);
+    },
+    [fitState.cargo, setCargoQuantity]
+  );
+  const removeCargo = useCallback(
+    (typeId: number): Promise<CargoHoldAttemptResult> =>
+      setCargoQuantity(typeId, 0),
+    [setCargoQuantity]
+  );
+  const clearCargo = useCallback(async (): Promise<CargoHoldAttemptResult> => {
+    const validationEpoch = ++cargoValidationEpochRef.current;
+    const result = await requestCargoHoldValidation({
+      cargo: [],
+      hullTypeId: fitState.hullTypeId
+    });
+
+    if (!result.ok) {
+      return result;
+    }
+
+    if (validationEpoch !== cargoValidationEpochRef.current) {
+      return hullChangedRejection();
+    }
+
+    dispatch({ type: "clear-cargo" });
+    setCargoHoldAnalysis(result.response.analysis);
+    setCargoWarnings(result.response.warnings);
+
+    return {
+      analysis: result.response.analysis,
+      ok: true,
+      warnings: result.response.warnings
+    };
+  }, [fitState.hullTypeId]);
 
   return {
+    addCargo,
     addDrone,
     analysis,
     bulkLoadCharge,
     cancelPendingOperation,
+    cargoHoldAnalysis,
+    cargoWarnings,
+    clearCargo,
+    decrementCargo,
     decrementDrone,
     droneBayAnalysis,
     fitModule,
@@ -490,6 +634,7 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
     fitState,
     loadCharge,
     moveModule,
+    removeCargo,
     removeDrone,
     removeModule,
     replaceModule,
@@ -497,6 +642,51 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
     selectedHull,
     unloadCharge
   };
+}
+
+async function requestCargoHoldValidation(input: {
+  cargo: CargoEntry[];
+  hullTypeId: number | null;
+}): Promise<
+  | { code?: CargoValidationIssueCode; message: string; ok: false }
+  | { ok: true; response: CargoHoldValidationResponse & { allowed: true } }
+> {
+  try {
+    const response = await fetch("/api/fitting/cargo", {
+      body: JSON.stringify(input),
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      method: "POST"
+    });
+    const payload = (await response.json().catch(() => null)) as
+      | CargoHoldValidationResponse
+      | { error?: unknown }
+      | null;
+
+    if (!response.ok) {
+      const issue = isCargoHoldValidationResponse(payload)
+        ? payload.errors[0]
+        : null;
+
+      return {
+        ...(issue ? { code: issue.code } : {}),
+        message:
+          issue?.message ??
+          (payload && "error" in payload && typeof payload.error === "string"
+            ? payload.error
+            : "The Cargo Hold change could not be validated."),
+        ok: false
+      };
+    }
+
+    if (!isCargoHoldValidationResponse(payload) || !payload.allowed) {
+      return { message: "The Cargo Hold analysis response was invalid.", ok: false };
+    }
+
+    return { ok: true, response: { ...payload, allowed: true } };
+  } catch {
+    return { message: "Cargo Hold analysis is temporarily unavailable.", ok: false };
+  }
 }
 
 async function requestDroneBayValidation(input: {
@@ -1076,6 +1266,36 @@ function createEmptyDroneBayAnalysis(capacity: number | null = null): DroneBayAn
   };
 }
 
+function createEmptyCargoHoldAnalysis(
+  baseCapacity: number | null = null
+): CargoHoldAnalysis {
+  return {
+    baseCapacity,
+    entries: [],
+    overBaseBy: 0,
+    remainingBaseVolume: baseCapacity,
+    usedVolume: 0
+  };
+}
+
+function setCargoEntryQuantity(
+  entries: CargoEntry[],
+  typeId: number,
+  quantity: number
+) {
+  if (quantity === 0) {
+    return entries.filter((entry) => entry.typeId !== typeId);
+  }
+
+  const existingEntry = entries.some((entry) => entry.typeId === typeId);
+
+  return existingEntry
+    ? entries.map((entry) =>
+        entry.typeId === typeId ? { ...entry, quantity } : entry
+      )
+    : [...entries, { quantity, typeId }];
+}
+
 function setDroneBayEntryQuantity(
   entries: DroneBayEntry[],
   typeId: number,
@@ -1096,4 +1316,75 @@ function setDroneBayEntryQuantity(
 
 function isNonnegativeFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function isCargoHoldValidationResponse(
+  value: unknown
+): value is CargoHoldValidationResponse {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    !("allowed" in value) ||
+    !("analysis" in value) ||
+    !("errors" in value) ||
+    !("warnings" in value) ||
+    typeof value.allowed !== "boolean" ||
+    !Array.isArray(value.errors) ||
+    !Array.isArray(value.warnings)
+  ) {
+    return false;
+  }
+
+  const analysis = value.analysis;
+
+  return (
+    analysis !== null &&
+    typeof analysis === "object" &&
+    "baseCapacity" in analysis &&
+    "entries" in analysis &&
+    "overBaseBy" in analysis &&
+    "remainingBaseVolume" in analysis &&
+    "usedVolume" in analysis &&
+    (analysis.baseCapacity === null ||
+      isNonnegativeFiniteNumber(analysis.baseCapacity)) &&
+    Array.isArray(analysis.entries) &&
+    analysis.entries.every(
+      (entry) =>
+        entry !== null &&
+        typeof entry === "object" &&
+        "quantity" in entry &&
+        "typeId" in entry &&
+        "typeName" in entry &&
+        "volume" in entry &&
+        typeof entry.quantity === "number" &&
+        Number.isSafeInteger(entry.quantity) &&
+        entry.quantity > 0 &&
+        typeof entry.typeId === "number" &&
+        Number.isInteger(entry.typeId) &&
+        entry.typeId > 0 &&
+        typeof entry.typeName === "string" &&
+        Boolean(entry.typeName.trim()) &&
+        isNonnegativeFiniteNumber(entry.volume)
+    ) &&
+    isNonnegativeFiniteNumber(analysis.overBaseBy) &&
+    (analysis.remainingBaseVolume === null ||
+      (typeof analysis.remainingBaseVolume === "number" &&
+        Number.isFinite(analysis.remainingBaseVolume))) &&
+    isNonnegativeFiniteNumber(analysis.usedVolume) &&
+    value.errors.every(isCargoValidationIssue) &&
+    value.warnings.every(isCargoValidationIssue)
+  );
+}
+
+function isCargoValidationIssue(value: unknown): value is CargoValidationIssue {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "code" in value &&
+    "message" in value &&
+    typeof value.code === "string" &&
+    Boolean(value.code) &&
+    typeof value.message === "string" &&
+    Boolean(value.message.trim())
+  );
 }

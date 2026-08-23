@@ -1,6 +1,7 @@
 import {
   createEmptyFitState,
   createFittingSlots,
+  type CargoEntry,
   type DroneBayEntry,
   type FittedModule,
   type FittingSlotAddress,
@@ -59,6 +60,21 @@ export type SetDroneQuantityInput = DroneBayEntry;
 
 export type DroneBayRejection = "invalid-drone-type" | "invalid-quantity";
 
+export type AddCargoInput = CargoEntry;
+
+export type SetCargoQuantityInput = CargoEntry;
+
+export type RemoveCargoInput = Pick<CargoEntry, "typeId">;
+
+export type ReplaceCargoInput = {
+  entries: CargoEntry[];
+};
+
+export type CargoRejection =
+  | "invalid-cargo-type"
+  | "invalid-quantity"
+  | "quantity-overflow";
+
 export type FitAction =
   | {
       hullTypeId: number;
@@ -100,7 +116,126 @@ export type FitAction =
     })
   | {
       type: "clear-drones";
+    }
+  | (AddCargoInput & {
+      type: "add-cargo";
+    })
+  | (SetCargoQuantityInput & {
+      type: "set-cargo-quantity";
+    })
+  | (RemoveCargoInput & {
+      type: "remove-cargo";
+    })
+  | (ReplaceCargoInput & {
+      type: "replace-cargo";
+    })
+  | {
+      type: "clear-cargo";
     };
+
+export function addCargo(state: FitState, input: AddCargoInput): FitState {
+  if (validateCargoEntry(input, false)) {
+    return state;
+  }
+
+  const current = state.cargo.find((entry) => entry.typeId === input.typeId);
+
+  if (current) {
+    const quantity = current.quantity + input.quantity;
+
+    if (!Number.isSafeInteger(quantity)) {
+      return state;
+    }
+
+    return {
+      ...state,
+      cargo: state.cargo.map((entry) =>
+        entry.typeId === input.typeId ? { ...entry, quantity } : entry
+      )
+    };
+  }
+
+  return {
+    ...state,
+    cargo: [
+      ...state.cargo,
+      { quantity: input.quantity, typeId: input.typeId }
+    ].toSorted(
+      (left, right) => left.typeId - right.typeId
+    )
+  };
+}
+
+export function setCargoQuantity(
+  state: FitState,
+  input: SetCargoQuantityInput
+): FitState {
+  if (validateCargoEntry(input, true)) {
+    return state;
+  }
+
+  if (input.quantity === 0) {
+    return removeCargo(state, input);
+  }
+
+  const existing = state.cargo.some((entry) => entry.typeId === input.typeId);
+
+  return {
+    ...state,
+    cargo: (existing
+      ? state.cargo.map((entry) =>
+          entry.typeId === input.typeId ? { ...entry, quantity: input.quantity } : entry
+        )
+      : [
+          ...state.cargo,
+          { quantity: input.quantity, typeId: input.typeId }
+        ]
+    ).toSorted((left, right) => left.typeId - right.typeId)
+  };
+}
+
+export function removeCargo(
+  state: FitState,
+  input: RemoveCargoInput
+): FitState {
+  if (validateCargoTypeId(input.typeId)) {
+    return state;
+  }
+
+  const cargo = state.cargo.filter((entry) => entry.typeId !== input.typeId);
+  return cargo.length === state.cargo.length ? state : { ...state, cargo };
+}
+
+export function replaceCargo(
+  state: FitState,
+  input: ReplaceCargoInput
+): FitState {
+  const quantities = new Map<number, number>();
+
+  for (const entry of input.entries) {
+    if (validateCargoEntry(entry, false)) {
+      return state;
+    }
+
+    const quantity = (quantities.get(entry.typeId) ?? 0) + entry.quantity;
+
+    if (!Number.isSafeInteger(quantity)) {
+      return state;
+    }
+
+    quantities.set(entry.typeId, quantity);
+  }
+
+  return {
+    ...state,
+    cargo: Array.from(quantities, ([typeId, quantity]) => ({ quantity, typeId }))
+      .toSorted((left, right) => left.typeId - right.typeId)
+  };
+}
+
+export function clearCargo(state: FitState): FitState {
+  return state.cargo.length ? { ...state, cargo: [] } : state;
+}
 
 export function addDrone(
   state: FitState,
@@ -504,6 +639,7 @@ export function fittingReducer(state: FitState, action: FitAction): FitState {
   switch (action.type) {
     case "select-hull":
       return {
+        cargo: [],
         drones: [],
         hullTypeId: action.hullTypeId,
         slots: createFittingSlots(action.topology)
@@ -532,9 +668,45 @@ export function fittingReducer(state: FitState, action: FitAction): FitState {
       return setDroneQuantity(state, action);
     case "clear-drones":
       return clearDrones(state);
+    case "add-cargo":
+      return addCargo(state, action);
+    case "set-cargo-quantity":
+      return setCargoQuantity(state, action);
+    case "remove-cargo":
+      return removeCargo(state, action);
+    case "replace-cargo":
+      return replaceCargo(state, action);
+    case "clear-cargo":
+      return clearCargo(state);
     default:
       return state;
   }
+}
+
+function validateCargoEntry(
+  entry: CargoEntry,
+  allowZero: boolean
+): CargoRejection | null {
+  const typeRejection = validateCargoTypeId(entry.typeId);
+
+  if (typeRejection) {
+    return typeRejection;
+  }
+
+  if (
+    !Number.isSafeInteger(entry.quantity) ||
+    entry.quantity < (allowZero ? 0 : 1)
+  ) {
+    return "invalid-quantity";
+  }
+
+  return null;
+}
+
+function validateCargoTypeId(typeId: number): CargoRejection | null {
+  return Number.isInteger(typeId) && typeId > 0
+    ? null
+    : "invalid-cargo-type";
 }
 
 function validateDroneBayEntry(

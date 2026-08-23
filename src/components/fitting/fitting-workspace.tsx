@@ -33,10 +33,15 @@ type FittingWorkspaceProps = {
 export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
   const {
     addDrone,
+    addCargo,
     analysis,
     bulkLoadCharge,
     cancelPendingOperation,
+    cargoHoldAnalysis,
+    cargoWarnings,
+    clearCargo,
     decrementDrone,
+    decrementCargo,
     droneBayAnalysis,
     fitModule,
     fitWarnings,
@@ -44,6 +49,7 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
     loadCharge,
     moveModule,
     removeDrone,
+    removeCargo,
     removeModule,
     replaceModule,
     selectHull,
@@ -55,12 +61,13 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
   const [browserRack, setBrowserRack] = useState<BrowsableFittingRack>("high");
   const [openBrowserSections, setOpenBrowserSections] = useState<
     Record<FittingBrowserSection, boolean>
-  >({ charges: false, drones: false, hulls: true, modules: false });
+  >({ cargo: false, charges: false, drones: false, hulls: true, modules: false });
   const [manipulationError, setManipulationError] = useState<string | null>(null);
   const [dragSource, setDragSource] = useState<FittingDragSource | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<SelectedFittingSlot | null>(null);
   const [isRemoveDragOver, setIsRemoveDragOver] = useState(false);
   const [isStageDragOver, setIsStageDragOver] = useState(false);
+  const [isCargoDragOver, setIsCargoDragOver] = useState(false);
   const [dragError, setDragError] = useState<string | null>(null);
   const [resolvedModuleNamesByTypeId, setResolvedModuleNamesByTypeId] = useState<
     Record<number, string>
@@ -87,6 +94,7 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
     setDragSource(null);
     setIsRemoveDragOver(false);
     setIsStageDragOver(false);
+    setIsCargoDragOver(false);
   }, []);
   const openBrowserSection = useCallback((section: FittingBrowserSection) => {
     setOpenBrowserSections((current) => ({ ...current, [section]: true }));
@@ -454,6 +462,13 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
         return;
       }
 
+      if (source.kind === "browser-cargo") {
+        const result = await addCargo(source.typeId);
+        setDragError(result.ok ? null : result.message);
+        clearDragState();
+        return;
+      }
+
       const result = moveModule({ from: source.from, to: target });
 
       if (result.ok) {
@@ -469,6 +484,7 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
       dragSource,
       fitModuleAtSlot,
       handleLoadChargeAt,
+      addCargo,
       moveModule
     ]
   );
@@ -503,16 +519,31 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
       return;
     }
 
-    const result = await addDrone(source.typeId);
+    const result = source.kind === "browser-cargo"
+      ? await addCargo(source.typeId)
+      : await addDrone(source.typeId);
     setDragError(result.ok ? null : result.message);
     clearDragState();
   }, [
     addDrone,
+    addCargo,
     bulkLoadCharge,
     clearDragState,
     dragSource,
     handleAutoFitModule
   ]);
+  const handleDropOnCargo = useCallback(async () => {
+    const source = dragSource;
+    setIsCargoDragOver(false);
+
+    if (!source || source.kind !== "browser-cargo") {
+      return;
+    }
+
+    const result = await addCargo(source.typeId);
+    setDragError(result.ok ? null : result.message);
+    clearDragState();
+  }, [addCargo, clearDragState, dragSource]);
   const handleDropOnRemove = useCallback(async () => {
     const source = dragSource;
 
@@ -555,11 +586,13 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
         <ItemBrowser
           actionMode={moduleActionMode}
           browserRack={browserRack}
+          cargoHoldAnalysis={cargoHoldAnalysis}
           droneBayAnalysis={droneBayAnalysis}
           dragSource={dragSource}
           hulls={hulls}
           manipulationError={manipulationError}
           onAutoFitModule={handleAutoFitModule}
+          onAddCargo={addCargo}
           onAddDrone={addDrone}
           onClearSelectedSlot={clearSelectedSlot}
           onDecrementDrone={decrementDrone}
@@ -629,7 +662,18 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
           selectedSlot={selectedSlot}
           slots={fitState.slots}
         />
-        <FitStatistics />
+        <FitStatistics
+          cargoAnalysis={cargoHoldAnalysis}
+          cargoWarnings={cargoWarnings}
+          dragSource={dragSource}
+          isCargoDragOver={isCargoDragOver}
+          onAddCargo={addCargo}
+          onCargoDragOverChange={setIsCargoDragOver}
+          onClearCargo={clearCargo}
+          onDecrementCargo={decrementCargo}
+          onDropCargo={() => void handleDropOnCargo()}
+          onRemoveCargo={removeCargo}
+        />
       </div>
       <FittingResources
         analysis={analysis}

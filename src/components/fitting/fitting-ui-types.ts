@@ -7,7 +7,12 @@ export type SelectedFittingSlot = {
 
 export type ModuleActionMode = "move" | "replace" | null;
 
-export type FittingBrowserSection = "charges" | "drones" | "hulls" | "modules";
+export type FittingBrowserSection =
+  | "cargo"
+  | "charges"
+  | "drones"
+  | "hulls"
+  | "modules";
 
 export type FittingDragSource =
   | {
@@ -27,6 +32,11 @@ export type FittingDragSource =
       typeName: string;
     }
   | {
+      kind: "browser-cargo";
+      typeId: number;
+      typeName: string;
+    }
+  | {
       from: SelectedFittingSlot;
       instanceId: string;
       kind: "fitted-module";
@@ -35,5 +45,11 @@ export type FittingDragSource =
 
 export type BrowserFittingDragSource = Extract<
   FittingDragSource,
-  { kind: "browser-charge" | "browser-drone" | "browser-module" }
+  {
+    kind:
+      | "browser-cargo"
+      | "browser-charge"
+      | "browser-drone"
+      | "browser-module";
+  }
 >;

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type {
+  CargoHoldValidationResponse,
   DroneBayValidationResponse,
   FittingAnalysisResponse,
   FitValidationIssue,
@@ -16,11 +17,19 @@ import {
 
 // Representative IDs and names are current authoritative fitting-cache records.
 const catalog: EftResolutionCatalog = {
+  cargo: [
+    { categoryId: 20, metaGroupId: null, packagedVolume: 0.01, typeId: 28668, typeName: "Nanite Repair Paste", volume: 0.01 },
+    { categoryId: 22, metaGroupId: null, packagedVolume: 12, typeId: 32006, typeName: "Navy Cap Booster 400", volume: 12 },
+    { categoryId: 22, metaGroupId: null, packagedVolume: 50, typeId: 33474, typeName: "Mobile Depot", volume: 50 },
+    { categoryId: 20, metaGroupId: null, packagedVolume: 1, typeId: 25349, typeName: "Strong Exile Booster", volume: 1 },
+    { categoryId: 20, metaGroupId: null, packagedVolume: 1, typeId: 19540, typeName: "High-grade Snake Alpha", volume: 1 },
+  ],
   charges: [
     { typeId: 23025, typeName: "Caldari Navy Antimatter Charge M" },
     { typeId: 27361, typeName: "Caldari Navy Scourge Light Missile" },
     { typeId: 30488, typeName: "Sisters Core Scanner Probe" },
     { typeId: 29001, typeName: "Tracking Speed Script" },
+    { typeId: 32006, typeName: "Navy Cap Booster 400" },
   ],
   drones: [
     { typeId: 2456, typeName: "Hobgoblin II" },
@@ -28,6 +37,7 @@ const catalog: EftResolutionCatalog = {
   ],
   hulls: [
     {
+      cargoCapacityBase: 480,
       droneCapacity: 125,
       highSlots: 4,
       lowSlots: 5,
@@ -37,6 +47,7 @@ const catalog: EftResolutionCatalog = {
       typeName: "Vexor",
     },
     {
+      cargoCapacityBase: 150,
       droneCapacity: 0,
       highSlots: 3,
       lowSlots: 3,
@@ -46,6 +57,7 @@ const catalog: EftResolutionCatalog = {
       typeName: "Merlin",
     },
     {
+      cargoCapacityBase: 400,
       droneCapacity: 0,
       highSlots: 0,
       lowSlots: 0,
@@ -58,6 +70,7 @@ const catalog: EftResolutionCatalog = {
   modules: [
     { rack: "low", typeId: 2048, typeName: "Damage Control II" },
     { rack: "mid", typeId: 1978, typeName: "Tracking Computer II" },
+    { rack: "mid", typeId: 2024, typeName: "Medium Capacitor Booster II" },
     { rack: "high", typeId: 12346, typeName: "200mm Railgun II" },
     { rack: "high", typeId: 1877, typeName: "Rapid Light Missile Launcher II" },
     { rack: "high", typeId: 17938, typeName: "Core Probe Launcher I" },
@@ -67,11 +80,13 @@ const catalog: EftResolutionCatalog = {
 
 const moduleRackByTypeId = new Map(catalog.modules.map((module) => [module.typeId, module.rack]));
 const droneNameByTypeId = new Map(catalog.drones.map((drone) => [drone.typeId, drone.typeName]));
+const cargoByTypeId = new Map(catalog.cargo.map((cargo) => [cargo.typeId, cargo]));
 const chargeQuantityByPair = new Map([
   ["12346:23025", 80],
   ["1877:27361", 20],
   ["1978:29001", 1],
   ["17938:30488", 8],
+  ["2024:32006", 3],
 ]);
 
 function fixture(lines: string[]): ReturnType<typeof parseEft> {
@@ -87,6 +102,36 @@ function createDependencies(options?: {
   analyzeCalls?: Array<Parameters<EftDraftValidationDependencies["analyzeFit"]>[0]>;
 }): EftDraftValidationDependencies {
   return {
+    async analyzeCargo(input) {
+      const hull = catalog.hulls.find((candidate) => candidate.typeId === input.hullTypeId);
+      assert.ok(hull);
+      const entries = input.cargo.map((entry) => {
+        const item = cargoByTypeId.get(entry.typeId);
+        assert.ok(item?.volume);
+        return { ...entry, typeName: item.typeName, volume: item.volume };
+      });
+      const usedVolume = entries.reduce(
+        (total, entry) => total + entry.quantity * entry.volume,
+        0,
+      );
+      const overBaseBy = Math.max(0, usedVolume - (hull.cargoCapacityBase ?? usedVolume));
+      const warnings = overBaseBy > 0
+        ? [{ code: "BASE_CAPACITY_EXCEEDED" as const, message: "Cargo exceeds base capacity." }]
+        : [];
+      const response: CargoHoldValidationResponse = {
+        allowed: true,
+        analysis: {
+          baseCapacity: hull.cargoCapacityBase,
+          entries,
+          overBaseBy,
+          remainingBaseVolume: hull.cargoCapacityBase === null ? null : hull.cargoCapacityBase - usedVolume,
+          usedVolume,
+        },
+        errors: [],
+        warnings,
+      };
+      return response;
+    },
     async analyzeFit(input) {
       options?.analyzeCalls?.push(structuredClone(input));
       const errors: FitValidationIssue[] = [];
@@ -389,7 +434,7 @@ test("does not reinterpret an unresolved fighter name as an ordinary drone", asy
   );
 });
 
-test("offline and cargo content produce review diagnostics", async () => {
+test("offline content produces review while cargo resolves into the draft", async () => {
   const parsed = fixture([
     "[Vexor, Review]",
     "Damage Control II /offline",
@@ -416,13 +461,126 @@ test("offline and cargo content produce review diagnostics", async () => {
   assert.equal(result.status, "review");
   assert.ok(result.draft);
   assert.ok(result.diagnostics.some((entry) => entry.code === "OFFLINE_UNSUPPORTED"));
-  assert.ok(
-    result.diagnostics.some(
-      (entry) =>
-        entry.code === "CARGO_UNSUPPORTED" &&
-        entry.rawText === "Nanite Repair Paste x100",
-    ),
-  );
+  assert.deepEqual(result.draft.cargo, [{ quantity: 100, typeId: 28668 }]);
+  assert.equal(result.draft.analysis.cargoHold.usedVolume, 1);
+});
+
+test("aggregates cargo separately from loaded charges and preserves a soft base-capacity warning", async () => {
+  const parsed = fixture([
+    "[Merlin, Cargo]",
+    "Damage Control II",
+    "",
+    "[Empty med slot]",
+    "",
+    "[Empty high slot]",
+    "",
+    "[Empty rig slot]",
+    "",
+    "",
+    "",
+    "",
+    "Navy Cap Booster 400 x10",
+    "Navy Cap Booster 400 x5",
+    "Mobile Depot x1",
+  ]);
+  const result = await resolveAndValidateEftDraft({
+    catalog,
+    dependencies: createDependencies(),
+    document: requireDocument(parsed),
+  });
+
+  assert.equal(result.status, "review");
+  assert.ok(result.draft);
+  assert.deepEqual(result.draft.cargo, [
+    { quantity: 15, typeId: 32006 },
+    { quantity: 1, typeId: 33474 },
+  ]);
+  assert.ok(result.diagnostics.some((entry) => entry.code === "CARGO_HOLD_WARNING"));
+});
+
+test("keeps loaded and spare charges separate while boosters and implants remain carried cargo", async () => {
+  const parsed = fixture([
+    "[Vexor, Role Separation]",
+    "Damage Control II",
+    "",
+    "Medium Capacitor Booster II, Navy Cap Booster 400",
+    "",
+    "[Empty high slot]",
+    "",
+    "[Empty rig slot]",
+    "",
+    "",
+    "",
+    "",
+    "Navy Cap Booster 400 x12",
+    "Nanite Repair Paste x200",
+    "Strong Exile Booster x1",
+    "High-grade Snake Alpha x1",
+  ]);
+  const result = await resolveAndValidateEftDraft({
+    catalog,
+    dependencies: createDependencies(),
+    document: requireDocument(parsed),
+  });
+
+  assert.ok(result.draft);
+  assert.deepEqual(result.draft.slots.mid[0].module?.charge, {
+    quantity: 3,
+    typeId: 32006,
+  });
+  assert.deepEqual(result.draft.cargo, [
+    { quantity: 1, typeId: 19540 },
+    { quantity: 1, typeId: 25349 },
+    { quantity: 200, typeId: 28668 },
+    { quantity: 12, typeId: 32006 },
+  ]);
+});
+
+test("rejects unresolved, ambiguous, package-sensitive, Blueprint, Abyssal, and volume-less cargo", async () => {
+  const baseCargo = [
+    ...catalog.cargo,
+    { categoryId: 6, metaGroupId: null, packagedVolume: 33, typeId: 3293, typeName: "Medium Standard Container", volume: 325 },
+    { categoryId: 9, metaGroupId: null, packagedVolume: 0.01, typeId: 999001, typeName: "Test Blueprint", volume: 0.01 },
+    { categoryId: 20, metaGroupId: 15, packagedVolume: 1, typeId: 999002, typeName: "Mutated Cargo", volume: 1 },
+    { categoryId: 20, metaGroupId: null, packagedVolume: null, typeId: 999003, typeName: "Unknown Volume Cargo", volume: null },
+  ];
+  const scenarios = [
+    { code: "CARGO_UNRESOLVED", line: "Imaginary Cargo x1", records: baseCargo },
+    { code: "CARGO_AMBIGUOUS", line: "Nanite Repair Paste x1", records: [...baseCargo, { ...catalog.cargo[0], typeId: 999004 }] },
+    { code: "CARGO_PACKAGE_STATE_UNSUPPORTED", line: "Medium Standard Container x1", records: baseCargo },
+    { code: "CARGO_BLUEPRINT_STATE_UNSUPPORTED", line: "Test Blueprint x1", records: baseCargo },
+    { code: "CARGO_MUTATED_STATE_UNSUPPORTED", line: "Mutated Cargo x1", records: baseCargo },
+    { code: "CARGO_VOLUME_UNAVAILABLE", line: "Unknown Volume Cargo x1", records: baseCargo },
+  ] as const;
+
+  for (const scenario of scenarios) {
+    const parsed = fixture([
+      "[Vexor, Invalid Cargo]",
+      "Damage Control II",
+      "",
+      "[Empty med slot]",
+      "",
+      "[Empty high slot]",
+      "",
+      "[Empty rig slot]",
+      "",
+      "",
+      "",
+      "",
+      scenario.line,
+    ]);
+    const result = await resolveAndValidateEftDraft({
+      catalog: { ...catalog, cargo: [...scenario.records] },
+      dependencies: createDependencies(),
+      document: requireDocument(parsed),
+    });
+    assert.equal(result.draft, null, scenario.code);
+    const diagnostic = result.diagnostics.find((entry) => entry.code === scenario.code);
+    assert.ok(diagnostic, scenario.code);
+    if (scenario.code === "CARGO_AMBIGUOUS") {
+      assert.deepEqual(diagnostic.candidateTypeIds, [28668, 999004]);
+    }
+  }
 });
 
 test("Strategic Cruiser subsystem content blocks application", async () => {

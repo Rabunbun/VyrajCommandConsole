@@ -1,8 +1,10 @@
 import type {
+  CargoHoldValidationResponse,
   DroneBayValidationResponse,
   FittedModuleAddress,
   FittingAnalysisResponse,
 } from "@/lib/fitting/types";
+import { getUnsupportedCargoIssue } from "@/lib/fitting/cargo-policy";
 import type {
   EftImportDiagnostic,
   EftImportDiagnosticCode,
@@ -14,6 +16,7 @@ import type {
   EftSourceLine,
   EftSupportedRack,
   ResolvedEftDrone,
+  ResolvedEftCargo,
   ResolvedEftSlot,
 } from "./types";
 
@@ -23,6 +26,7 @@ type NamedCatalogRecord = {
 };
 
 export type EftHullCatalogRecord = NamedCatalogRecord & {
+  cargoCapacityBase: number | null;
   droneCapacity: number | null;
   highSlots: number;
   lowSlots: number;
@@ -36,8 +40,15 @@ export type EftModuleCatalogRecord = NamedCatalogRecord & {
 
 export type EftChargeCatalogRecord = NamedCatalogRecord;
 export type EftDroneCatalogRecord = NamedCatalogRecord;
+export type EftCargoCatalogRecord = NamedCatalogRecord & {
+  categoryId: number;
+  metaGroupId: number | null;
+  packagedVolume: number | null;
+  volume: number | null;
+};
 
 export type EftResolutionCatalog = {
+  cargo: EftCargoCatalogRecord[];
   charges: EftChargeCatalogRecord[];
   drones: EftDroneCatalogRecord[];
   hulls: EftHullCatalogRecord[];
@@ -49,6 +60,10 @@ type ChargeValidationResult =
   | { message: string; status: "error" };
 
 export type EftDraftValidationDependencies = {
+  analyzeCargo: (input: {
+    cargo: ResolvedEftCargo[];
+    hullTypeId: number;
+  }) => Promise<CargoHoldValidationResponse>;
   analyzeFit: (input: {
     fittedModules: FittedModuleAddress[];
     hullTypeId: number;
@@ -196,6 +211,10 @@ export async function resolveAndValidateEftDraft(input: {
   if (!drones) {
     resolutionFailed = true;
   }
+  const cargo = resolveCargo(input.document, input.catalog.cargo, diagnostics);
+  if (!cargo) {
+    resolutionFailed = true;
+  }
 
   const chargeQuantities = await validateLoadedCharges(
     pendingSlots,
@@ -206,7 +225,7 @@ export async function resolveAndValidateEftDraft(input: {
     resolutionFailed = true;
   }
 
-  if (resolutionFailed || !drones || !chargeQuantities) {
+  if (resolutionFailed || !drones || !cargo || !chargeQuantities) {
     return { diagnostics, draft: null, status: "error" };
   }
 
@@ -242,7 +261,7 @@ export async function resolveAndValidateEftDraft(input: {
     ),
   );
 
-  const [fitting, droneBayResponse] = await Promise.all([
+  const [fitting, droneBayResponse, cargoHoldResponse] = await Promise.all([
     input.dependencies.analyzeFit({ fittedModules, hullTypeId: hull.typeId }),
     drones.length > 0
       ? input.dependencies.validateDroneBay({ drones, hullTypeId: hull.typeId })
@@ -256,6 +275,7 @@ export async function resolveAndValidateEftDraft(input: {
           },
           errors: [],
         }),
+    input.dependencies.analyzeCargo({ cargo, hullTypeId: hull.typeId }),
   ]);
 
   for (const issue of fitting.errors) {
@@ -278,10 +298,35 @@ export async function resolveAndValidateEftDraft(input: {
       ),
     );
   }
+  for (const issue of cargoHoldResponse.errors) {
+    diagnostics.push(
+      makeDiagnostic(
+        "error",
+        "CARGO_HOLD_VALIDATION",
+        `${issue.code}: ${issue.message}`,
+        null,
+      ),
+    );
+  }
+  for (const issue of cargoHoldResponse.warnings) {
+    diagnostics.push(
+      makeDiagnostic(
+        "warning",
+        "CARGO_HOLD_WARNING",
+        `${issue.code}: ${issue.message}`,
+        null,
+      ),
+    );
+  }
 
   const status = deriveStatus(diagnostics);
   const draft = {
-    analysis: { droneBay: droneBayResponse.analysis, fitting },
+    analysis: {
+      cargoHold: cargoHoldResponse.analysis,
+      droneBay: droneBayResponse.analysis,
+      fitting,
+    },
+    cargo,
     diagnostics,
     drones,
     fitName: input.document.header.fitName,
@@ -452,6 +497,94 @@ function resolveDrones(
     : Array.from(quantities, ([typeId, quantity]) => ({ quantity, typeId }));
 }
 
+function resolveCargo(
+  document: EftParsedDocument,
+  catalog: EftCargoCatalogRecord[],
+  diagnostics: EftImportDiagnostic[],
+): ResolvedEftCargo[] | null {
+  const quantities = new Map<number, number>();
+  let failed = false;
+
+  for (const line of document.cargo) {
+    if (line.quantity === null || !Number.isSafeInteger(line.quantity) || line.quantity <= 0) {
+      diagnostics.push(
+        makeDiagnostic(
+          "error",
+          "CARGO_QUANTITY_INVALID",
+          `Cargo line ${quote(line.source.text)} does not contain a valid positive quantity.`,
+          line.source,
+        ),
+      );
+      failed = true;
+      continue;
+    }
+
+    const resolution = resolveName(line.itemName, catalog);
+    if (resolution.kind !== "resolved") {
+      diagnostics.push(
+        makeDiagnostic(
+          "error",
+          resolution.kind === "ambiguous" ? "CARGO_AMBIGUOUS" : "CARGO_UNRESOLVED",
+          resolution.kind === "ambiguous"
+            ? `Cargo name ${quote(line.itemName)} matches multiple authoritative cargo-item records.`
+            : `Cargo name ${quote(line.itemName)} is not present in the authoritative cargo-item cache.`,
+          line.source,
+          resolution.kind === "ambiguous"
+            ? resolution.records.map((record) => record.typeId).sort((left, right) => left - right)
+            : undefined,
+        ),
+      );
+      failed = true;
+      continue;
+    }
+
+    addNormalizationWarning(diagnostics, resolution, line.itemName, "cargo", line.source);
+    const unsupported = getUnsupportedCargoIssue(resolution.record);
+    if (unsupported) {
+      const code = (() => {
+        switch (unsupported.code) {
+          case "BLUEPRINT_STATE_UNSUPPORTED":
+            return "CARGO_BLUEPRINT_STATE_UNSUPPORTED";
+          case "CARGO_VOLUME_UNAVAILABLE":
+            return "CARGO_VOLUME_UNAVAILABLE";
+          case "MUTATED_STATE_UNSUPPORTED":
+            return "CARGO_MUTATED_STATE_UNSUPPORTED";
+          case "PACKAGE_STATE_UNSUPPORTED":
+            return "CARGO_PACKAGE_STATE_UNSUPPORTED";
+          default:
+            return "CARGO_HOLD_VALIDATION";
+        }
+      })();
+      diagnostics.push(
+        makeDiagnostic("error", code, unsupported.message, line.source),
+      );
+      failed = true;
+      continue;
+    }
+
+    const nextQuantity = (quantities.get(resolution.record.typeId) ?? 0) + line.quantity;
+    if (!Number.isSafeInteger(nextQuantity)) {
+      diagnostics.push(
+        makeDiagnostic(
+          "error",
+          "CARGO_QUANTITY_OVERFLOW",
+          `Aggregated quantity for ${resolution.record.typeName} exceeds the safe integer range.`,
+          line.source,
+        ),
+      );
+      failed = true;
+      continue;
+    }
+    quantities.set(resolution.record.typeId, nextQuantity);
+  }
+
+  return failed
+    ? null
+    : Array.from(quantities, ([typeId, quantity]) => ({ quantity, typeId })).sort(
+        (left, right) => left.typeId - right.typeId,
+      );
+}
+
 async function validateLoadedCharges(
   slots: Record<EftSupportedRack, PendingSlot[]>,
   dependencies: EftDraftValidationDependencies,
@@ -535,16 +668,6 @@ function addUnsupportedDiagnostics(
       ),
     );
   }
-  for (const line of document.cargo) {
-    diagnostics.push(
-      makeDiagnostic(
-        "warning",
-        "CARGO_UNSUPPORTED",
-        "Cargo content was retained for review but will not be applied or loaded into modules.",
-        line.source,
-      ),
-    );
-  }
   for (const block of document.unsupportedBlocks.filter(
     (unsupported) => unsupported.kind === "extension",
   )) {
@@ -590,7 +713,7 @@ function addNormalizationWarning<T extends NamedCatalogRecord>(
   diagnostics: EftImportDiagnostic[],
   resolution: Extract<NameResolution<T>, { kind: "resolved" }>,
   requestedName: string,
-  kind: "charge" | "drone" | "hull" | "module",
+  kind: "cargo" | "charge" | "drone" | "hull" | "module",
   source: EftSourceLine,
 ): void {
   if (!resolution.normalized) {
@@ -625,8 +748,10 @@ function makeDiagnostic(
   code: EftImportDiagnosticCode,
   message: string,
   source: EftSourceLine | null,
+  candidateTypeIds?: number[],
 ): EftImportDiagnostic {
   return {
+    ...(candidateTypeIds ? { candidateTypeIds } : {}),
     code,
     lineNumber: source?.lineNumber ?? null,
     message,

@@ -10,6 +10,11 @@ export type DroneBayEntry = {
   typeId: number;
 };
 
+export type CargoEntry = {
+  quantity: number;
+  typeId: number;
+};
+
 export type FittedModule = {
   charge: LoadedCharge | null;
   instanceId: string;
@@ -29,6 +34,7 @@ export type FittingSlotAddress = {
 export type FittingSlots = Record<RackType, FittingSlot[]>;
 
 export type FitState = {
+  cargo: CargoEntry[];
   drones: DroneBayEntry[];
   hullTypeId: number | null;
   slots: FittingSlots;
@@ -43,6 +49,7 @@ export type FittingTopology = {
 
 export function createEmptyFitState(): FitState {
   return {
+    cargo: [],
     drones: [],
     hullTypeId: null,
     slots: createEmptyFittingSlots()

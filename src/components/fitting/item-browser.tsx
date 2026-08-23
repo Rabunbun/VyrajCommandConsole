@@ -14,6 +14,7 @@ import type {
   SelectedFittingSlot
 } from "@/components/fitting/fitting-ui-types";
 import type {
+  CargoHoldAttemptResult,
   DroneBayAttemptResult,
   FitModuleAttemptResult,
   FitOperationAttemptResult,
@@ -23,11 +24,14 @@ import { ModuleIcon } from "@/components/module-visuals";
 import type { FittedModule } from "@/lib/fitting/fit-state";
 import type {
   BrowsableFittingRack,
+  CargoHoldAnalysis,
   DroneBayAnalysis,
   FittingChargeCatalogResponse,
   FittingChargeHierarchyNode,
   FittingChargeHierarchyResponse,
   FittingChargeSearchResult,
+  FittingCargoSearchResponse,
+  FittingCargoSearchResult,
   FittingDroneSearchResponse,
   FittingDroneSearchResult,
   FittingHullSummary,
@@ -40,6 +44,7 @@ import type {
 const moduleResultLimit = 40;
 const chargeResultLimit = 40;
 const droneResultLimit = 200;
+const cargoResultLimit = 40;
 const searchDebounceMs = 250;
 const shipMarketRootName = "Ships";
 const specialEditionMarketGroupName = "Special Edition Ships";
@@ -57,6 +62,7 @@ const browserRacks: Array<{ label: string; rack: BrowsableFittingRack }> = [
 type ItemBrowserProps = {
   actionMode: ModuleActionMode;
   browserRack: BrowsableFittingRack;
+  cargoHoldAnalysis: CargoHoldAnalysis;
   droneBayAnalysis: DroneBayAnalysis;
   dragSource: FittingDragSource | null;
   hulls: FittingHullSummary[];
@@ -65,6 +71,7 @@ type ItemBrowserProps = {
     module: FittingModuleSearchResult
   ) => Promise<FitModuleAttemptResult>;
   onAddDrone: (typeId: number) => Promise<DroneBayAttemptResult>;
+  onAddCargo: (typeId: number) => Promise<CargoHoldAttemptResult>;
   onClearSelectedSlot: () => void;
   onDecrementDrone: (typeId: number) => Promise<DroneBayAttemptResult>;
   onFitModule: (typeId: number) => Promise<FitModuleAttemptResult>;
@@ -92,11 +99,13 @@ type ItemBrowserProps = {
 export function ItemBrowser({
   actionMode,
   browserRack,
+  cargoHoldAnalysis,
   droneBayAnalysis,
   dragSource,
   hulls,
   manipulationError,
   onAutoFitModule,
+  onAddCargo,
   onAddDrone,
   onClearSelectedSlot,
   onDecrementDrone,
@@ -125,10 +134,14 @@ export function ItemBrowser({
   const [moduleQuery, setModuleQuery] = useState("");
   const [chargeQuery, setChargeQuery] = useState("");
   const [droneQuery, setDroneQuery] = useState("");
+  const [cargoQuery, setCargoQuery] = useState("");
   const [collapsedModuleGroups, setCollapsedModuleGroups] = useState<Set<string>>(
     () => new Set()
   );
   const [collapsedChargeGroups, setCollapsedChargeGroups] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [collapsedCargoGroups, setCollapsedCargoGroups] = useState<Set<string>>(
     () => new Set()
   );
   const selectedRack = selectedSlot?.rack ?? null;
@@ -331,6 +344,45 @@ export function ItemBrowser({
           query={droneQuery}
           selectedHull={selectedHull}
           setQuery={setDroneQuery}
+        />
+      </PersistentBrowserSection>
+
+      <PersistentBrowserSection
+        badge={
+          cargoHoldAnalysis.entries.length
+            ? `${cargoHoldAnalysis.entries.reduce(
+                (total, entry) => total + entry.quantity,
+                0
+              )} Carried`
+            : "Empty"
+        }
+        description="Ordinary carried inventory"
+        id="fitting-browser-cargo"
+        onToggle={() => onToggleSection("cargo")}
+        open={openSections.cargo}
+        title="Cargo"
+      >
+        <CargoBrowser
+          active={openSections.cargo}
+          collapsedGroups={collapsedCargoGroups}
+          draggingCargoTypeId={
+            dragSource?.kind === "browser-cargo" ? dragSource.typeId : null
+          }
+          onAddCargo={onAddCargo}
+          onCargoDragEnd={onBrowserDragEnd}
+          onCargoDragStart={(cargo) =>
+            onBrowserDragStart({
+              kind: "browser-cargo",
+              typeId: cargo.typeId,
+              typeName: cargo.typeName
+            })
+          }
+          onToggleGroup={(groupKey) =>
+            toggleCollapsedGroup(setCollapsedCargoGroups, groupKey)
+          }
+          query={cargoQuery}
+          selectedHullTypeId={selectedHull?.typeId ?? null}
+          setQuery={setCargoQuery}
         />
       </PersistentBrowserSection>
     </aside>
@@ -1919,6 +1971,292 @@ function ChargeResultRow({
   );
 }
 
+type CargoBrowserProps = {
+  active: boolean;
+  collapsedGroups: Set<string>;
+  draggingCargoTypeId: number | null;
+  onAddCargo: (typeId: number) => Promise<CargoHoldAttemptResult>;
+  onCargoDragEnd: () => void;
+  onCargoDragStart: (cargo: FittingCargoSearchResult) => void;
+  onToggleGroup: (groupKey: string) => void;
+  query: string;
+  selectedHullTypeId: number | null;
+  setQuery: (query: string) => void;
+};
+
+type CargoSearchState =
+  | { status: "loading" }
+  | { message: string; requestKey: string; status: "error" }
+  | {
+      requestKey: string;
+      response: FittingCargoSearchResponse;
+      status: "ready";
+    };
+
+function CargoBrowser({
+  active,
+  collapsedGroups,
+  draggingCargoTypeId,
+  onAddCargo,
+  onCargoDragEnd,
+  onCargoDragStart,
+  onToggleGroup,
+  query,
+  selectedHullTypeId,
+  setQuery
+}: CargoBrowserProps) {
+  const [searchState, setSearchState] = useState<CargoSearchState>({
+    status: "loading"
+  });
+  const [pendingTypeId, setPendingTypeId] = useState<number | null>(null);
+  const [feedback, setFeedback] = useState<{
+    hullTypeId: number | null;
+    message: string;
+    tone: "error" | "success";
+  } | null>(null);
+  const currentFeedback =
+    feedback?.hullTypeId === selectedHullTypeId ? feedback : null;
+  const requestKey = query;
+  const currentSearchState =
+    searchState.status !== "loading" && searchState.requestKey === requestKey
+      ? searchState
+      : ({ status: "loading" } as const);
+  const groupedCargo =
+    currentSearchState.status === "ready"
+      ? groupCargo(currentSearchState.response.results)
+      : [];
+
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+
+    const abortController = new AbortController();
+    const timeoutId = window.setTimeout(async () => {
+      const searchParams = new URLSearchParams({
+        limit: String(cargoResultLimit),
+        q: query
+      });
+
+      try {
+        const response = await fetch(`/api/fitting/cargo?${searchParams}`, {
+          cache: "no-store",
+          signal: abortController.signal
+        });
+        const payload = (await response.json()) as
+          | FittingCargoSearchResponse
+          | { error?: string };
+
+        if (!response.ok || !("results" in payload)) {
+          throw new Error(
+            "error" in payload && payload.error
+              ? payload.error
+              : "Cargo search is temporarily unavailable."
+          );
+        }
+
+        setSearchState({ requestKey, response: payload, status: "ready" });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        setSearchState({
+          message:
+            error instanceof Error
+              ? error.message
+              : "Cargo search is temporarily unavailable.",
+          requestKey,
+          status: "error"
+        });
+      }
+    }, searchDebounceMs);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      abortController.abort();
+    };
+  }, [active, query, requestKey]);
+
+  async function addCargo(cargo: FittingCargoSearchResult) {
+    if (pendingTypeId !== null) {
+      return;
+    }
+
+    setPendingTypeId(cargo.typeId);
+    setFeedback(null);
+    const result = await onAddCargo(cargo.typeId);
+    setPendingTypeId(null);
+
+    if (!result.ok) {
+      setFeedback({
+        hullTypeId: selectedHullTypeId,
+        message: result.message,
+        tone: "error"
+      });
+      return;
+    }
+
+    setFeedback({
+      hullTypeId: selectedHullTypeId,
+      message: `Added ${cargo.typeName} to Cargo Hold.`,
+      tone: "success"
+    });
+  }
+
+  return (
+    <div className="fitting-browser-index">
+      <label className="field-stack">
+        <span className="field-label">Search cargo</span>
+        <input
+          className="text-input fitting-search-input"
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search item, group, category, or market path..."
+          type="search"
+          value={query}
+        />
+      </label>
+
+      <div className="fitting-browser-result-heading">
+        <span>Browser-safe cargo</span>
+        <small>Up to {cargoResultLimit} results</small>
+      </div>
+
+      {currentFeedback ? (
+        <div
+          className="fitting-empty-note"
+          data-tone={currentFeedback.tone}
+          role="status"
+        >
+          {currentFeedback.message}
+        </div>
+      ) : null}
+
+      <div className="fitting-browser-scroll-region" aria-live="polite">
+        {currentSearchState.status === "loading" ? (
+          <div className="fitting-empty-note">Searching cargo cache...</div>
+        ) : null}
+        {currentSearchState.status === "error" ? (
+          <div className="fitting-empty-note" data-tone="error">
+            {currentSearchState.message}
+          </div>
+        ) : null}
+        {currentSearchState.status === "ready" ? (
+          groupedCargo.length ? (
+            <div className="fitting-browser-groups">
+              {groupedCargo.map((group) => (
+                <BrowserResultGroup
+                  collapsed={collapsedGroups.has(group.key)}
+                  count={group.items.length}
+                  groupKey={group.key}
+                  key={group.key}
+                  label={group.label}
+                  onToggle={onToggleGroup}
+                >
+                  <div className="fitting-cargo-list">
+                    {group.items.map((cargo) => (
+                      <CargoResultRow
+                        cargo={cargo}
+                        dragging={draggingCargoTypeId === cargo.typeId}
+                        key={cargo.typeId}
+                        onAdd={() => void addCargo(cargo)}
+                        onDragEnd={onCargoDragEnd}
+                        onDragStart={() => onCargoDragStart(cargo)}
+                        pending={pendingTypeId === cargo.typeId}
+                      />
+                    ))}
+                  </div>
+                </BrowserResultGroup>
+              ))}
+            </div>
+          ) : (
+            <div className="fitting-empty-note">
+              {query.trim()
+                ? "No browser-safe cargo matches this search. Package-sensitive and instance-specific items remain resolver-only."
+                : "No browser-safe cargo is available. The cargo cache may be empty."}
+            </div>
+          )
+        ) : null}
+      </div>
+
+      <div className="fitting-browser-readonly-note">
+        Browser results exclude blueprints, Abyssal templates, unknown volume, and
+        unresolved packaged/assembled state.
+      </div>
+    </div>
+  );
+}
+
+function CargoResultRow({
+  cargo,
+  dragging,
+  onAdd,
+  onDragEnd,
+  onDragStart,
+  pending
+}: {
+  cargo: FittingCargoSearchResult;
+  dragging: boolean;
+  onAdd: () => void;
+  onDragEnd: () => void;
+  onDragStart: () => void;
+  pending: boolean;
+}) {
+  const badges = Array.from(
+    new Set(
+      [cargo.metaGroupName, formatTechLevel(cargo.techLevel)].filter(
+        (value): value is string => Boolean(value)
+      )
+    )
+  );
+
+  return (
+    <div
+      className="fitting-cargo-result"
+      data-dragging={dragging}
+      draggable
+      onDragEnd={onDragEnd}
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = "copy";
+        event.dataTransfer.setData("text/plain", `fitting-cargo:${cargo.typeId}`);
+        onDragStart();
+      }}
+      onDoubleClick={() => {
+        if (!pending) {
+          onAdd();
+        }
+      }}
+      title={`Double-click or drag to add ${cargo.typeName} to Cargo Hold`}
+    >
+      <EveModuleIcon typeId={cargo.typeId} typeName={cargo.typeName} />
+      <span className="fitting-hull-result-copy">
+        <strong>{cargo.typeName}</strong>
+        <span>
+          {cargo.groupName} · {formatVolume(cargo.volume)} m³ each
+        </span>
+      </span>
+      {badges.length ? (
+        <span className="fitting-drone-badges" aria-label="Cargo metadata">
+          {badges.map((badge) => (
+            <small className="fitting-drone-badge" key={badge}>
+              {badge}
+            </small>
+          ))}
+        </span>
+      ) : null}
+      <button
+        className="fitting-drone-add"
+        disabled={pending}
+        onClick={onAdd}
+        onDoubleClick={(event) => event.stopPropagation()}
+        type="button"
+      >
+        {pending ? "Adding…" : "Add"}
+      </button>
+    </div>
+  );
+}
+
 type DroneBrowserProps = {
   active: boolean;
   analysis: DroneBayAnalysis;
@@ -2570,6 +2908,30 @@ function groupModules(modules: FittingModuleSearchResult[]) {
 
 function groupCharges(charges: FittingChargeSearchResult[]) {
   return groupResults(charges);
+}
+
+function groupCargo(cargoItems: FittingCargoSearchResult[]) {
+  const groups = new Map<
+    string,
+    { items: FittingCargoSearchResult[]; key: string; label: string }
+  >();
+
+  for (const cargo of cargoItems) {
+    const key = `cargo:${cargo.categoryId}:${cargo.groupId}`;
+    const marketLeaf = cargo.marketGroupPathNames.at(-1);
+    const label = `${cargo.categoryName} · ${marketLeaf || cargo.groupName}`;
+    const group = groups.get(key);
+
+    if (group) {
+      group.items.push(cargo);
+    } else {
+      groups.set(key, { items: [cargo], key, label });
+    }
+  }
+
+  return Array.from(groups.values()).toSorted((left, right) =>
+    hullHierarchyCollator.compare(left.label, right.label)
+  );
 }
 
 function groupResults<T extends { groupId: number; groupName: string }>(

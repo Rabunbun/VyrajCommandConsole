@@ -341,7 +341,7 @@ function isStructurallyValidDropTarget(
     return occupied;
   }
 
-  if (source.kind === "browser-drone") {
+  if (source.kind === "browser-drone" || source.kind === "browser-cargo") {
     return false;
   }
 

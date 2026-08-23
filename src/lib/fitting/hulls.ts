@@ -12,6 +12,7 @@ export async function getFittingHullIndex(): Promise<FittingHullSummary[]> {
       orderBy: [{ groupName: "asc" }, { typeName: "asc" }],
       select: {
         calibrationCapacity: true,
+        cargoCapacityBase: true,
         categoryName: true,
         cpuBase: true,
         droneBandwidth: true,

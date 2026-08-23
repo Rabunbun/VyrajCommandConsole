@@ -2,6 +2,7 @@ import type { RackType } from "@/lib/fitting/fit-state";
 
 export type FittingHullSummary = {
   calibrationCapacity: number | null;
+  cargoCapacityBase: number | null;
   categoryName: string;
   cpuBase: number | null;
   droneBandwidth: number | null;
@@ -129,6 +130,69 @@ export type FittingDroneSearchResult = {
 export type FittingDroneSearchResponse = {
   results: FittingDroneSearchResult[];
   total: number;
+};
+
+export type FittingCargoSearchResult = {
+  categoryId: number;
+  categoryName: string;
+  groupId: number;
+  groupName: string;
+  marketGroupId: number | null;
+  marketGroupName: string | null;
+  marketGroupPathIds: number[];
+  marketGroupPathNames: string[];
+  metaGroupId: number | null;
+  metaGroupName: string | null;
+  techLevel: number | null;
+  typeId: number;
+  typeName: string;
+  volume: number;
+};
+
+export type FittingCargoSearchResponse = {
+  results: FittingCargoSearchResult[];
+};
+
+export type CargoInputEntry = {
+  quantity: number;
+  typeId: number;
+};
+
+export type ResolvedCargoEntry = CargoInputEntry & {
+  typeName: string;
+  volume: number;
+};
+
+export type CargoHoldAnalysis = {
+  baseCapacity: number | null;
+  entries: ResolvedCargoEntry[];
+  overBaseBy: number;
+  remainingBaseVolume: number | null;
+  usedVolume: number;
+};
+
+export type CargoValidationIssueCode =
+  | "BASE_CAPACITY_EXCEEDED"
+  | "BASE_CAPACITY_UNAVAILABLE"
+  | "BLUEPRINT_STATE_UNSUPPORTED"
+  | "CARGO_ITEM_NOT_FOUND"
+  | "CARGO_VOLUME_UNAVAILABLE"
+  | "HULL_NOT_FOUND"
+  | "HULL_NOT_SELECTED"
+  | "INVALID_CARGO_STATE"
+  | "MUTATED_STATE_UNSUPPORTED"
+  | "PACKAGE_STATE_UNSUPPORTED";
+
+export type CargoValidationIssue = {
+  code: CargoValidationIssueCode;
+  message: string;
+};
+
+export type CargoHoldValidationResponse = {
+  allowed: boolean;
+  analysis: CargoHoldAnalysis;
+  errors: CargoValidationIssue[];
+  warnings: CargoValidationIssue[];
 };
 
 export type DroneBayInputEntry = {

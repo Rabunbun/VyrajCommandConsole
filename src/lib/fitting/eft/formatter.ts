@@ -1,5 +1,6 @@
 import type {
   EftExportDocument,
+  EftExportCargo,
   EftExportDrone,
   EftExportSlot,
   EftSupportedRack,
@@ -62,6 +63,12 @@ function compareDrones(left: EftExportDrone, right: EftExportDrone): number {
   return left.typeId - right.typeId;
 }
 
+function compareCargo(left: EftExportCargo, right: EftExportCargo): number {
+  if (left.typeName < right.typeName) return -1;
+  if (left.typeName > right.typeName) return 1;
+  return left.typeId - right.typeId;
+}
+
 function formatDrone(drone: EftExportDrone): string {
   if (!Number.isSafeInteger(drone.typeId) || drone.typeId <= 0) {
     throw new EftFormatError("Drone typeId must be a positive safe integer.");
@@ -70,6 +77,31 @@ function formatDrone(drone: EftExportDrone): string {
     throw new EftFormatError("Drone quantity must be a positive safe integer.");
   }
   return `${canonicalName(drone.typeName, "Drone type name")} x${drone.quantity}`;
+}
+
+function normalizeCargo(cargo: EftExportCargo[]): EftExportCargo[] {
+  const byTypeId = new Map<number, EftExportCargo>();
+
+  for (const entry of cargo) {
+    if (!Number.isSafeInteger(entry.typeId) || entry.typeId <= 0) {
+      throw new EftFormatError("Cargo typeId must be a positive safe integer.");
+    }
+    if (!Number.isSafeInteger(entry.quantity) || entry.quantity <= 0) {
+      throw new EftFormatError("Cargo quantity must be a positive safe integer.");
+    }
+    const typeName = canonicalName(entry.typeName, "Cargo type name");
+    const current = byTypeId.get(entry.typeId);
+    if (current && current.typeName !== typeName) {
+      throw new EftFormatError(`Cargo type ${entry.typeId} has inconsistent type names.`);
+    }
+    const quantity = (current?.quantity ?? 0) + entry.quantity;
+    if (!Number.isSafeInteger(quantity)) {
+      throw new EftFormatError(`Cargo quantity for ${typeName} exceeds the safe integer range.`);
+    }
+    byTypeId.set(entry.typeId, { quantity, typeId: entry.typeId, typeName });
+  }
+
+  return [...byTypeId.values()].sort(compareCargo);
 }
 
 /**
@@ -93,6 +125,11 @@ export function formatEft(document: EftExportDocument): string {
   // subsystem and service sections to the drone/fighter bay section.
   lines.push("", "");
   lines.push(...[...document.drones].sort(compareDrones).map(formatDrone));
+  const cargo = normalizeCargo(document.cargo);
+  if (cargo.length) {
+    lines.push("");
+    lines.push(...cargo.map((entry) => `${entry.typeName} x${entry.quantity}`));
+  }
 
   return `${lines.join("\n").replace(/\n+$/g, "")}\n`;
 }

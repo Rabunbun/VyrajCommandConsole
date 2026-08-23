@@ -3,6 +3,7 @@ import "server-only";
 import { FittingRack, Prisma } from "@prisma/client";
 import { getDb, isDatabaseConfigured } from "@/lib/db";
 import { validateFittingChargeLoad } from "@/lib/fitting/charges";
+import { analyzeCargoHold } from "@/lib/fitting/cargo";
 import { validateDroneBay } from "@/lib/fitting/drones";
 import { analyzeFittingFit } from "@/lib/fitting/validation";
 import type {
@@ -42,6 +43,7 @@ export async function resolveEftDraft(
   }
 
   const emptyCatalog: EftResolutionCatalog = {
+    cargo: [],
     charges: [],
     drones: [],
     hulls: [],
@@ -63,6 +65,7 @@ export async function resolveEftDraft(
   const db = getDb();
   const hulls = await db.fittingHull.findMany({
     select: {
+      cargoCapacityBase: true,
       droneCapacity: true,
       highSlots: true,
       lowSlots: true,
@@ -89,7 +92,7 @@ export async function resolveEftDraft(
   }
 
   const names = collectReferencedNames(parsed.document);
-  const [modules, charges, drones] = await Promise.all([
+  const [modules, charges, drones, cargo] = await Promise.all([
     names.modules.length
       ? db.fittingModule.findMany({
           select: { rack: true, typeId: true, typeName: true },
@@ -108,10 +111,24 @@ export async function resolveEftDraft(
           where: { OR: insensitiveNameConditions(names.drones) },
         })
       : [],
+    names.cargo.length
+      ? db.fittingCargoItem.findMany({
+          select: {
+            categoryId: true,
+            metaGroupId: true,
+            packagedVolume: true,
+            typeId: true,
+            typeName: true,
+            volume: true,
+          },
+          where: { OR: insensitiveNameConditions(names.cargo) },
+        })
+      : [],
   ]);
 
   return resolveAndValidateEftDraft({
     catalog: {
+      cargo,
       charges,
       drones,
       hulls,
@@ -127,6 +144,7 @@ export async function resolveEftDraft(
 }
 
 const authoritativeDependencies = {
+  analyzeCargo: analyzeCargoHold,
   analyzeFit: analyzeFittingFit,
   async validateCharge(moduleTypeId: number, chargeTypeId: number) {
     const result = await validateFittingChargeLoad(moduleTypeId, chargeTypeId);
@@ -141,6 +159,7 @@ function collectReferencedNames(document: NonNullable<EftParseResult["document"]
   const moduleNames = new Set<string>();
   const chargeNames = new Set<string>();
   const droneNames = new Set<string>();
+  const cargoNames = new Set<string>();
 
   for (const rack of ["low", "mid", "high", "rig"] as const) {
     for (const line of document.slots[rack]) {
@@ -157,8 +176,12 @@ function collectReferencedNames(document: NonNullable<EftParseResult["document"]
   for (const line of document.droneAndFighterBay) {
     droneNames.add(line.itemName);
   }
+  for (const line of document.cargo) {
+    cargoNames.add(line.itemName);
+  }
 
   return {
+    cargo: [...cargoNames],
     charges: [...chargeNames],
     drones: [...droneNames],
     modules: [...moduleNames],
