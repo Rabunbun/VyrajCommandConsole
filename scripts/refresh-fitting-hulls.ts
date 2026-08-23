@@ -19,13 +19,12 @@ const sdeJsonlZipUrl =
   "https://developers.eveonline.com/static-data/eve-online-static-data-latest-jsonl.zip";
 const shipCategoryId = 6;
 const verificationShipNames = [
-  "Merlin",
-  "Caracal",
-  "Drake",
-  "Raven",
-  "Freki",
-  "Anhinga",
-  "Naga"
+  "Rifter",
+  "Vexor",
+  "Iteron Mark V",
+  "Orca",
+  "Providence",
+  "Capsule"
 ];
 
 const FITTING_ATTRIBUTE_IDS = {
@@ -53,6 +52,11 @@ const FITTING_ATTRIBUTE_IDS = {
     id: 48,
     sdeName: "cpuOutput",
     label: "CPU"
+  },
+  cargoCapacityBase: {
+    id: 38,
+    sdeName: "capacity",
+    label: "Cargo Capacity"
   },
   launcherHardpoints: {
     id: 101,
@@ -110,6 +114,7 @@ type SdeGroup = {
 
 type SdeType = {
   _key: number;
+  capacity?: number;
   groupID: number;
   marketGroupID?: number;
   name?: LocalizedName;
@@ -138,6 +143,7 @@ type SdeTypeDogma = {
 type FittingHullRecord = {
   categoryName: string;
   calibrationCapacity: number | null;
+  cargoCapacityBase: number | null;
   cpuBase: number | null;
   droneBandwidth: number | null;
   droneCapacity: number | null;
@@ -195,23 +201,30 @@ async function main() {
     const hullAttributes = await readHullDogmaAttributes(files.typeDogma, publishedShips);
     const refreshedAt = new Date();
     const hulls = Array.from(publishedShips.values())
-      .map((ship) => ({
-        ...ship,
-        ...hullAttributes.get(ship.typeId),
-        calibrationCapacity: hullAttributes.get(ship.typeId)?.calibrationCapacity ?? null,
-        cpuBase: hullAttributes.get(ship.typeId)?.cpuBase ?? null,
-        droneBandwidth: hullAttributes.get(ship.typeId)?.droneBandwidth ?? null,
-        droneCapacity: hullAttributes.get(ship.typeId)?.droneCapacity ?? null,
-        highSlots: hullAttributes.get(ship.typeId)?.highSlots ?? 0,
-        launcherHardpoints: hullAttributes.get(ship.typeId)?.launcherHardpoints ?? null,
-        lowSlots: hullAttributes.get(ship.typeId)?.lowSlots ?? 0,
-        midSlots: hullAttributes.get(ship.typeId)?.midSlots ?? 0,
-        powergridBase: hullAttributes.get(ship.typeId)?.powergridBase ?? null,
-        rigSlots: hullAttributes.get(ship.typeId)?.rigSlots ?? 0,
-        rigSize: hullAttributes.get(ship.typeId)?.rigSize ?? null,
-        turretHardpoints: hullAttributes.get(ship.typeId)?.turretHardpoints ?? null,
-        lastRefreshedAt: refreshedAt
-      }))
+      .map((ship) => {
+        const dogma = hullAttributes.get(ship.typeId);
+        validateCargoCapacityMatch(
+          ship,
+          dogma?.cargoCapacityDogma ?? null
+        );
+
+        return {
+          ...ship,
+          calibrationCapacity: dogma?.calibrationCapacity ?? null,
+          cpuBase: dogma?.cpuBase ?? null,
+          droneBandwidth: dogma?.droneBandwidth ?? null,
+          droneCapacity: dogma?.droneCapacity ?? null,
+          highSlots: dogma?.highSlots ?? 0,
+          launcherHardpoints: dogma?.launcherHardpoints ?? null,
+          lowSlots: dogma?.lowSlots ?? 0,
+          midSlots: dogma?.midSlots ?? 0,
+          powergridBase: dogma?.powergridBase ?? null,
+          rigSlots: dogma?.rigSlots ?? 0,
+          rigSize: dogma?.rigSize ?? null,
+          turretHardpoints: dogma?.turretHardpoints ?? null,
+          lastRefreshedAt: refreshedAt
+        };
+      })
       .sort((left, right) =>
         left.groupName.localeCompare(right.groupName, "en-US") ||
         left.typeName.localeCompare(right.typeName, "en-US")
@@ -230,7 +243,7 @@ async function main() {
 
     for (const hull of verified) {
       console.log(
-        `- ${hull.typeName}: ${hull.groupName}; market ${hull.marketGroupPathNames.join(" > ") || "unclassified"}; high ${hull.highSlots}, mid ${hull.midSlots}, low ${hull.lowSlots}, rig ${hull.rigSlots}, rig size ${formatNullableValue(hull.rigSize)}; CPU ${formatNullableValue(hull.cpuBase)}, PG ${formatNullableValue(hull.powergridBase)}, calibration ${formatNullableValue(hull.calibrationCapacity)}, turrets ${formatNullableValue(hull.turretHardpoints)}, launchers ${formatNullableValue(hull.launcherHardpoints)}, drone bay ${formatNullableValue(hull.droneCapacity)}, bandwidth ${formatNullableValue(hull.droneBandwidth)}`
+        `- ${hull.typeName}: ${hull.groupName}; market ${hull.marketGroupPathNames.join(" > ") || "unclassified"}; cargo ${formatNullableValue(hull.cargoCapacityBase)} m3; high ${hull.highSlots}, mid ${hull.midSlots}, low ${hull.lowSlots}, rig ${hull.rigSlots}, rig size ${formatNullableValue(hull.rigSize)}; CPU ${formatNullableValue(hull.cpuBase)}, PG ${formatNullableValue(hull.powergridBase)}, calibration ${formatNullableValue(hull.calibrationCapacity)}, turrets ${formatNullableValue(hull.turretHardpoints)}, launchers ${formatNullableValue(hull.launcherHardpoints)}, drone bay ${formatNullableValue(hull.droneCapacity)}, bandwidth ${formatNullableValue(hull.droneBandwidth)}`
       );
     }
 
@@ -239,6 +252,10 @@ async function main() {
     );
     console.log(
       `Market hierarchy coverage: ${marketSummary.classified}/${hulls.length} classified, ${marketSummary.missingMarketGroup} without market group, ${marketSummary.missingPath} without ancestry, ${marketSummary.specialEdition} under CCP Special Edition Ships.`
+    );
+    const cargoSummary = summarizeCargoCapacity(hulls);
+    console.log(
+      `Base normal cargo capacity from CCP types.capacity: ${cargoSummary.missing} missing/null, ${cargoSummary.zero} explicit zero, ${cargoSummary.positive} positive.`
     );
 
     if (verified.length < 4) {
@@ -487,6 +504,7 @@ async function readPublishedShips(
     marketGroupName: string | null;
     marketGroupPathIds: number[];
     marketGroupPathNames: string[];
+    cargoCapacityBase: number | null;
     typeId: number;
     typeName: string;
   }>();
@@ -512,6 +530,10 @@ async function readPublishedShips(
     }
 
     ships.set(type._key, {
+      cargoCapacityBase: readOptionalNonnegativeNumber(
+        type.capacity,
+        `ship type ${type._key} capacity`
+      ),
       categoryName: categoryNames.get(group.categoryId) || "Ship",
       groupId: type.groupID,
       groupName: group.groupName,
@@ -534,6 +556,7 @@ async function readHullDogmaAttributes(
   const shipTypeIds = new Set(ships.keys());
   const attributes = new Map<number, {
     calibrationCapacity: number | null;
+    cargoCapacityDogma: number | null;
     cpuBase: number | null;
     droneBandwidth: number | null;
     droneCapacity: number | null;
@@ -561,6 +584,7 @@ async function readHullDogmaAttributes(
 
     attributes.set(typeDogma._key, {
       calibrationCapacity: readNullableInteger(attributeValues, FITTING_ATTRIBUTE_IDS.calibrationCapacity.id),
+      cargoCapacityDogma: readNullableNumber(attributeValues, FITTING_ATTRIBUTE_IDS.cargoCapacityBase.id),
       cpuBase: readNullableNumber(attributeValues, FITTING_ATTRIBUTE_IDS.cpuBase.id),
       droneBandwidth: readNullableNumber(attributeValues, FITTING_ATTRIBUTE_IDS.droneBandwidth.id),
       droneCapacity: readNullableNumber(attributeValues, FITTING_ATTRIBUTE_IDS.droneCapacity.id),
@@ -576,6 +600,21 @@ async function readHullDogmaAttributes(
   }
 
   return attributes;
+}
+
+function validateCargoCapacityMatch(
+  ship: { cargoCapacityBase: number | null; typeId: number; typeName: string },
+  dogmaCapacity: number | null
+) {
+  if (
+    ship.cargoCapacityBase !== null &&
+    dogmaCapacity !== null &&
+    ship.cargoCapacityBase !== dogmaCapacity
+  ) {
+    throw new Error(
+      `Ship ${ship.typeId}/${ship.typeName} types.capacity ${ship.cargoCapacityBase} did not match Dogma attribute 38/capacity ${dogmaCapacity}. Database mutation was skipped.`
+    );
+  }
 }
 
 function readSlotValue(values: Map<number, number>, attributeId: number) {
@@ -596,6 +635,23 @@ function readNullableNumber(
 
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return null;
+  }
+
+  return value;
+}
+
+function readOptionalNonnegativeNumber(
+  value: number | undefined,
+  label: string
+): number | null {
+  if (value === undefined) {
+    return null;
+  }
+
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(
+      `${label} must be a finite nonnegative number, received ${value}. Database mutation was skipped.`
+    );
   }
 
   return value;
@@ -699,6 +755,18 @@ function summarizeMarketGroupCoverage(hulls: FittingHullRecord[]) {
       missingPath: 0,
       specialEdition: 0
     }
+  );
+}
+
+function summarizeCargoCapacity(hulls: FittingHullRecord[]) {
+  return hulls.reduce(
+    (summary, hull) => ({
+      missing: summary.missing + Number(hull.cargoCapacityBase === null),
+      positive:
+        summary.positive + Number((hull.cargoCapacityBase ?? 0) > 0),
+      zero: summary.zero + Number(hull.cargoCapacityBase === 0)
+    }),
+    { missing: 0, positive: 0, zero: 0 }
   );
 }
 

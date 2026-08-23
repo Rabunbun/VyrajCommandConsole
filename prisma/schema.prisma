@@ -625,6 +625,7 @@ model FittingHull {
   calibrationCapacity Int?
   turretHardpoints    Int?
   launcherHardpoints  Int?
+  cargoCapacityBase   Float?
   droneCapacity       Float?
   droneBandwidth      Float?
   rigSize             Int?
@@ -723,5 +724,33 @@ model FittingDrone {
   @@index([groupId, typeName])
   @@index([marketGroupId])
   @@index([metaGroupId])
+  @@index([lastRefreshedAt])
+}
+
+model FittingCargoItem {
+  id                   String   @id @default(uuid()) @db.Uuid
+  typeId               Int      @unique
+  typeName             String
+  categoryId           Int
+  categoryName         String
+  groupId              Int
+  groupName             String
+  marketGroupId         Int?
+  marketGroupName       String?
+  marketGroupPathIds    Int[]    @default([])
+  marketGroupPathNames  String[] @default([])
+  metaGroupId           Int?
+  metaGroupName         String?
+  techLevel             Int?
+  volume                Float?
+  packagedVolume        Float?
+  lastRefreshedAt       DateTime
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([typeName])
+  @@index([categoryId])
+  @@index([groupId])
+  @@index([marketGroupId])
   @@index([lastRefreshedAt])
 }
