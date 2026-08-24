@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createEmptyFitState } from "./fit-state";
+import { createEmptyFitState, hasMeaningfulFitContent } from "./fit-state";
 import { fittingReducer } from "./fit-reducer";
 
 function createFitWithTwoModules() {
@@ -165,4 +165,56 @@ test("selecting another hull clears all carried cargo", () => {
 
   assert.deepEqual(next.cargo, []);
   assert.ok(next.slots.high.every((slot) => slot.module === null));
+});
+
+test("replace-fit swaps the complete fitting atomically and defensively clones it", () => {
+  const current = createFitWithTwoModules();
+  const replacement = {
+    cargo: [{ quantity: 4, typeId: 28668 }],
+    drones: [{ quantity: 5, typeId: 2456 }],
+    hullTypeId: 626,
+    slots: {
+      high: [{ index: 0, module: { charge: { quantity: 80, typeId: 23025 }, instanceId: "import-1", typeId: 12346 } }],
+      low: [],
+      mid: [],
+      rig: [],
+      subsystem: []
+    }
+  };
+  const next = fittingReducer(current, { nextState: replacement, type: "replace-fit" });
+
+  assert.notStrictEqual(next, replacement);
+  assert.equal(next.hullTypeId, 626);
+  assert.equal(next.slots.high[0].module?.instanceId, "import-1");
+  assert.equal(next.slots.mid.length, 0);
+  replacement.cargo[0].quantity = 99;
+  assert.equal(next.cargo[0].quantity, 4);
+});
+
+test("replace-fit rejects an invalid candidate without changing the current fit", () => {
+  const current = createFitWithTwoModules();
+  const invalid = structuredClone(current);
+  invalid.slots.high[0].module!.instanceId = invalid.slots.mid[0].module!.instanceId;
+  assert.strictEqual(
+    fittingReducer(current, { nextState: invalid, type: "replace-fit" }),
+    current
+  );
+});
+
+test("meaningful fit content excludes a hull alone and includes modules, drones, or cargo", () => {
+  const hullOnly = fittingReducer(createEmptyFitState(), {
+    hullTypeId: 626,
+    topology: { highSlots: 1, lowSlots: 0, midSlots: 0, rigSlots: 0 },
+    type: "select-hull"
+  });
+  assert.equal(hasMeaningfulFitContent(hullOnly), false);
+  assert.equal(hasMeaningfulFitContent(createFitWithTwoModules()), true);
+  assert.equal(
+    hasMeaningfulFitContent({ ...hullOnly, drones: [{ quantity: 1, typeId: 2456 }] }),
+    true
+  );
+  assert.equal(
+    hasMeaningfulFitContent({ ...hullOnly, cargo: [{ quantity: 1, typeId: 28668 }] }),
+    true
+  );
 });

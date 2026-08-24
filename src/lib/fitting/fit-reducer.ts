@@ -70,6 +70,10 @@ export type ReplaceCargoInput = {
   entries: CargoEntry[];
 };
 
+export type ReplaceFitInput = {
+  nextState: FitState;
+};
+
 export type CargoRejection =
   | "invalid-cargo-type"
   | "invalid-quantity"
@@ -131,7 +135,10 @@ export type FitAction =
     })
   | {
       type: "clear-cargo";
-    };
+    }
+  | (ReplaceFitInput & {
+      type: "replace-fit";
+    });
 
 export function addCargo(state: FitState, input: AddCargoInput): FitState {
   if (validateCargoEntry(input, false)) {
@@ -678,9 +685,17 @@ export function fittingReducer(state: FitState, action: FitAction): FitState {
       return replaceCargo(state, action);
     case "clear-cargo":
       return clearCargo(state);
+    case "replace-fit":
+      return replaceFit(state, action);
     default:
       return state;
   }
+}
+
+export function replaceFit(state: FitState, input: ReplaceFitInput): FitState {
+  return isValidCompleteFitState(input.nextState)
+    ? cloneFitState(input.nextState)
+    : state;
 }
 
 function validateCargoEntry(
@@ -780,4 +795,81 @@ function isValidLoadedCharge(charge: unknown): charge is LoadedCharge {
     Number.isInteger(charge.quantity) &&
     charge.quantity > 0
   );
+}
+
+function isValidCompleteFitState(state: FitState): boolean {
+  if (
+    state.hullTypeId === null ||
+    !Number.isInteger(state.hullTypeId) ||
+    state.hullTypeId <= 0 ||
+    !isValidUniqueEntries(state.cargo) ||
+    !isValidUniqueEntries(state.drones)
+  ) {
+    return false;
+  }
+
+  const instanceIds = new Set<string>();
+  for (const rack of ["high", "mid", "low", "rig", "subsystem"] as const) {
+    const slots = state.slots[rack];
+    if (
+      !Array.isArray(slots) ||
+      !slots.every((slot, index) => slot.index === index)
+    ) {
+      return false;
+    }
+    for (const slot of slots) {
+      if (!slot.module) continue;
+      if (
+        !isValidFittedModule(slot.module) ||
+        instanceIds.has(slot.module.instanceId)
+      ) {
+        return false;
+      }
+      instanceIds.add(slot.module.instanceId);
+    }
+  }
+
+  return true;
+}
+
+function isValidUniqueEntries(entries: Array<{ quantity: number; typeId: number }>) {
+  return (
+    Array.isArray(entries) &&
+    entries.every(
+      (entry) =>
+        Number.isInteger(entry.typeId) &&
+        entry.typeId > 0 &&
+        Number.isSafeInteger(entry.quantity) &&
+        entry.quantity > 0
+    ) &&
+    new Set(entries.map((entry) => entry.typeId)).size === entries.length
+  );
+}
+
+function cloneFitState(state: FitState): FitState {
+  return {
+    cargo: state.cargo.map((entry) => ({ ...entry })),
+    drones: state.drones.map((entry) => ({ ...entry })),
+    hullTypeId: state.hullTypeId,
+    slots: {
+      high: cloneRack(state.slots.high),
+      low: cloneRack(state.slots.low),
+      mid: cloneRack(state.slots.mid),
+      rig: cloneRack(state.slots.rig),
+      subsystem: cloneRack(state.slots.subsystem)
+    }
+  };
+}
+
+function cloneRack(slots: FitState["slots"][RackType]) {
+  return slots.map((slot) => ({
+    index: slot.index,
+    module: slot.module
+      ? {
+          charge: slot.module.charge ? { ...slot.module.charge } : null,
+          instanceId: slot.module.instanceId,
+          typeId: slot.module.typeId
+        }
+      : null
+  }));
 }

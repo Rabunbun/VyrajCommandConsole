@@ -76,6 +76,16 @@ export function createFittingSlots(topology: FittingTopology): FittingSlots {
   };
 }
 
+export function hasMeaningfulFitContent(state: FitState): boolean {
+  return (
+    Object.values(state.slots).some((slots) =>
+      slots.some((slot) => slot.module !== null)
+    ) ||
+    state.drones.length > 0 ||
+    state.cargo.length > 0
+  );
+}
+
 function createRackSlots(count: number): FittingSlot[] {
   return Array.from({ length: Math.max(0, Math.round(count)) }, (_, index) => ({
     index,

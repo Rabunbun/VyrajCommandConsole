@@ -215,3 +215,53 @@ export type EftResolutionResult = {
   draft: ResolvedEftDraft | null;
   status: EftImportStatus;
 };
+
+export type ResolvedEftApplicationModule = {
+  charge: ResolvedEftCharge | null;
+  typeId: number;
+};
+
+export type ResolvedEftApplicationSlot = {
+  index: number;
+  module: ResolvedEftApplicationModule | null;
+};
+
+export type ResolvedEftApplication = {
+  cargo: ResolvedEftCargo[];
+  drones: ResolvedEftDrone[];
+  hullTypeId: number;
+  slots: Record<EftSupportedRack, ResolvedEftApplicationSlot[]>;
+  topology: {
+    highSlots: number;
+    lowSlots: number;
+    midSlots: number;
+    rigSlots: number;
+  };
+};
+
+export type EftPreviewDiagnostic = EftImportDiagnostic & {
+  disposition: "blocking" | "review" | "warning";
+};
+
+export type EftPreviewModule = {
+  charge: (ResolvedEftCharge & { typeName: string }) | null;
+  typeId: number;
+  typeName: string;
+};
+
+export type EftPreviewSlot = {
+  index: number;
+  module: EftPreviewModule | null;
+};
+
+export type EftPreviewResponse = {
+  analysis: ResolvedEftDraft["analysis"] | null;
+  application: ResolvedEftApplication | null;
+  cargo: Array<ResolvedEftCargo & { typeName: string }>;
+  diagnostics: EftPreviewDiagnostic[];
+  drones: Array<ResolvedEftDrone & { typeName: string }>;
+  fitName: string | null;
+  hull: { typeId: number; typeName: string } | null;
+  racks: Record<EftSupportedRack, EftPreviewSlot[]>;
+  status: EftImportStatus;
+};

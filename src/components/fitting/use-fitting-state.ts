@@ -20,6 +20,11 @@ import {
   type FitState,
   type RackType
 } from "@/lib/fitting/fit-state";
+import {
+  canApplyEftPreview,
+  resolvedEftApplicationToFitState
+} from "@/lib/fitting/eft/application";
+import type { EftPreviewResponse } from "@/lib/fitting/eft/types";
 import type {
   BaseFitAnalysis,
   BrowsableFittingRack,
@@ -70,6 +75,10 @@ export type FitOperationAttemptResult =
   | {
       ok: true;
     };
+
+type ApplyEftPreviewOptions = {
+  clearTransientInteractionState: () => void;
+};
 
 export type LoadChargeAttemptResult =
   | {
@@ -160,6 +169,44 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
       type: "select-hull"
     });
   }, []);
+  const applyEftPreview = useCallback(
+    (
+      preview: EftPreviewResponse,
+      { clearTransientInteractionState }: ApplyEftPreviewOptions
+    ): FitOperationAttemptResult => {
+      if (
+        !canApplyEftPreview(preview.status, preview.application) ||
+        !preview.analysis
+      ) {
+        return {
+          message: "This EFT preview contains blocking errors and cannot be applied.",
+          ok: false
+        };
+      }
+
+      const nextState = resolvedEftApplicationToFitState(preview.application);
+      if (!nextState) {
+        return {
+          message: "The resolved EFT application payload is invalid.",
+          ok: false
+        };
+      }
+
+      validationEpochRef.current += 1;
+      droneValidationEpochRef.current += 1;
+      cargoValidationEpochRef.current += 1;
+      dispatch({ nextState, type: "replace-fit" });
+      setAnalysis(preview.analysis.fitting.analysis);
+      setFitWarnings(preview.analysis.fitting.warnings);
+      setDroneBayAnalysis(preview.analysis.droneBay);
+      setCargoHoldAnalysis(preview.analysis.cargoHold);
+      setCargoWarnings(extractCargoWarnings(preview));
+      clearTransientInteractionState();
+
+      return { ok: true };
+    },
+    []
+  );
   const fitModule = useCallback(
     async ({ index, rack, typeId }: FitModuleOptions): Promise<FitModuleAttemptResult> => {
       const validationEpoch = ++validationEpochRef.current;
@@ -621,6 +668,7 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
     addCargo,
     addDrone,
     analysis,
+    applyEftPreview,
     bulkLoadCharge,
     cancelPendingOperation,
     cargoHoldAnalysis,
@@ -642,6 +690,25 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
     selectedHull,
     unloadCharge
   };
+}
+
+function extractCargoWarnings(
+  preview: EftPreviewResponse
+): CargoValidationIssue[] {
+  const supportedCodes = new Set<CargoValidationIssueCode>([
+    "BASE_CAPACITY_EXCEEDED",
+    "BASE_CAPACITY_UNAVAILABLE"
+  ]);
+
+  return preview.diagnostics.flatMap((entry) => {
+    if (entry.code !== "CARGO_HOLD_WARNING") return [];
+    const separator = entry.message.indexOf(":");
+    const code = (separator === -1
+      ? entry.message
+      : entry.message.slice(0, separator)) as CargoValidationIssueCode;
+    if (!supportedCodes.has(code)) return [];
+    return [{ code, message: entry.message }];
+  });
 }
 
 async function requestCargoHoldValidation(input: {

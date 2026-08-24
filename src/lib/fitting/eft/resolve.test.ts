@@ -100,6 +100,7 @@ function requireDocument(parsed: ReturnType<typeof parseEft>): EftParsedDocument
 
 function createDependencies(options?: {
   analyzeCalls?: Array<Parameters<EftDraftValidationDependencies["analyzeFit"]>[0]>;
+  fitWarnings?: FitValidationIssue[];
 }): EftDraftValidationDependencies {
   return {
     async analyzeCargo(input) {
@@ -143,7 +144,7 @@ function createDependencies(options?: {
           });
         }
       }
-      return fittingAnalysis(errors);
+      return fittingAnalysis(errors, options?.fitWarnings);
     },
     async validateCharge(moduleTypeId, chargeTypeId) {
       const quantity = chargeQuantityByPair.get(`${moduleTypeId}:${chargeTypeId}`);
@@ -187,7 +188,10 @@ function createDependencies(options?: {
   };
 }
 
-function fittingAnalysis(errors: FitValidationIssue[] = []): FittingAnalysisResponse {
+function fittingAnalysis(
+  errors: FitValidationIssue[] = [],
+  warnings: FitValidationIssue[] = [],
+): FittingAnalysisResponse {
   return {
     allowed: errors.length === 0,
     analysis: {
@@ -198,7 +202,7 @@ function fittingAnalysis(errors: FitValidationIssue[] = []): FittingAnalysisResp
       turretHardpointsUsed: 0,
     },
     errors,
-    warnings: [],
+    warnings,
   };
 }
 
@@ -265,6 +269,24 @@ test("uses a unique case-insensitive exact match and reports normalization", asy
   assert.equal(result.status, "review");
   assert.ok(result.draft);
   assert.equal(result.diagnostics.filter((entry) => entry.code === "NORMALIZED_NAME").length, 2);
+});
+
+test("retains authoritative resource overage warnings as an applicable review draft", async () => {
+  const parsed = fixture(["[Vexor, Resource Warning]", "Damage Control II"]);
+  const result = await resolveAndValidateEftDraft({
+    catalog,
+    dependencies: createDependencies({
+      fitWarnings: [
+        { code: "CPU_BASE_OVER", message: "CPU usage exceeds the hull base output." },
+      ],
+    }),
+    document: requireDocument(parsed),
+  });
+
+  assert.equal(result.status, "review");
+  assert.ok(result.draft);
+  assert.ok(result.diagnostics.some((entry) => entry.code === "FIT_WARNING"));
+  assert.equal(result.draft.analysis.fitting.warnings[0].code, "CPU_BASE_OVER");
 });
 
 test("blocks unknown and ambiguous module names without partial validation", async () => {
