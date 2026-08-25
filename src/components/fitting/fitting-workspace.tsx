@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FitStatistics } from "@/components/fitting/fit-statistics";
+import { EftDrawer } from "@/components/fitting/eft-drawer";
 import { FittingHeader } from "@/components/fitting/fitting-header";
 import { FittingResources } from "@/components/fitting/fitting-resources";
 import { FittingStage } from "@/components/fitting/fitting-stage";
@@ -25,6 +26,7 @@ import type {
   FittingHullSummary,
   FittingModuleSearchResult
 } from "@/lib/fitting/types";
+import type { EftPreviewResponse } from "@/lib/fitting/eft/types";
 
 type FittingWorkspaceProps = {
   hulls: FittingHullSummary[];
@@ -35,6 +37,7 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
     addDrone,
     addCargo,
     analysis,
+    applyEftPreview,
     bulkLoadCharge,
     cancelPendingOperation,
     cargoHoldAnalysis,
@@ -57,6 +60,7 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
     unloadCharge
   } = useFittingState({ hulls });
   const [selectedSlot, setSelectedSlot] = useState<SelectedFittingSlot | null>(null);
+  const [isEftDrawerOpen, setIsEftDrawerOpen] = useState(false);
   const [moduleActionMode, setModuleActionMode] = useState<ModuleActionMode>(null);
   const [browserRack, setBrowserRack] = useState<BrowsableFittingRack>("high");
   const [openBrowserSections, setOpenBrowserSections] = useState<
@@ -96,6 +100,15 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
     setIsStageDragOver(false);
     setIsCargoDragOver(false);
   }, []);
+  const clearImportedFitInteractions = useCallback(() => {
+    cancelPendingOperation();
+    clearDragState();
+    browserRackBeforeReplacementRef.current = null;
+    setDragError(null);
+    setManipulationError(null);
+    setModuleActionMode(null);
+    setSelectedSlot(null);
+  }, [cancelPendingOperation, clearDragState]);
   const openBrowserSection = useCallback((section: FittingBrowserSection) => {
     setOpenBrowserSections((current) => ({ ...current, [section]: true }));
   }, []);
@@ -124,6 +137,30 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
       selectHull(hull);
     },
     [clearSelectedSlot, selectHull]
+  );
+  const handleApplyEftPreview = useCallback(
+    (preview: EftPreviewResponse): FitOperationAttemptResult => {
+      const result = applyEftPreview(preview, {
+        clearTransientInteractionState: clearImportedFitInteractions
+      });
+      if (!result.ok) return result;
+
+      const moduleNames: Record<number, string> = {};
+      const chargeNames: Record<number, string> = {};
+      for (const rack of ["low", "mid", "high", "rig"] as const) {
+        for (const slot of preview.racks[rack]) {
+          if (!slot.module) continue;
+          moduleNames[slot.module.typeId] = slot.module.typeName;
+          if (slot.module.charge) {
+            chargeNames[slot.module.charge.typeId] = slot.module.charge.typeName;
+          }
+        }
+      }
+      setResolvedModuleNamesByTypeId(moduleNames);
+      setResolvedChargeNamesByTypeId(chargeNames);
+      return result;
+    },
+    [applyEftPreview, clearImportedFitInteractions]
   );
   const handleSelectSlot = useCallback(
     (slot: SelectedFittingSlot) => {
@@ -564,7 +601,7 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
   }, [clearDragState, clearSelectedSlot, dragSource, removeModule]);
 
   useEffect(() => {
-    if (!selectedSlot && !dragSource) {
+    if (isEftDrawerOpen || (!selectedSlot && !dragSource)) {
       return;
     }
 
@@ -577,11 +614,11 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [clearSelectedSlot, dragSource, selectedSlot]);
+  }, [clearSelectedSlot, dragSource, isEftDrawerOpen, selectedSlot]);
 
   return (
     <div className="fitting-shell" aria-labelledby="fitting-bay-title">
-      <FittingHeader selectedHull={selectedHull} />
+      <FittingHeader onOpenEft={() => setIsEftDrawerOpen(true)} selectedHull={selectedHull} />
       <div className="fitting-workspace-grid">
         <ItemBrowser
           actionMode={moduleActionMode}
@@ -680,6 +717,12 @@ export function FittingWorkspace({ hulls }: FittingWorkspaceProps) {
         droneBayUsedVolume={droneBayAnalysis.usedVolume}
         selectedHull={selectedHull}
         warnings={fitWarnings}
+      />
+      <EftDrawer
+        fitState={fitState}
+        isOpen={isEftDrawerOpen}
+        onApplyPreview={handleApplyEftPreview}
+        onClose={() => setIsEftDrawerOpen(false)}
       />
     </div>
   );

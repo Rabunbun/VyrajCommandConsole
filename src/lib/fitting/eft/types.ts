@@ -265,3 +265,27 @@ export type EftPreviewResponse = {
   racks: Record<EftSupportedRack, EftPreviewSlot[]>;
   status: EftImportStatus;
 };
+
+export type EftExportSnapshotModule = {
+  chargeTypeId: number | null;
+  typeId: number;
+};
+
+export type EftExportSnapshotSlot = {
+  index: number;
+  module: EftExportSnapshotModule | null;
+};
+
+export type EftExportSnapshot = {
+  cargo: ResolvedEftCargo[];
+  drones: ResolvedEftDrone[];
+  fitName: string;
+  hullTypeId: number;
+  slots: Record<EftSupportedRack, EftExportSnapshotSlot[]>;
+};
+
+export type EftExportResponse = {
+  eftText: string;
+  fitName: string;
+  hullName: string;
+};
