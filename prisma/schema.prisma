@@ -201,11 +201,29 @@ model EveIdentity {
 
   officer    Officer? @relation(fields: [officerId], references: [id], onDelete: SetNull)
   memberCorp Corp?    @relation("EveIdentityMemberCorp", fields: [memberCorpId], references: [id], onDelete: SetNull)
+  savedFittings SavedFitting[]
 
   @@index([corporationId])
   @@index([allianceId])
   @@index([officerId])
   @@index([memberCorpId])
+}
+
+model SavedFitting {
+  id                 String   @id @default(uuid()) @db.Uuid
+  ownerEveIdentityId String   @db.Uuid
+  name               String
+  hullTypeId         Int
+  snapshot           Json
+  snapshotVersion    Int      @default(1)
+  revision           Int      @default(1)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  owner EveIdentity @relation(fields: [ownerEveIdentityId], references: [id], onDelete: Restrict)
+
+  @@index([ownerEveIdentityId, updatedAt])
+  @@index([ownerEveIdentityId, hullTypeId])
 }
 
 model OfficerSession {
