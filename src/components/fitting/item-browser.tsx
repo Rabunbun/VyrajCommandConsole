@@ -6,6 +6,7 @@ import {
   useTransition
 } from "react";
 import { EveModuleIcon } from "@/components/fitting/eve-module-icon";
+import { SavedFittingLibrary } from "@/components/fitting/saved-fitting-library";
 import type {
   BrowserFittingDragSource,
   FittingBrowserSection,
@@ -20,8 +21,11 @@ import type {
   FitOperationAttemptResult,
   LoadChargeAttemptResult
 } from "@/components/fitting/use-fitting-state";
-import { ModuleIcon } from "@/components/module-visuals";
 import type { FittedModule } from "@/lib/fitting/fit-state";
+import type {
+  SavedFittingLibraryState,
+  SavedFittingSummary
+} from "@/lib/fitting/saved/ui-types";
 import type {
   BrowsableFittingRack,
   CargoHoldAnalysis,
@@ -67,6 +71,9 @@ type ItemBrowserProps = {
   dragSource: FittingDragSource | null;
   hulls: FittingHullSummary[];
   manipulationError: string | null;
+  activeSavedFittingId: string | null;
+  activeSavedFittingIsDirty: boolean;
+  busySavedFittingId: string | null;
   onAutoFitModule: (
     module: FittingModuleSearchResult
   ) => Promise<FitModuleAttemptResult>;
@@ -74,8 +81,10 @@ type ItemBrowserProps = {
   onAddCargo: (typeId: number) => Promise<CargoHoldAttemptResult>;
   onClearSelectedSlot: () => void;
   onDecrementDrone: (typeId: number) => Promise<DroneBayAttemptResult>;
+  onDeleteSavedFitting: (fitting: SavedFittingSummary) => void;
   onFitModule: (typeId: number) => Promise<FitModuleAttemptResult>;
   onLoadCharge: (typeId: number) => Promise<LoadChargeAttemptResult>;
+  onLoadSavedFitting: (fitting: SavedFittingSummary) => void;
   onBrowserDragEnd: () => void;
   onBrowserDragStart: (source: BrowserFittingDragSource) => void;
   onModuleRackChange: (rack: BrowsableFittingRack) => void;
@@ -89,6 +98,8 @@ type ItemBrowserProps = {
   onToggleSection: (section: FittingBrowserSection) => void;
   onUnloadCharge: () => FitOperationAttemptResult;
   openSections: Record<FittingBrowserSection, boolean>;
+  savedFittingLibrary: SavedFittingLibraryState;
+  savedFittingMessage: { text: string; tone: "error" | "info" | "success" } | null;
   selectedHull: FittingHullSummary | null;
   selectedChargeName: string | null;
   selectedModule: FittedModule | null;
@@ -97,8 +108,11 @@ type ItemBrowserProps = {
 };
 
 export function ItemBrowser({
+  activeSavedFittingId,
+  activeSavedFittingIsDirty,
   actionMode,
   browserRack,
+  busySavedFittingId,
   cargoHoldAnalysis,
   droneBayAnalysis,
   dragSource,
@@ -109,8 +123,10 @@ export function ItemBrowser({
   onAddDrone,
   onClearSelectedSlot,
   onDecrementDrone,
+  onDeleteSavedFitting,
   onFitModule,
   onLoadCharge,
+  onLoadSavedFitting,
   onBrowserDragEnd,
   onBrowserDragStart,
   onModuleRackChange,
@@ -124,6 +140,8 @@ export function ItemBrowser({
   onToggleSection,
   onUnloadCharge,
   openSections,
+  savedFittingLibrary,
+  savedFittingMessage,
   selectedHull,
   selectedChargeName,
   selectedModule,
@@ -218,9 +236,16 @@ export function ItemBrowser({
         title="Hulls & Fits"
       >
         <HullBrowser
+          activeSavedFittingId={activeSavedFittingId}
+          activeSavedFittingIsDirty={activeSavedFittingIsDirty}
+          busySavedFittingId={busySavedFittingId}
           hulls={hulls}
+          onDeleteSavedFitting={onDeleteSavedFitting}
+          onLoadSavedFitting={onLoadSavedFitting}
           onSelectHull={onSelectHull}
           query={hullQuery}
+          savedFittingLibrary={savedFittingLibrary}
+          savedFittingMessage={savedFittingMessage}
           selectedHull={selectedHull}
           setQuery={setHullQuery}
         />
@@ -440,17 +465,31 @@ function PersistentBrowserSection({
 }
 
 type HullBrowserProps = {
+  activeSavedFittingId: string | null;
+  activeSavedFittingIsDirty: boolean;
+  busySavedFittingId: string | null;
   hulls: FittingHullSummary[];
+  onDeleteSavedFitting: (fitting: SavedFittingSummary) => void;
+  onLoadSavedFitting: (fitting: SavedFittingSummary) => void;
   onSelectHull: (hull: FittingHullSummary) => void;
   query: string;
+  savedFittingLibrary: SavedFittingLibraryState;
+  savedFittingMessage: { text: string; tone: "error" | "info" | "success" } | null;
   selectedHull: FittingHullSummary | null;
   setQuery: (query: string) => void;
 };
 
 function HullBrowser({
+  activeSavedFittingId,
+  activeSavedFittingIsDirty,
+  busySavedFittingId,
   hulls,
+  onDeleteSavedFitting,
+  onLoadSavedFitting,
   onSelectHull,
   query,
+  savedFittingLibrary,
+  savedFittingMessage,
   selectedHull,
   setQuery
 }: HullBrowserProps) {
@@ -617,13 +656,16 @@ function HullBrowser({
         )}
       </section>
 
-      <div className="fitting-browser-placeholder" aria-disabled="true">
-        <ModuleIcon name="doctrine" size={16} />
-        <span>
-          <strong>Saved Fits</strong>
-          <small>Persistence is planned for a later mission.</small>
-        </span>
-      </div>
+      <SavedFittingLibrary
+        activeSavedFittingId={activeSavedFittingId}
+        activeSavedFittingIsDirty={activeSavedFittingIsDirty}
+        busyFittingId={busySavedFittingId}
+        hulls={hulls}
+        library={savedFittingLibrary}
+        message={savedFittingMessage}
+        onDelete={onDeleteSavedFitting}
+        onLoad={onLoadSavedFitting}
+      />
     </>
   );
 }

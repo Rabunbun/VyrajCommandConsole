@@ -16,10 +16,12 @@ import type {
 import type { FitState } from "@/lib/fitting/fit-state";
 
 type EftDrawerProps = {
+  currentFitName: string;
   fitState: FitState;
   isOpen: boolean;
   onApplyPreview: (preview: EftPreviewResponse) => FitOperationAttemptResult;
   onClose: () => void;
+  onFitNameChange: (name: string) => void;
 };
 
 type DrawerTab = "import" | "export";
@@ -32,7 +34,14 @@ const rackLabels: Record<EftSupportedRack, string> = {
 };
 const numberFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
 
-export function EftDrawer({ fitState, isOpen, onApplyPreview, onClose }: EftDrawerProps) {
+export function EftDrawer({
+  currentFitName,
+  fitState,
+  isOpen,
+  onApplyPreview,
+  onClose,
+  onFitNameChange
+}: EftDrawerProps) {
   const [activeTab, setActiveTab] = useState<DrawerTab>("import");
   const [eftText, setEftText] = useState("");
   const [preview, setPreview] = useState<EftPreviewResponse | null>(null);
@@ -40,7 +49,6 @@ export function EftDrawer({ fitState, isOpen, onApplyPreview, onClose }: EftDraw
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [confirmationPending, setConfirmationPending] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
-  const [fitName, setFitName] = useState("");
   const [exportText, setExportText] = useState("");
   const [exportError, setExportError] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
@@ -123,14 +131,14 @@ export function EftDrawer({ fitState, isOpen, onApplyPreview, onClose }: EftDraw
       setImportMessage(result.message);
       return;
     }
-    setFitName(preview.fitName?.trim() || preview.hull?.typeName || "");
+    onFitNameChange(preview.fitName?.trim() || preview.hull?.typeName || "");
     setExportText("");
     setConfirmationPending(false);
     setImportMessage("Current fit replaced from the authoritative EFT preview.");
   };
 
   const handleExport = async () => {
-    const snapshot = fitStateToEftExportSnapshot(fitState, fitName);
+    const snapshot = fitStateToEftExportSnapshot(fitState, currentFitName);
     if (!snapshot) return;
     setIsExporting(true);
     setExportError(null);
@@ -147,7 +155,7 @@ export function EftDrawer({ fitState, isOpen, onApplyPreview, onClose }: EftDraw
         setExportError(readApiError(payload, "EFT export could not be generated."));
         return;
       }
-      setFitName(payload.fitName);
+      onFitNameChange(payload.fitName);
       setExportText(payload.eftText);
     } catch {
       setExportError("EFT export is temporarily unavailable.");
@@ -250,13 +258,13 @@ export function EftDrawer({ fitState, isOpen, onApplyPreview, onClose }: EftDraw
               <input
                 maxLength={120}
                 onChange={(event) => {
-                  setFitName(event.target.value);
+                  onFitNameChange(event.target.value);
                   setExportText("");
                   setCopyMessage(null);
                 }}
                 placeholder={fitState.hullTypeId ? "Defaults to hull name" : "Select a hull first"}
                 type="text"
-                value={fitName}
+                value={currentFitName}
               />
             </label>
             {fitState.hullTypeId === null ? (

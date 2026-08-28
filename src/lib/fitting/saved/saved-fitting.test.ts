@@ -8,6 +8,11 @@ import {
   normalizeSavedFittingName
 } from "./fingerprint";
 import {
+  createUnsavedFittingEditor,
+  establishSavedFittingEditor,
+  evaluateSavedFittingEditor
+} from "./editor";
+import {
   decodeSavedFittingSnapshot,
   runSequentialSavedFittingMigrations
 } from "./migrate";
@@ -103,6 +108,81 @@ test("FitState conversion strips instance IDs while retaining charges and exact 
   assert.deepEqual(result.value.slots.mid, [{ index: 0, module: null }]);
   assert.deepEqual(result.value.slots.low.map((slot) => slot.index), [0, 1]);
   assert.deepEqual(result.value.slots.rig.map((slot) => slot.index), [0]);
+});
+
+test("loaded editor context is clean for an identical fit and ignores runtime instance IDs", () => {
+  const state = createFitState();
+  const snapshot = createSnapshot();
+  const editor = establishSavedFittingEditor({
+    id: "00000000-0000-4000-8000-000000000001",
+    name: "  Canonical Fit  ",
+    revision: 7,
+    snapshot
+  });
+
+  assert.equal(editor.savedFittingId, "00000000-0000-4000-8000-000000000001");
+  assert.equal(editor.savedRevision, 7);
+  assert.equal(editor.name, "Canonical Fit");
+  assert.deepEqual(evaluateSavedFittingEditor(editor, state), {
+    currentFingerprint: editor.baselineFingerprint,
+    dirty: false,
+    kind: "saved",
+    label: "Saved"
+  });
+
+  const regeneratedIds = structuredClone(state);
+  regeneratedIds.slots.high[0].module!.instanceId = "new-runtime-high-0";
+  regeneratedIds.slots.low[1].module!.instanceId = "new-runtime-low-1";
+  assert.equal(evaluateSavedFittingEditor(editor, regeneratedIds).dirty, false);
+});
+
+test("module placement, charge quantity, drones, cargo, and name changes mark a loaded fit dirty", () => {
+  const state = createFitState();
+  const editor = establishSavedFittingEditor({
+    id: "00000000-0000-4000-8000-000000000002",
+    name: "Dirty Coverage",
+    revision: 1,
+    snapshot: createSnapshot()
+  });
+
+  const moved = structuredClone(state);
+  moved.slots.high[1].module = moved.slots.high[0].module;
+  moved.slots.high[0].module = null;
+  assert.equal(evaluateSavedFittingEditor(editor, moved).dirty, true);
+
+  const chargeChanged = structuredClone(state);
+  chargeChanged.slots.high[0].module!.charge!.quantity += 1;
+  assert.equal(evaluateSavedFittingEditor(editor, chargeChanged).dirty, true);
+
+  const dronesChanged = structuredClone(state);
+  dronesChanged.drones[0].quantity += 1;
+  assert.equal(evaluateSavedFittingEditor(editor, dronesChanged).dirty, true);
+
+  const cargoChanged = structuredClone(state);
+  cargoChanged.cargo[0].quantity += 1;
+  assert.equal(evaluateSavedFittingEditor(editor, cargoChanged).dirty, true);
+
+  assert.equal(
+    evaluateSavedFittingEditor({ ...editor, name: "Renamed" }, state).dirty,
+    true
+  );
+});
+
+test("new and EFT-imported editors clear saved association and remain not saved", () => {
+  const imported = createUnsavedFittingEditor("  Imported EFT  ");
+
+  assert.deepEqual(imported, {
+    baselineFingerprint: null,
+    name: "Imported EFT",
+    savedFittingId: null,
+    savedRevision: null
+  });
+  assert.deepEqual(evaluateSavedFittingEditor(imported, createFitState()), {
+    currentFingerprint: evaluateSavedFittingEditor(imported, createFitState()).currentFingerprint,
+    dirty: true,
+    kind: "not-saved",
+    label: "Not Saved"
+  });
 });
 
 test("canonicalization aggregates and sorts drone and cargo entries", () => {

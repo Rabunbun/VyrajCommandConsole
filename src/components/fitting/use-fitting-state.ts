@@ -25,6 +25,11 @@ import {
   resolvedEftApplicationToFitState
 } from "@/lib/fitting/eft/application";
 import type { EftPreviewResponse } from "@/lib/fitting/eft/types";
+import { savedFittingApplicationToFitState } from "@/lib/fitting/saved/load-application";
+import type {
+  SavedFittingLoadAnalysis,
+  SavedFittingLoadResult
+} from "@/lib/fitting/saved/load-types";
 import type {
   BaseFitAnalysis,
   BrowsableFittingRack,
@@ -79,6 +84,8 @@ export type FitOperationAttemptResult =
 type ApplyEftPreviewOptions = {
   clearTransientInteractionState: () => void;
 };
+
+type SuccessfulSavedFittingLoad = Extract<SavedFittingLoadResult, { ok: true }>;
 
 export type LoadChargeAttemptResult =
   | {
@@ -201,6 +208,41 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
       setDroneBayAnalysis(preview.analysis.droneBay);
       setCargoHoldAnalysis(preview.analysis.cargoHold);
       setCargoWarnings(extractCargoWarnings(preview));
+      clearTransientInteractionState();
+
+      return { ok: true };
+    },
+    []
+  );
+  const applySavedFittingLoad = useCallback(
+    (
+      load: SuccessfulSavedFittingLoad,
+      { clearTransientInteractionState }: ApplyEftPreviewOptions
+    ): FitOperationAttemptResult => {
+      if (!load.application || !load.analysis) {
+        return {
+          message: "This saved fitting contains blocking errors and cannot be applied.",
+          ok: false
+        };
+      }
+
+      const nextState = savedFittingApplicationToFitState(load.application);
+      if (!nextState) {
+        return {
+          message: "The resolved saved fitting payload is invalid.",
+          ok: false
+        };
+      }
+
+      validationEpochRef.current += 1;
+      droneValidationEpochRef.current += 1;
+      cargoValidationEpochRef.current += 1;
+      dispatch({ nextState, type: "replace-fit" });
+      setAnalysis(load.analysis.fitting.analysis);
+      setFitWarnings(load.analysis.fitting.warnings);
+      setDroneBayAnalysis(load.analysis.droneBay);
+      setCargoHoldAnalysis(load.analysis.cargoHold);
+      setCargoWarnings(extractSavedFittingCargoWarnings(load.analysis));
       clearTransientInteractionState();
 
       return { ok: true };
@@ -669,6 +711,7 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
     addDrone,
     analysis,
     applyEftPreview,
+    applySavedFittingLoad,
     bulkLoadCharge,
     cancelPendingOperation,
     cargoHoldAnalysis,
@@ -690,6 +733,29 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
     selectedHull,
     unloadCharge
   };
+}
+
+function extractSavedFittingCargoWarnings(
+  analysis: SavedFittingLoadAnalysis
+): CargoValidationIssue[] {
+  if (analysis.cargoHold.overBaseBy > 0) {
+    return [{
+      code: "BASE_CAPACITY_EXCEEDED",
+      message: `Cargo exceeds base capacity by ${analysis.cargoHold.overBaseBy.toLocaleString("en-US")} m3.`
+    }];
+  }
+
+  if (
+    analysis.cargoHold.baseCapacity === null &&
+    analysis.cargoHold.entries.length > 0
+  ) {
+    return [{
+      code: "BASE_CAPACITY_UNAVAILABLE",
+      message: "Base cargo capacity is unavailable for this hull."
+    }];
+  }
+
+  return [];
 }
 
 function extractCargoWarnings(
