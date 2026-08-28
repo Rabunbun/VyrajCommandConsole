@@ -89,7 +89,7 @@ export async function getSavedFittingFromRepository(
     : { code: "INVALID_RECORD", invalidRecord: decoded.invalidRecord, ok: false };
 }
 
-function decodeSavedFittingRow(row: SavedFittingReadRow):
+export function decodeSavedFittingRow(row: SavedFittingReadRow):
   | { fitting: SavedFittingReadRecord; ok: true }
   | { invalidRecord: SavedFittingInvalidRecord; ok: false } {
   const validated = validateSavedFittingMetadata({

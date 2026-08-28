@@ -53,6 +53,76 @@ export type SavedFittingMetadataValidationResult =
       value: null;
     };
 
+export type SavedFittingWriteInput = {
+  name: unknown;
+  snapshot: unknown;
+};
+
+export type ValidatedSavedFittingWrite = {
+  hullTypeId: number;
+  name: string;
+  snapshot: SavedFittingSnapshotV1;
+  snapshotVersion: typeof SAVED_FITTING_SNAPSHOT_VERSION;
+};
+
+export type SavedFittingWriteValidationResult =
+  | {
+      issues: [];
+      ok: true;
+      snapshotDiagnostics: SavedFittingSnapshotDiagnostic[];
+      value: ValidatedSavedFittingWrite;
+    }
+  | {
+      issues: SavedFittingMetadataIssue[];
+      ok: false;
+      snapshotDiagnostics: SavedFittingSnapshotDiagnostic[];
+      value: null;
+    };
+
+/**
+ * Validates caller-controlled write content as the current snapshot version.
+ * Projected database metadata is deliberately absent from this input.
+ */
+export function validateSavedFittingWrite(
+  input: SavedFittingWriteInput
+): SavedFittingWriteValidationResult {
+  const issues: SavedFittingMetadataIssue[] = [];
+  const name = normalizeSavedFittingName(input.name, issues);
+  const decoded = decodeSavedFittingSnapshot({
+    snapshot: input.snapshot,
+    snapshotVersion: SAVED_FITTING_SNAPSHOT_VERSION
+  });
+
+  if (!decoded.ok) {
+    issues.push({
+      code: "SNAPSHOT_INVALID",
+      message: "Saved fitting snapshot is invalid.",
+      path: "snapshot"
+    });
+  }
+
+  if (!decoded.ok || issues.length > 0) {
+    return {
+      issues,
+      ok: false,
+      snapshotDiagnostics: decoded.diagnostics,
+      value: null
+    };
+  }
+
+  return {
+    issues: [],
+    ok: true,
+    snapshotDiagnostics: decoded.diagnostics,
+    value: {
+      hullTypeId: decoded.value.snapshot.hullTypeId,
+      name,
+      snapshot: decoded.value.snapshot,
+      snapshotVersion: SAVED_FITTING_SNAPSHOT_VERSION
+    }
+  };
+}
+
 export function validateSavedFittingMetadata(
   input: SavedFittingMetadataInput,
   options: {
@@ -61,21 +131,7 @@ export function validateSavedFittingMetadata(
   } = {}
 ): SavedFittingMetadataValidationResult {
   const issues: SavedFittingMetadataIssue[] = [];
-  const name = typeof input.name === "string" ? input.name.trim() : "";
-
-  if (!name) {
-    issues.push({
-      code: "INVALID_NAME",
-      message: "Saved fitting name must not be empty.",
-      path: "name"
-    });
-  } else if (name.length > SAVED_FITTING_NAME_MAX_LENGTH) {
-    issues.push({
-      code: "NAME_TOO_LONG",
-      message: `Saved fitting name must not exceed ${SAVED_FITTING_NAME_MAX_LENGTH} characters.`,
-      path: "name"
-    });
-  }
+  const name = normalizeSavedFittingName(input.name, issues);
 
   if (!isPositiveSafeInteger(input.hullTypeId)) {
     issues.push({
@@ -159,4 +215,27 @@ export function validateSavedFittingMetadata(
 
 function isPositiveSafeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+
+function normalizeSavedFittingName(
+  value: unknown,
+  issues: SavedFittingMetadataIssue[]
+) {
+  const name = typeof value === "string" ? value.trim() : "";
+
+  if (!name) {
+    issues.push({
+      code: "INVALID_NAME",
+      message: "Saved fitting name must not be empty.",
+      path: "name"
+    });
+  } else if (name.length > SAVED_FITTING_NAME_MAX_LENGTH) {
+    issues.push({
+      code: "NAME_TOO_LONG",
+      message: `Saved fitting name must not exceed ${SAVED_FITTING_NAME_MAX_LENGTH} characters.`,
+      path: "name"
+    });
+  }
+
+  return name;
 }
