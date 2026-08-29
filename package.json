@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test:eft": "tsx --test src/lib/fitting/eft/eft.test.ts src/lib/fitting/eft/resolve.test.ts src/lib/fitting/eft/application.test.ts src/lib/fitting/eft/preview-project.test.ts src/lib/fitting/eft/export-project.test.ts src/lib/fitting/eft/ui.test.ts",
-    "test:fitting": "tsx --test src/lib/fitting/fit-reducer.test.ts src/lib/fitting/saved/saved-fitting.test.ts src/lib/fitting/saved/persistence.test.ts src/lib/fitting/saved/load.test.ts",
+    "test:fitting": "tsx --test scripts/lib/fitting-skill-requirements.test.ts src/lib/fitting/fit-reducer.test.ts src/lib/fitting/skills/analysis.test.ts src/lib/fitting/saved/saved-fitting.test.ts src/lib/fitting/saved/persistence.test.ts src/lib/fitting/saved/load.test.ts",
     "migration:validate": "tsx scripts/validate-v1-export.ts",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
@@ -23,6 +23,7 @@
     "eve:refresh-fitting-modules": "tsx scripts/refresh-fitting-modules.ts",
     "eve:refresh-fitting-charges": "tsx scripts/refresh-fitting-charges.ts",
     "eve:refresh-fitting-drones": "tsx scripts/refresh-fitting-drones.ts",
+    "eve:refresh-fitting-skills": "tsx scripts/refresh-fitting-skills.ts",
     "eve:refresh-fitting-cargo-items": "tsx scripts/refresh-fitting-cargo-items.ts",
     "db:studio": "prisma studio"
   },
