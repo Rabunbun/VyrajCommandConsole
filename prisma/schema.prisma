@@ -29,6 +29,13 @@ enum LoginProvider {
   EVE_SSO
 }
 
+enum EveEsiCredentialStatus {
+  USABLE
+  REAUTHORIZATION_REQUIRED
+  REVOKED
+  UNAVAILABLE
+}
+
 enum ContentStatus {
   ACTIVE
   DRAFT
@@ -202,11 +209,33 @@ model EveIdentity {
   officer    Officer? @relation(fields: [officerId], references: [id], onDelete: SetNull)
   memberCorp Corp?    @relation("EveIdentityMemberCorp", fields: [memberCorpId], references: [id], onDelete: SetNull)
   savedFittings SavedFitting[]
+  esiCredential EveEsiCredential?
 
   @@index([corporationId])
   @@index([allianceId])
   @@index([officerId])
   @@index([memberCorpId])
+}
+
+model EveEsiCredential {
+  id                      String                 @id @default(uuid()) @db.Uuid
+  eveIdentityId           String                 @unique @db.Uuid
+  encryptedRefreshToken   String
+  refreshTokenIv          String
+  refreshTokenAuthTag     String
+  encryptionKeyVersion    Int
+  grantedScopes           String[]               @default([])
+  status                  EveEsiCredentialStatus @default(UNAVAILABLE)
+  lastSuccessfulRefreshAt DateTime?
+  lastFailureAt           DateTime?
+  lastFailureCode         String?
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+
+  eveIdentity EveIdentity @relation(fields: [eveIdentityId], references: [id], onDelete: Restrict)
+
+  @@index([status])
+  @@index([lastSuccessfulRefreshAt])
 }
 
 model SavedFitting {

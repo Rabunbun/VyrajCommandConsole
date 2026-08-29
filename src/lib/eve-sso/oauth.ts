@@ -31,6 +31,7 @@ type EveJwtClaims = {
   exp?: number;
   iss?: string;
   name?: string;
+  scp?: string | string[];
   sub?: string;
 };
 
@@ -254,7 +255,8 @@ export async function validateEveAccessToken(accessToken: string) {
   return {
     characterId,
     characterName,
-    claims
+    claims,
+    scopes: normalizeJwtScopes(claims.scp)
   };
 }
 
@@ -683,6 +685,18 @@ function extractCharacterId(subject: string | undefined) {
   }
 
   return BigInt(match[1]);
+}
+
+function normalizeJwtScopes(value: string | string[] | undefined) {
+  const scopes = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/\s+/)
+      : [];
+
+  return Array.from(
+    new Set(scopes.map((scope) => scope.trim()).filter(Boolean))
+  ).sort((left, right) => left.localeCompare(right, "en-US"));
 }
 
 function decodeJwtSegment(token: string, segmentIndex: number): unknown {
