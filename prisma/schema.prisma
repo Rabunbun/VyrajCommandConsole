@@ -36,6 +36,14 @@ enum EveEsiCredentialStatus {
   UNAVAILABLE
 }
 
+enum EveCharacterSkillSnapshotStatus {
+  AVAILABLE
+  STALE
+  UNAVAILABLE
+  REAUTHORIZATION_REQUIRED
+  REVOKED
+}
+
 enum ContentStatus {
   ACTIVE
   DRAFT
@@ -210,6 +218,7 @@ model EveIdentity {
   memberCorp Corp?    @relation("EveIdentityMemberCorp", fields: [memberCorpId], references: [id], onDelete: SetNull)
   savedFittings SavedFitting[]
   esiCredential EveEsiCredential?
+  skillSnapshot EveCharacterSkillSnapshot?
 
   @@index([corporationId])
   @@index([allianceId])
@@ -236,6 +245,33 @@ model EveEsiCredential {
 
   @@index([status])
   @@index([lastSuccessfulRefreshAt])
+}
+
+model EveCharacterSkillSnapshot {
+  id                    String                          @id @default(uuid()) @db.Uuid
+  eveIdentityId         String                          @unique @db.Uuid
+  skills                Json?
+  source                String                          @default("ESI")
+  status                EveCharacterSkillSnapshotStatus @default(UNAVAILABLE)
+  fetchedAt             DateTime?
+  checkedAt             DateTime?
+  refreshAfter          DateTime?
+  skillsEtag            String?
+  skillsLastModified    String?
+  skillsCacheControl    String?
+  queueEtag             String?
+  queueLastModified     String?
+  queueCacheControl     String?
+  lastErrorAt           DateTime?
+  lastErrorCode         String?
+  refreshVersion        Int                             @default(0)
+  createdAt             DateTime                        @default(now())
+  updatedAt             DateTime                        @updatedAt
+
+  eveIdentity EveIdentity @relation(fields: [eveIdentityId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([refreshAfter])
 }
 
 model SavedFitting {
