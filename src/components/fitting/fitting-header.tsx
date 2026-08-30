@@ -1,4 +1,9 @@
 import { StatusPip } from "@/components/module-visuals";
+import {
+  getSimulationProfileLabel,
+  getSimulationWarningSummary,
+  type FittingSimulationState
+} from "@/lib/fitting/simulation";
 import type { FittingHullSummary } from "@/lib/fitting/types";
 
 type FittingHeaderProps = {
@@ -7,6 +12,7 @@ type FittingHeaderProps = {
   isSaving: boolean;
   onFittingNameChange: (name: string) => void;
   onOpenEft: () => void;
+  onOpenSimulation: () => void;
   onReloadConflict: () => void;
   onSave: () => void;
   onSaveAs: () => void;
@@ -14,6 +20,7 @@ type FittingHeaderProps = {
   persistenceMessage: { text: string; tone: "error" | "info" | "success" } | null;
   saveDisabled: boolean;
   selectedHull: FittingHullSummary | null;
+  simulationState: FittingSimulationState;
   status: {
     kind: "not-saved" | "saved" | "unsaved-changes";
     label: string;
@@ -26,6 +33,7 @@ export function FittingHeader({
   isSaving,
   onFittingNameChange,
   onOpenEft,
+  onOpenSimulation,
   onReloadConflict,
   onSave,
   onSaveAs,
@@ -33,8 +41,11 @@ export function FittingHeader({
   persistenceMessage,
   saveDisabled,
   selectedHull,
+  simulationState,
   status
 }: FittingHeaderProps) {
+  const simulationWarning = getSimulationWarningSummary(simulationState);
+
   return (
     <header className="fitting-header">
       <div className="fitting-header-main">
@@ -77,6 +88,19 @@ export function FittingHeader({
         </button>
         <button className="secondary-button fitting-eft-control" onClick={onOpenEft} type="button">
           EFT Import / Export
+        </button>
+        <button
+          aria-label={`${getSimulationProfileLabel(simulationState)}: ${simulationWarning.label}. Open Character and Simulation.`}
+          className="fitting-simulation-control"
+          data-tone={simulationWarning.tone}
+          onClick={onOpenSimulation}
+          type="button"
+        >
+          <span>{getSimulationProfileLabel(simulationState)}</span>
+          <small>
+            <span aria-hidden="true" className="fitting-simulation-dot" />
+            {simulationWarning.label}
+          </small>
         </button>
         <StatusPip
           label={selectedHull ? "Hull Selected" : "Hull Selection Ready"}

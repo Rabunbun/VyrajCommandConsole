@@ -8,6 +8,7 @@ import {
   updateSavedFittingAction
 } from "@/app/fitting/actions";
 import { FitStatistics } from "@/components/fitting/fit-statistics";
+import { CharacterSimulationDrawer } from "@/components/fitting/character-simulation-drawer";
 import { EftDrawer } from "@/components/fitting/eft-drawer";
 import { FittingHeader } from "@/components/fitting/fitting-header";
 import { FittingResources } from "@/components/fitting/fitting-resources";
@@ -28,6 +29,7 @@ import {
   type FitOperationAttemptResult,
   type LoadChargeAttemptResult
 } from "@/components/fitting/use-fitting-state";
+import { useFittingSimulation } from "@/components/fitting/use-fitting-simulation";
 import type {
   BrowsableFittingRack,
   FittingHullSummary,
@@ -46,10 +48,12 @@ import type {
   SavedFittingLibraryState,
   SavedFittingSummary
 } from "@/lib/fitting/saved/ui-types";
+import type { FittingSimulationBootstrap } from "@/lib/fitting/simulation";
 
 type FittingWorkspaceProps = {
   hulls: FittingHullSummary[];
   initialSavedFittings: SavedFittingLibraryState;
+  simulationBootstrap: FittingSimulationBootstrap;
 };
 
 type SavedFittingMessage = {
@@ -59,7 +63,11 @@ type SavedFittingMessage = {
 
 type SuccessfulSavedFittingLoad = Extract<SavedFittingLoadResult, { ok: true }>;
 
-export function FittingWorkspace({ hulls, initialSavedFittings }: FittingWorkspaceProps) {
+export function FittingWorkspace({
+  hulls,
+  initialSavedFittings,
+  simulationBootstrap
+}: FittingWorkspaceProps) {
   const {
     addDrone,
     addCargo,
@@ -87,6 +95,12 @@ export function FittingWorkspace({ hulls, initialSavedFittings }: FittingWorkspa
     selectedHull,
     unloadCharge
   } = useFittingState({ hulls });
+  const {
+    disconnect: disconnectCharacterData,
+    refreshSkills,
+    selectProfile: selectSimulationProfile,
+    state: simulationState
+  } = useFittingSimulation(fitState, simulationBootstrap);
   const [selectedSlot, setSelectedSlot] = useState<SelectedFittingSlot | null>(null);
   const [savedFittingLibrary, setSavedFittingLibrary] = useState(initialSavedFittings);
   const [savedFittingEditor, setSavedFittingEditor] = useState(createUnsavedFittingEditor);
@@ -102,6 +116,7 @@ export function FittingWorkspace({ hulls, initialSavedFittings }: FittingWorkspa
   const [busySavedFittingId, setBusySavedFittingId] = useState<string | null>(null);
   const [isSavingFitting, setIsSavingFitting] = useState(false);
   const [isEftDrawerOpen, setIsEftDrawerOpen] = useState(false);
+  const [isSimulationDrawerOpen, setIsSimulationDrawerOpen] = useState(false);
   const [moduleActionMode, setModuleActionMode] = useState<ModuleActionMode>(null);
   const [browserRack, setBrowserRack] = useState<BrowsableFittingRack>("high");
   const [openBrowserSections, setOpenBrowserSections] = useState<
@@ -878,7 +893,7 @@ export function FittingWorkspace({ hulls, initialSavedFittings }: FittingWorkspa
   }, [clearDragState, clearSelectedSlot, dragSource, removeModule]);
 
   useEffect(() => {
-    if (isEftDrawerOpen || (!selectedSlot && !dragSource)) {
+    if (isEftDrawerOpen || isSimulationDrawerOpen || (!selectedSlot && !dragSource)) {
       return;
     }
 
@@ -891,7 +906,7 @@ export function FittingWorkspace({ hulls, initialSavedFittings }: FittingWorkspa
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [clearSelectedSlot, dragSource, isEftDrawerOpen, selectedSlot]);
+  }, [clearSelectedSlot, dragSource, isEftDrawerOpen, isSimulationDrawerOpen, selectedSlot]);
 
   return (
     <div className="fitting-shell" aria-labelledby="fitting-bay-title">
@@ -903,7 +918,14 @@ export function FittingWorkspace({ hulls, initialSavedFittings }: FittingWorkspa
           setSavedFittingEditor((current) => ({ ...current, name }));
           setSavedFittingMessage(null);
         }}
-        onOpenEft={() => setIsEftDrawerOpen(true)}
+        onOpenEft={() => {
+          setIsSimulationDrawerOpen(false);
+          setIsEftDrawerOpen(true);
+        }}
+        onOpenSimulation={() => {
+          setIsEftDrawerOpen(false);
+          setIsSimulationDrawerOpen(true);
+        }}
         onReloadConflict={() => {
           if (savedFittingLibrary.status !== "available" || !savedFittingConflict) return;
           const fitting = savedFittingLibrary.fittings.find(
@@ -917,6 +939,7 @@ export function FittingWorkspace({ hulls, initialSavedFittings }: FittingWorkspa
         persistenceMessage={savedFittingMessage}
         saveDisabled={fitState.hullTypeId === null || !savedFittingEditor.name.trim()}
         selectedHull={selectedHull}
+        simulationState={simulationState}
         status={savedFittingStatus}
       />
       <div className="fitting-workspace-grid">
@@ -1034,6 +1057,14 @@ export function FittingWorkspace({ hulls, initialSavedFittings }: FittingWorkspa
         onFitNameChange={(name) =>
           setSavedFittingEditor((current) => ({ ...current, name }))
         }
+      />
+      <CharacterSimulationDrawer
+        isOpen={isSimulationDrawerOpen}
+        onClose={() => setIsSimulationDrawerOpen(false)}
+        onDisconnect={disconnectCharacterData}
+        onRefreshSkills={refreshSkills}
+        onSelectProfile={selectSimulationProfile}
+        state={simulationState}
       />
       {pendingSavedFittingLoad ? (
         <SavedFittingLoadDialog

@@ -1,9 +1,9 @@
 import "server-only";
 
+import { getDb } from "@/lib/db";
 import { getPrivateEsiConfigurationStatus } from "./config";
 import {
   completePrivateEsiAuthorization,
-  disconnectPrivateEsiCredential,
   getPrivateEsiSafeStatus,
   refreshPrivateEsiAccessToken
 } from "./credential-core";
@@ -55,8 +55,14 @@ export async function getFreshPrivateEsiAccessToken(actor: PrivateEsiActor) {
 }
 
 export async function disconnectPrivateEsi(actor: PrivateEsiActor) {
-  return disconnectPrivateEsiCredential(
-    actor,
-    createPrivateEsiCredentialRepository()
-  );
+  const [, credential] = await getDb().$transaction([
+    getDb().eveCharacterSkillSnapshot.deleteMany({
+      where: { eveIdentityId: actor.eveIdentityId }
+    }),
+    getDb().eveEsiCredential.deleteMany({
+      where: { eveIdentityId: actor.eveIdentityId }
+    })
+  ]);
+
+  return credential.count === 1;
 }

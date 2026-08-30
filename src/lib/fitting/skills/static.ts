@@ -7,6 +7,7 @@ import type {
   CharacterProfile,
   FittingSkillName,
   FittingSkillRequirementEdge,
+  FittingSkillSource,
   SkillAnalysis
 } from "./types";
 
@@ -20,7 +21,20 @@ export type ResolvedFitSkillStaticData = {
 export async function resolveFitSkillStaticData(
   fitState: FitState
 ): Promise<ResolvedFitSkillStaticData> {
-  const itemSources = collectFitSkillSources(fitState);
+  return resolveSkillStaticDataForSources(collectFitSkillSources(fitState));
+}
+
+export async function resolveSkillStaticDataForSources(
+  itemSources: FittingSkillSource[]
+): Promise<ResolvedFitSkillStaticData> {
+  if (itemSources.length === 0) {
+    return {
+      itemSources,
+      requirementEdges: [],
+      skillNames: [],
+      staticDataStatus: "available"
+    };
+  }
 
   if (!isDatabaseConfigured()) {
     return {
@@ -72,6 +86,55 @@ export async function resolveFitSkillStaticData(
   };
 }
 
+export async function resolveFittingSkillSourceNames(
+  itemSources: FittingSkillSource[]
+): Promise<Record<number, string>> {
+  if (!isDatabaseConfigured()) {
+    return {};
+  }
+
+  const typeIdsByFamily = {
+    charges: uniqueTypeIds(itemSources, new Set(["charge"])),
+    drones: uniqueTypeIds(itemSources, new Set(["drone"])),
+    hulls: uniqueTypeIds(itemSources, new Set(["hull"])),
+    modules: uniqueTypeIds(itemSources, new Set(["module", "rig"]))
+  };
+  const db = getDb();
+  const [hulls, modules, charges, drones] = await Promise.all([
+    typeIdsByFamily.hulls.length
+      ? db.fittingHull.findMany({
+          select: { typeId: true, typeName: true },
+          where: { typeId: { in: typeIdsByFamily.hulls } }
+        })
+      : Promise.resolve([]),
+    typeIdsByFamily.modules.length
+      ? db.fittingModule.findMany({
+          select: { typeId: true, typeName: true },
+          where: { typeId: { in: typeIdsByFamily.modules } }
+        })
+      : Promise.resolve([]),
+    typeIdsByFamily.charges.length
+      ? db.fittingCharge.findMany({
+          select: { typeId: true, typeName: true },
+          where: { typeId: { in: typeIdsByFamily.charges } }
+        })
+      : Promise.resolve([]),
+    typeIdsByFamily.drones.length
+      ? db.fittingDrone.findMany({
+          select: { typeId: true, typeName: true },
+          where: { typeId: { in: typeIdsByFamily.drones } }
+        })
+      : Promise.resolve([])
+  ]);
+
+  return Object.fromEntries(
+    [...hulls, ...modules, ...charges, ...drones].map((item) => [
+      item.typeId,
+      item.typeName
+    ])
+  );
+}
+
 export async function analyzeFitSkillRequirements(
   fitState: FitState,
   profile: CharacterProfile
@@ -82,4 +145,26 @@ export async function analyzeFitSkillRequirements(
     ...staticData,
     profile
   });
+}
+
+export async function analyzeFittingSkillSources(
+  itemSources: FittingSkillSource[],
+  profile: CharacterProfile
+): Promise<SkillAnalysis> {
+  const staticData = await resolveSkillStaticDataForSources(itemSources);
+
+  return analyzeSkillRequirements({ ...staticData, profile });
+}
+
+function uniqueTypeIds(
+  itemSources: FittingSkillSource[],
+  kinds: Set<FittingSkillSource["kind"]>
+) {
+  return Array.from(
+    new Set(
+      itemSources
+        .filter((source) => kinds.has(source.kind))
+        .map((source) => source.typeId)
+    )
+  );
 }

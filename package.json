@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "test:private-esi": "tsx --test src/lib/eve-sso/private/private-esi.test.ts",
     "test:skill-sync": "tsx --test src/lib/eve-sso/private/skills/skill-sync.test.ts",
+    "test:simulation": "tsx --test src/lib/fitting/simulation.test.ts",
     "test:eft": "tsx --test src/lib/fitting/eft/eft.test.ts src/lib/fitting/eft/resolve.test.ts src/lib/fitting/eft/application.test.ts src/lib/fitting/eft/preview-project.test.ts src/lib/fitting/eft/export-project.test.ts src/lib/fitting/eft/ui.test.ts",
     "test:fitting": "tsx --test scripts/lib/fitting-skill-requirements.test.ts src/lib/fitting/fit-reducer.test.ts src/lib/fitting/skills/analysis.test.ts src/lib/fitting/saved/saved-fitting.test.ts src/lib/fitting/saved/persistence.test.ts src/lib/fitting/saved/load.test.ts",
     "migration:validate": "tsx scripts/validate-v1-export.ts",
