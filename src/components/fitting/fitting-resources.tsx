@@ -3,10 +3,13 @@ import type {
   FittingHullSummary,
   FitValidationIssue
 } from "@/lib/fitting/types";
+import type { EffectiveFitAnalysis } from "@/lib/fitting/dogma";
 
 type FittingResourcesProps = {
   analysis: BaseFitAnalysis;
   droneBayUsedVolume: number;
+  effectiveAnalysis: EffectiveFitAnalysis | null;
+  isEffectiveAnalysisLoading: boolean;
   selectedHull: FittingHullSummary | null;
   warnings: FitValidationIssue[];
 };
@@ -14,26 +17,57 @@ type FittingResourcesProps = {
 export function FittingResources({
   analysis,
   droneBayUsedVolume,
+  effectiveAnalysis,
+  isEffectiveAnalysisLoading,
   selectedHull,
   warnings
 }: FittingResourcesProps) {
   const warningCodes = new Set(warnings.map((warning) => warning.code));
+  const effectiveAvailable = effectiveAnalysis?.status === "available";
   const resources = [
     {
-      capacity: selectedHull?.cpuBase ?? null,
+      capacity: effectiveAvailable
+        ? effectiveAnalysis.cpu.effectiveOutput
+        : selectedHull?.cpuBase ?? null,
       label: "CPU",
-      scope: "Base / Unmodified",
+      scope: effectiveAvailable
+        ? `Effective · Base ${formatUsageValue(
+            analysis.cpuUsed,
+            selectedHull?.cpuBase ?? null,
+            "tf"
+          )}`
+        : isEffectiveAnalysisLoading
+          ? "Effective calculating · Base / Unmodified shown"
+          : "Effective unavailable · Base / Unmodified shown",
       unit: "tf",
-      used: analysis.cpuUsed,
-      warning: warningCodes.has("CPU_BASE_OVER")
+      used: effectiveAvailable
+        ? effectiveAnalysis.cpu.effectiveUsed ?? analysis.cpuUsed
+        : analysis.cpuUsed,
+      warning: effectiveAvailable
+        ? (effectiveAnalysis.cpu.overage ?? 0) > 0
+        : warningCodes.has("CPU_BASE_OVER")
     },
     {
-      capacity: selectedHull?.powergridBase ?? null,
+      capacity: effectiveAvailable
+        ? effectiveAnalysis.powergrid.effectiveOutput
+        : selectedHull?.powergridBase ?? null,
       label: "Powergrid",
-      scope: "Base / Unmodified",
+      scope: effectiveAvailable
+        ? `Effective · Base ${formatUsageValue(
+            analysis.powergridUsed,
+            selectedHull?.powergridBase ?? null,
+            "MW"
+          )}`
+        : isEffectiveAnalysisLoading
+          ? "Effective calculating · Base / Unmodified shown"
+          : "Effective unavailable · Base / Unmodified shown",
       unit: "MW",
-      used: analysis.powergridUsed,
-      warning: warningCodes.has("POWERGRID_BASE_OVER")
+      used: effectiveAvailable
+        ? effectiveAnalysis.powergrid.effectiveUsed ?? analysis.powergridUsed
+        : analysis.powergridUsed,
+      warning: effectiveAvailable
+        ? (effectiveAnalysis.powergrid.overage ?? 0) > 0
+        : warningCodes.has("POWERGRID_BASE_OVER")
     },
     {
       capacity: selectedHull?.calibrationCapacity ?? null,

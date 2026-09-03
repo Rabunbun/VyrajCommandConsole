@@ -12,11 +12,13 @@ import type {
 
 export type ResolvedOperationModifier = Readonly<{
   effectId: number;
+  effectiveMultiplier?: number | null;
   effectiveValue?: number;
   modifyingAttributeId: number;
   operation: number;
   ordinal: number;
   rawValue: number;
+  rawMultiplier?: number | null;
   sourceInstanceId: string;
   sourceTypeId: number | null;
   stackingFactor?: number | null;
@@ -95,11 +97,13 @@ export function evaluateAttributeOperations(input: {
       before,
       effectId: modifier.effectId,
       effectiveContribution: value - before,
+      effectiveMultiplier: modifier.effectiveMultiplier ?? null,
       effectiveValue: operand,
       modifyingAttributeId: modifier.modifyingAttributeId,
       operation: modifier.operation,
       ordinal: modifier.ordinal,
       rawValue: modifier.rawValue,
+      rawMultiplier: modifier.rawMultiplier ?? null,
       sourceInstanceId: modifier.sourceInstanceId,
       sourceTypeId: modifier.sourceTypeId,
       stackingFactor: modifier.stackingFactor ?? null,

@@ -1045,6 +1045,8 @@ export function FittingWorkspace({
       <FittingResources
         analysis={analysis}
         droneBayUsedVolume={droneBayAnalysis.usedVolume}
+        effectiveAnalysis={simulationState.effectiveAnalysis}
+        isEffectiveAnalysisLoading={simulationState.isAnalyzing}
         selectedHull={selectedHull}
         warnings={fitWarnings}
       />

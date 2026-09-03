@@ -1,5 +1,7 @@
 export * from "./attributes";
 export * from "./dependency";
+export * from "./evaluation";
+export * from "./effective-resources";
 export * from "./modifiers";
 export * from "./object-graph";
 export * from "./operations";

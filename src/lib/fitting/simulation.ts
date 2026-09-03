@@ -1,6 +1,7 @@
 import type { CharacterSkillSnapshotSafeResult } from "@/lib/eve-sso/private/skills/types";
 import type { PrivateEsiCredentialSafeStatus } from "@/lib/eve-sso/private/types";
 import type { FitState } from "./fit-state";
+import type { EffectiveFitAnalysis } from "./dogma";
 import { collectFitSkillSources } from "./skills/analysis";
 import {
   createAllVCharacterProfile,
@@ -21,6 +22,7 @@ export type FittingSimulationState = {
   analysis: SkillAnalysis | null;
   connection: PrivateEsiCredentialSafeStatus | null;
   error: string | null;
+  effectiveAnalysis: EffectiveFitAnalysis | null;
   isAnalyzing: boolean;
   isInitializing: boolean;
   isRefreshing: boolean;
@@ -35,6 +37,7 @@ export function createInitialFittingSimulationState(): FittingSimulationState {
     analysis: null,
     connection: null,
     error: null,
+    effectiveAnalysis: null,
     isAnalyzing: false,
     isInitializing: true,
     isRefreshing: false,
@@ -68,6 +71,7 @@ export function selectFittingSimulationProfile(
   return {
     ...state,
     analysis: null,
+    effectiveAnalysis: null,
     error: null,
     mode,
     profile: createSimulationProfile(mode, state.linkedSnapshot),

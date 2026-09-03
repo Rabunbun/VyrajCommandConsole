@@ -89,6 +89,7 @@ test("usable linked data becomes the default and profile switching is reversible
   const allV = selectFittingSimulationProfile(initialized, "all-v");
   assert.equal(allV.mode, "all-v");
   assert.equal(allV.profile.skillSource.kind, "all-v");
+  assert.equal(allV.effectiveAnalysis, null);
 
   const linkedAgain = selectFittingSimulationProfile(allV, "linked-character");
   assert.equal(linkedAgain.profile.skillSource.kind, "linked-character");

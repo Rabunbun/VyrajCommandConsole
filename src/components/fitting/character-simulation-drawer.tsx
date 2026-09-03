@@ -278,7 +278,8 @@ export function CharacterSimulationDrawer({
           </section>
 
           <p className="simulation-scope-note">
-            This profile reports fitting requirements only. It does not alter CPU, powergrid, damage, tank, capacitor, or other effective statistics.
+            This profile drives fitting requirements and effective CPU and powergrid.
+            Other effective statistics remain deferred.
           </p>
         </div>
       </aside>

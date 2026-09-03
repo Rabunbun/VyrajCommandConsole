@@ -27,6 +27,11 @@ export type BuildDogmaObjectGraphInput = Readonly<{
   }>;
   modules: readonly DogmaGraphModuleInput[];
   ship: Readonly<{ instanceId: string; projection: DogmaTypeProjection }>;
+  skills?: readonly Readonly<{
+    activeLevel: number;
+    instanceId: string;
+    projection: DogmaTypeProjection;
+  }>[];
 }>;
 
 export function buildDogmaObjectGraph(
@@ -34,6 +39,7 @@ export function buildDogmaObjectGraph(
 ): DogmaObjectGraph {
   const objects = new Map<string, DogmaRuntimeObject>();
   addObject(objects, {
+    attributeOverrides: [],
     instanceId: input.character.instanceId,
     kind: "character",
     locationInstanceId: null,
@@ -42,6 +48,7 @@ export function buildDogmaObjectGraph(
     projection: input.character.projection
   });
   addObject(objects, {
+    attributeOverrides: [],
     instanceId: input.ship.instanceId,
     kind: "ship",
     locationInstanceId: null,
@@ -50,8 +57,21 @@ export function buildDogmaObjectGraph(
     projection: input.ship.projection
   });
 
+  for (const skill of input.skills ?? []) {
+    addObject(objects, {
+      attributeOverrides: [{ attributeId: 280, value: skill.activeLevel }],
+      instanceId: skill.instanceId,
+      kind: "skill",
+      locationInstanceId: input.character.instanceId,
+      otherInstanceId: null,
+      ownerInstanceId: input.character.instanceId,
+      projection: skill.projection
+    });
+  }
+
   for (const fittedItem of input.modules) {
     addObject(objects, {
+      attributeOverrides: [],
       instanceId: fittedItem.instanceId,
       kind: fittedItem.kind,
       locationInstanceId: input.ship.instanceId,
@@ -61,6 +81,7 @@ export function buildDogmaObjectGraph(
     });
     if (fittedItem.charge) {
       addObject(objects, {
+        attributeOverrides: [],
         instanceId: fittedItem.charge.instanceId,
         kind: "charge",
         locationInstanceId: fittedItem.instanceId,
@@ -91,6 +112,7 @@ function childObject(
   graphInput: BuildDogmaObjectGraphInput
 ): DogmaRuntimeObject {
   return {
+    attributeOverrides: [],
     instanceId: inputObject.instanceId,
     kind,
     locationInstanceId: graphInput.ship.instanceId,

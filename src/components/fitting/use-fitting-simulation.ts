@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CharacterSkillSnapshotSafeResult } from "@/lib/eve-sso/private/skills/types";
 import type { PrivateEsiCredentialSafeStatus } from "@/lib/eve-sso/private/types";
 import type { FitState } from "@/lib/fitting/fit-state";
+import type { EffectiveFitAnalysis } from "@/lib/fitting/dogma";
 import {
   collectSimulationSkillSources,
   createInitialFittingSimulationState,
@@ -19,8 +20,9 @@ import type {
   SkillAnalysis
 } from "@/lib/fitting/skills/types";
 
-type SkillAnalysisResponse = {
+type SimulationAnalysisResponse = {
   analysis: SkillAnalysis;
+  effectiveAnalysis: EffectiveFitAnalysis;
   sourceNames: Record<number, string>;
 };
 
@@ -72,7 +74,12 @@ export function useFittingSimulation(
     analysisRequestRef.current = requestId;
     const controller = new AbortController();
 
-    setState((current) => ({ ...current, error: null, isAnalyzing: true }));
+    setState((current) => ({
+      ...current,
+      effectiveAnalysis: null,
+      error: null,
+      isAnalyzing: true
+    }));
     void requestSkillAnalysis(state.mode, itemSources, controller.signal).then(
       (result) => {
         if (analysisRequestRef.current !== requestId) {
@@ -84,6 +91,7 @@ export function useFittingSimulation(
             ? {
                 ...current,
                 analysis: result.value.analysis,
+                effectiveAnalysis: result.value.effectiveAnalysis,
                 error: null,
                 isAnalyzing: false,
                 sourceNames: result.value.sourceNames
@@ -91,6 +99,7 @@ export function useFittingSimulation(
             : {
                 ...current,
                 error: result.message,
+                effectiveAnalysis: null,
                 isAnalyzing: false
               }
         );
@@ -114,7 +123,13 @@ export function useFittingSimulation(
     const refreshId = refreshRequestRef.current + 1;
     refreshRequestRef.current = refreshId;
     analysisRequestRef.current += 1;
-    setState((current) => ({ ...current, error: null, isRefreshing: true }));
+    setState((current) => ({
+      ...current,
+      effectiveAnalysis:
+        current.mode === "linked-character" ? null : current.effectiveAnalysis,
+      error: null,
+      isRefreshing: true
+    }));
 
     const snapshotResult = await requestSkillRefresh();
 
@@ -184,6 +199,7 @@ export function useFittingSimulation(
         ...(linkedAnalysis
           ? {
               analysis: linkedAnalysis.analysis,
+              effectiveAnalysis: linkedAnalysis.effectiveAnalysis,
               sourceNames: linkedAnalysis.sourceNames
             }
           : {}),
@@ -223,6 +239,8 @@ export function useFittingSimulation(
         ...current,
         analysis: current.mode === "linked-character" ? null : current.analysis,
         connection,
+        effectiveAnalysis:
+          current.mode === "linked-character" ? null : current.effectiveAnalysis,
         isRefreshing: false,
         linkedSnapshot: null,
         profile: createSimulationProfile(current.mode, null),
@@ -300,10 +318,10 @@ async function requestSkillAnalysis(
   signal?: AbortSignal
 ): Promise<
   | { message: string; ok: false }
-  | { ok: true; value: SkillAnalysisResponse }
+  | { ok: true; value: SimulationAnalysisResponse }
 > {
   try {
-    const response = await fetch("/api/fitting/skills", {
+    const response = await fetch("/api/fitting/analysis", {
       body: JSON.stringify({ itemSources, profileMode }),
       cache: "no-store",
       headers: { "Content-Type": "application/json" },
@@ -311,11 +329,11 @@ async function requestSkillAnalysis(
       signal
     });
     const payload = await response.json().catch(() => null) as
-      | SkillAnalysisResponse
+      | SimulationAnalysisResponse
       | { error?: unknown }
       | null;
 
-    if (!response.ok || !isSkillAnalysisResponse(payload)) {
+    if (!response.ok || !isSimulationAnalysisResponse(payload)) {
       return {
         message:
           payload && "error" in payload && typeof payload.error === "string"
@@ -337,20 +355,29 @@ async function requestSkillAnalysis(
   }
 }
 
-function isSkillAnalysisResponse(value: unknown): value is SkillAnalysisResponse {
+function isSimulationAnalysisResponse(
+  value: unknown
+): value is SimulationAnalysisResponse {
   if (
     !value ||
     typeof value !== "object" ||
     !("analysis" in value) ||
+    !("effectiveAnalysis" in value) ||
     !("sourceNames" in value)
   ) {
     return false;
   }
 
   const analysis = value.analysis;
+  const effectiveAnalysis = value.effectiveAnalysis;
   const sourceNames = value.sourceNames;
 
-  if (!analysis || typeof analysis !== "object") {
+  if (
+    !analysis ||
+    typeof analysis !== "object" ||
+    !effectiveAnalysis ||
+    typeof effectiveAnalysis !== "object"
+  ) {
     return false;
   }
 
@@ -363,6 +390,14 @@ function isSkillAnalysisResponse(value: unknown): value is SkillAnalysisResponse
     typeof analysis.missingCount === "number" &&
     Array.isArray(analysis.requirements) &&
     ["met", "missing", "unavailable"].includes(String(analysis.status)) &&
+    "cpu" in effectiveAnalysis &&
+    "powergrid" in effectiveAnalysis &&
+    "diagnostics" in effectiveAnalysis &&
+    "modules" in effectiveAnalysis &&
+    "status" in effectiveAnalysis &&
+    Array.isArray(effectiveAnalysis.diagnostics) &&
+    Array.isArray(effectiveAnalysis.modules) &&
+    ["available", "unavailable"].includes(String(effectiveAnalysis.status)) &&
     Boolean(sourceNames) &&
     typeof sourceNames === "object" &&
     !Array.isArray(sourceNames)

@@ -60,6 +60,7 @@ export type DogmaTypeProjection = Readonly<{
 
 export type DogmaRuntimeObjectKind =
   | "character"
+  | "skill"
   | "ship"
   | "module"
   | "rig"
@@ -69,6 +70,7 @@ export type DogmaRuntimeObjectKind =
   | "structure";
 
 export type DogmaRuntimeObject = Readonly<{
+  attributeOverrides: readonly DogmaTypeAttributeValue[];
   instanceId: string;
   kind: DogmaRuntimeObjectKind;
   locationInstanceId: string | null;
@@ -118,11 +120,13 @@ export type ModifierTrace = Readonly<{
   before: number;
   effectId: number;
   effectiveContribution: number;
+  effectiveMultiplier: number | null;
   effectiveValue: number;
   modifyingAttributeId: number;
   operation: number;
   ordinal: number;
   rawValue: number;
+  rawMultiplier: number | null;
   sourceInstanceId: string;
   sourceTypeId: number | null;
   stackingFactor: number | null;
