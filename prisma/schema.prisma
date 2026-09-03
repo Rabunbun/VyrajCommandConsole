@@ -81,6 +81,13 @@ enum FittingRack {
   SUBSYSTEM
 }
 
+enum FittingDogmaEffectCapability {
+  GENERIC_MODIFIER
+  METADATA_NONEXECUTING
+  REQUIRES_SPECIAL_HANDLER
+  UNSUPPORTED_UNKNOWN
+}
+
 model Corp {
   id                       String     @id @default(uuid()) @db.Uuid
   slug                     String     @unique
@@ -862,4 +869,94 @@ model FittingCargoItem {
   @@index([groupId])
   @@index([marketGroupId])
   @@index([lastRefreshedAt])
+}
+
+model FittingDogmaAttribute {
+  attributeId     Int      @id
+  name            String
+  defaultValue    Float?
+  unitId          Int?
+  stackable       Boolean
+  highIsGood      Boolean?
+  minAttributeId  Int?
+  maxAttributeId  Int?
+  lastRefreshedAt DateTime
+
+  @@index([unitId])
+  @@index([lastRefreshedAt])
+}
+
+model FittingDogmaEffect {
+  effectId             Int                          @id
+  name                 String
+  categoryId           Int
+  durationAttributeId  Int?
+  dischargeAttributeId Int?
+  capability           FittingDogmaEffectCapability
+  lastRefreshedAt      DateTime
+  modifiers            FittingDogmaEffectModifier[]
+
+  @@index([categoryId])
+  @@index([capability])
+  @@index([lastRefreshedAt])
+}
+
+model FittingDogmaEffectModifier {
+  effectId             Int
+  ordinal              Int
+  domain               String?
+  functionName         String
+  operation            Int?
+  modifiedAttributeId  Int?
+  modifyingAttributeId Int?
+  groupId              Int?
+  skillTypeId          Int?
+  lastRefreshedAt      DateTime
+  effect               FittingDogmaEffect @relation(fields: [effectId], references: [effectId], onDelete: Cascade)
+
+  @@id([effectId, ordinal])
+  @@index([operation])
+  @@index([groupId])
+  @@index([skillTypeId])
+  @@index([lastRefreshedAt])
+}
+
+model FittingDogmaTypeProjection {
+  typeId               Int      @id
+  groupId              Int
+  categoryId           Int
+  requiredSkillTypeIds Int[]    @default([])
+  attributes           Json
+  effects              Json
+  projectionVersion    Int
+  sdeBuild             String
+  checksum             String
+  lastRefreshedAt      DateTime
+
+  @@index([groupId])
+  @@index([categoryId])
+  @@index([projectionVersion, sdeBuild])
+  @@index([lastRefreshedAt])
+}
+
+model FittingDogmaProjectionBuild {
+  id                        String   @id
+  projectionVersion         Int
+  sdeBuild                  String
+  checksum                  String
+  rootTypeCount             Int
+  closureTypeCount          Int
+  projectedTypeCount        Int
+  attributeDefinitionCount  Int
+  effectDefinitionCount     Int
+  modifierCount             Int
+  genericEffectCount        Int
+  metadataEffectCount       Int
+  specialHandlerEffectCount Int
+  unknownEffectCount        Int
+  malformedReferenceCount   Int
+  operationIds              Int[]    @default([])
+  domains                   String[] @default([])
+  modifierFunctions         String[] @default([])
+  lastRefreshedAt           DateTime
 }
