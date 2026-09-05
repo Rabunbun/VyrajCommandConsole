@@ -2,6 +2,15 @@ import type { RackType } from "../fit-state";
 import { attributeKey } from "./dependency";
 import { evaluateDogmaAttributes } from "./evaluation";
 import { buildDogmaObjectGraph } from "./object-graph";
+import {
+  analyzePassiveStats,
+  PASSIVE_STAT_TARGET_ATTRIBUTE_IDS,
+  unavailablePassiveStats,
+  type PassiveCapacityAnalysis,
+  type PassiveDefenseAnalysis,
+  type PassiveNavigationAnalysis,
+  type PassiveTargetingAnalysis
+} from "./passive-stats";
 import type {
   AttributeResult,
   DogmaAttributeDefinition,
@@ -47,13 +56,18 @@ export type EffectiveResourceSummary = Readonly<{
 
 export type EffectiveFitAnalysis = Readonly<{
   assumptions: readonly string[];
+  capacities: PassiveCapacityAnalysis;
   cpu: EffectiveResourceSummary;
+  defense: PassiveDefenseAnalysis;
   diagnostics: readonly EngineDiagnostic[];
   hullTypeId: number | null;
   modules: readonly EffectiveFittedModuleAnalysis[];
+  navigation: PassiveNavigationAnalysis;
   powergrid: EffectiveResourceSummary;
   profileKind: "all-v" | "explicit" | "unavailable";
+  profileStale: boolean;
   status: "available" | "unavailable";
+  targeting: PassiveTargetingAnalysis;
 }>;
 
 export type EffectiveResourceModuleInput = Readonly<{
@@ -83,7 +97,9 @@ export type AnalyzeEffectiveFitResourcesInput = Readonly<{
 const assumptions = [
   "Passive effects are applied.",
   "Fitted modules and rigs are treated as online.",
-  "Active, overheated, projected, implant, booster, subsystem, and mutated-item effects are not evaluated."
+  "Active, overheated, projected, implant, booster, subsystem, and mutated-item effects are not evaluated.",
+  "Displayed resistances are derived as one minus effective resonance.",
+  "Peak passive shield recharge uses 2.5 times shield capacity divided by recharge time."
 ] as const;
 
 export function analyzeEffectiveFitResources(
@@ -113,6 +129,12 @@ export function analyzeEffectiveFitResources(
       projection: skill.projection
     }))
   });
+  const attributeDefinitions = new Map(
+    input.attributeDefinitions.map((definition) => [
+      definition.attributeId,
+      definition
+    ])
+  );
   const targets = [
     { attributeId: FITTING_RESOURCE_ATTRIBUTE_IDS.cpuOutput, instanceId: "ship" },
     { attributeId: FITTING_RESOURCE_ATTRIBUTE_IDS.powergridOutput, instanceId: "ship" },
@@ -125,15 +147,16 @@ export function analyzeEffectiveFitResources(
         attributeId: FITTING_RESOURCE_ATTRIBUTE_IDS.powergridNeed,
         instanceId: module.instanceId
       }
-    ])
+    ]),
+    ...PASSIVE_STAT_TARGET_ATTRIBUTE_IDS
+      .filter((attributeId) => attributeDefinitions.has(attributeId))
+      .map((attributeId) => ({
+        attributeId,
+        instanceId: "ship"
+      }))
   ];
   const evaluated = evaluateDogmaAttributes({
-    attributeDefinitions: new Map(
-      input.attributeDefinitions.map((definition) => [
-        definition.attributeId,
-        definition
-      ])
-    ),
+    attributeDefinitions,
     effectDefinitions: new Map(
       input.effectDefinitions.map((effect) => [effect.effectId, effect])
     ),
@@ -170,6 +193,7 @@ export function analyzeEffectiveFitResources(
     rack: module.rack,
     typeId: module.projection.typeId
   }));
+  const passive = analyzePassiveStats(evaluated.results);
   const diagnostics = deduplicateDiagnostics([
     ...(input.profileDiagnostics ?? []),
     ...evaluated.diagnostics
@@ -181,23 +205,42 @@ export function analyzeEffectiveFitResources(
       (module) =>
         module.cpu.effective === null || module.powergrid.effective === null
     ) ||
-    diagnostics.some(
-      (diagnostic) =>
-        diagnostic.severity === "error" || diagnostic.severity === "unsupported"
+    [cpuOutput, powergridOutput].some(hasBlockingDiagnostic) ||
+    input.modules.some(
+      (module) =>
+        [
+          getResult(
+            evaluated.results,
+            module.instanceId,
+            FITTING_RESOURCE_ATTRIBUTE_IDS.cpuNeed
+          ),
+          getResult(
+            evaluated.results,
+            module.instanceId,
+            FITTING_RESOURCE_ATTRIBUTE_IDS.powergridNeed
+          )
+        ].some(hasBlockingDiagnostic)
     );
 
   return {
     assumptions,
+    capacities: passive.capacities,
     cpu: summarizeResource(cpuOutput, modules.map((module) => module.cpu)),
+    defense: passive.defense,
     diagnostics,
     hullTypeId: input.hull.typeId,
     modules,
+    navigation: passive.navigation,
     powergrid: summarizeResource(
       powergridOutput,
       modules.map((module) => module.powergrid)
     ),
     profileKind: input.profile.kind,
-    status: unavailable ? "unavailable" : "available"
+    profileStale: (input.profileDiagnostics ?? []).some(
+      (diagnostic) => diagnostic.code === "effective-resource-profile-stale"
+    ),
+    status: unavailable ? "unavailable" : "available",
+    targeting: passive.targeting
   };
 }
 
@@ -284,9 +327,13 @@ function unavailableAnalysis(
     remaining: null
   };
 
+  const passive = unavailablePassiveStats(reason);
+
   return {
     assumptions,
+    capacities: passive.capacities,
     cpu: empty,
+    defense: passive.defense,
     diagnostics: [{
       code: "effective-resource-analysis-unavailable",
       message: reason,
@@ -294,10 +341,20 @@ function unavailableAnalysis(
     }],
     hullTypeId,
     modules: [],
+    navigation: passive.navigation,
     powergrid: empty,
     profileKind: "unavailable",
-    status: "unavailable"
+    profileStale: false,
+    status: "unavailable",
+    targeting: passive.targeting
   };
+}
+
+function hasBlockingDiagnostic(result: AttributeResult) {
+  return result.diagnostics.some(
+    (diagnostic) =>
+      diagnostic.severity === "error" || diagnostic.severity === "unsupported"
+  );
 }
 
 function deduplicateDiagnostics(diagnostics: readonly EngineDiagnostic[]) {

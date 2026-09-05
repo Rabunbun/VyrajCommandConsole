@@ -1033,7 +1033,9 @@ export function FittingWorkspace({
           cargoAnalysis={cargoHoldAnalysis}
           cargoWarnings={cargoWarnings}
           dragSource={dragSource}
+          effectiveAnalysis={simulationState.effectiveAnalysis}
           isCargoDragOver={isCargoDragOver}
+          isEffectiveAnalysisLoading={simulationState.isAnalyzing}
           onAddCargo={addCargo}
           onCargoDragOverChange={setIsCargoDragOver}
           onClearCargo={clearCargo}

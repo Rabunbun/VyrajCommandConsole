@@ -24,6 +24,10 @@ export function FittingResources({
 }: FittingResourcesProps) {
   const warningCodes = new Set(warnings.map((warning) => warning.code));
   const effectiveAvailable = effectiveAnalysis?.status === "available";
+  const effectiveDroneBay =
+    effectiveAnalysis?.capacities.droneBay.status === "available"
+      ? effectiveAnalysis.capacities.droneBay.effective
+      : null;
   const resources = [
     {
       capacity: effectiveAvailable
@@ -78,16 +82,18 @@ export function FittingResources({
       warning: warningCodes.has("CALIBRATION_OVER")
     },
     {
-      capacity: selectedHull?.droneCapacity ?? null,
+      capacity: effectiveDroneBay ?? selectedHull?.droneCapacity ?? null,
       label: "Drone Bay",
-      scope: "Carried Volume",
+      scope:
+        effectiveDroneBay !== null
+          ? `Effective · Base ${formatNullableNumber(selectedHull?.droneCapacity ?? null)} m³ · Add checks base`
+          : "Carried Volume · Effective unavailable",
       unit: "m³",
       used: droneBayUsedVolume,
       warning:
-        selectedHull?.droneCapacity !== null &&
-        selectedHull?.droneCapacity !== undefined &&
-        selectedHull.droneCapacity > 0 &&
-        droneBayUsedVolume / selectedHull.droneCapacity >= 0.9
+        (effectiveDroneBay ?? selectedHull?.droneCapacity ?? 0) > 0 &&
+        droneBayUsedVolume /
+          (effectiveDroneBay ?? selectedHull?.droneCapacity ?? 1) >= 0.9
     }
   ];
 
@@ -153,4 +159,8 @@ function formatStaticNumber(value: number) {
   return new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 2
   }).format(value);
+}
+
+function formatNullableNumber(value: number | null) {
+  return value === null ? "—" : formatStaticNumber(value);
 }

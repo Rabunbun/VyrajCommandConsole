@@ -53,7 +53,7 @@ export async function analyzeFittingEffectiveResources(
     new Set([hullSource.typeId, ...moduleSources.map((source) => source.typeId)])
   );
   const db = getDb();
-  const [build, projectionRows, attributeRows] = await Promise.all([
+  const [build, projectionRows, attributeRows, hullCache] = await Promise.all([
     db.fittingDogmaProjectionBuild.findUnique({ where: { id: "current" } }),
     db.fittingDogmaTypeProjection.findMany({
       where:
@@ -70,12 +70,22 @@ export async function analyzeFittingEffectiveResources(
               }
             }
     }),
-    db.fittingDogmaAttribute.findMany()
+    db.fittingDogmaAttribute.findMany(),
+    db.fittingHull.findUnique({
+      select: { cargoCapacityBase: true },
+      where: { typeId: hullSource.typeId }
+    })
   ]);
-  const projections = projectionRows.flatMap((row) => {
+  const parsedProjections = projectionRows.flatMap((row) => {
     const projection = parseProjection(row);
     return projection ? [projection] : [];
   });
+  const projections = parsedProjections.map((projection) =>
+    projection.typeId === hullSource.typeId && hullCache?.cargoCapacityBase !== null &&
+    hullCache?.cargoCapacityBase !== undefined
+      ? withAttributeOverride(projection, 38, hullCache.cargoCapacityBase)
+      : projection
+  );
   const projectionByTypeId = new Map(
     projections.map((projection) => [projection.typeId, projection])
   );
@@ -256,6 +266,22 @@ function parseProjection(row: {
     groupId: row.groupId,
     requiredSkillTypeIds: row.requiredSkillTypeIds,
     typeId: row.typeId
+  };
+}
+
+function withAttributeOverride(
+  projection: DogmaTypeProjection,
+  attributeId: number,
+  value: number
+): DogmaTypeProjection {
+  return {
+    ...projection,
+    attributes: [
+      ...projection.attributes.filter(
+        (attribute) => attribute.attributeId !== attributeId
+      ),
+      { attributeId, value }
+    ]
   };
 }
 

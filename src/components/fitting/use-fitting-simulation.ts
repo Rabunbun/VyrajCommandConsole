@@ -392,9 +392,14 @@ function isSimulationAnalysisResponse(
     ["met", "missing", "unavailable"].includes(String(analysis.status)) &&
     "cpu" in effectiveAnalysis &&
     "powergrid" in effectiveAnalysis &&
+    "capacities" in effectiveAnalysis &&
+    "defense" in effectiveAnalysis &&
     "diagnostics" in effectiveAnalysis &&
     "modules" in effectiveAnalysis &&
+    "navigation" in effectiveAnalysis &&
+    "profileStale" in effectiveAnalysis &&
     "status" in effectiveAnalysis &&
+    "targeting" in effectiveAnalysis &&
     Array.isArray(effectiveAnalysis.diagnostics) &&
     Array.isArray(effectiveAnalysis.modules) &&
     ["available", "unavailable"].includes(String(effectiveAnalysis.status)) &&

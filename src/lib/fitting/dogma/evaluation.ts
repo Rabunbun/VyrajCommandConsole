@@ -53,6 +53,7 @@ export function evaluateDogmaAttributes(input: {
 }): DogmaEvaluationResult {
   const diagnostics: EngineDiagnostic[] = [];
   const neededAttributeIds = collectNeededAttributeIds(
+    input.attributeDefinitions,
     input.effectDefinitions,
     input.targets.map((target) => target.attributeId)
   );
@@ -99,7 +100,12 @@ export function evaluateDogmaAttributes(input: {
     visiting.add(key);
     const base = resolveObjectBaseAttribute(object, definition);
     const operationModifiers = [];
-    const localDiagnostics: EngineDiagnostic[] = [...base.diagnostics];
+    const localDiagnostics: EngineDiagnostic[] = [
+      ...base.diagnostics,
+      ...diagnostics.filter(
+        (diagnostic) => diagnostic.attributeId === attributeId
+      )
+    ];
 
     for (const modifier of modifiersByTarget.get(key) ?? []) {
       const source = evaluate(
@@ -182,12 +188,28 @@ export function evaluateDogmaAttributes(input: {
         }];
       })
     });
+    let effective = evaluated.effective;
+    if (effective !== null && evaluated.minAttributeId !== null) {
+      const minimum = evaluate(instanceId, evaluated.minAttributeId);
+      localDiagnostics.push(...minimum.diagnostics);
+      effective = minimum.effective === null
+        ? null
+        : Math.max(effective, minimum.effective);
+    }
+    if (effective !== null && evaluated.maxAttributeId !== null) {
+      const maximum = evaluate(instanceId, evaluated.maxAttributeId);
+      localDiagnostics.push(...maximum.diagnostics);
+      effective = maximum.effective === null
+        ? null
+        : Math.min(effective, maximum.effective);
+    }
     const result = {
       ...evaluated,
       diagnostics: deduplicateDiagnostics([
         ...localDiagnostics,
         ...evaluated.diagnostics
-      ])
+      ]),
+      effective
     };
     visiting.delete(key);
     results.set(key, result);
@@ -212,6 +234,7 @@ export function evaluateDogmaAttributes(input: {
 }
 
 function collectNeededAttributeIds(
+  attributes: ReadonlyMap<number, DogmaAttributeDefinition>,
   effects: ReadonlyMap<number, DogmaEffectDefinition>,
   targetAttributeIds: readonly number[]
 ) {
@@ -220,6 +243,18 @@ function collectNeededAttributeIds(
 
   while (changed) {
     changed = false;
+    for (const attributeId of [...needed]) {
+      const definition = attributes.get(attributeId);
+      for (const boundId of [
+        definition?.minAttributeId,
+        definition?.maxAttributeId
+      ]) {
+        if (boundId !== null && boundId !== undefined && !needed.has(boundId)) {
+          needed.add(boundId);
+          changed = true;
+        }
+      }
+    }
     for (const effect of effects.values()) {
       if (!evaluatedEffectCategories.has(effect.categoryId)) continue;
       for (const modifier of effect.modifiers) {
@@ -272,6 +307,7 @@ function collectRelevantModifiers(input: {
       if (effect.capability !== "generic-modifier") {
         if (isSupersededSkillLevelEffect(object, relevantDefinitions)) continue;
         input.diagnostics.push({
+          attributeId: relevantDefinitions[0]?.modifiedAttributeId ?? undefined,
           code: "resource-effect-requires-special-handler",
           effectId: effect.effectId,
           instanceId: object.instanceId,

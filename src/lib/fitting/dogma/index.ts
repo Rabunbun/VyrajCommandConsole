@@ -5,6 +5,7 @@ export * from "./effective-resources";
 export * from "./modifiers";
 export * from "./object-graph";
 export * from "./operations";
+export * from "./passive-stats";
 export * from "./semantics";
 export * from "./stacking";
 export * from "./types";

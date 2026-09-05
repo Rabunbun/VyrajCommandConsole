@@ -5146,10 +5146,27 @@ button.fitting-slot[data-occupied="true"]:not(:disabled):active {
 
 .fit-stat-row dd {
   color: #f2f3f6;
+  display: grid;
   font-family: var(--font-command);
   font-size: 0.82rem;
   font-weight: 800;
+  gap: 1px;
+  justify-items: end;
   margin: 0;
+  min-width: 0;
+  text-align: right;
+}
+
+.fit-stat-row dd strong {
+  font: inherit;
+}
+
+.fit-stat-row dd small {
+  color: var(--color-muted);
+  font-family: var(--font-sans);
+  font-size: 0.58rem;
+  font-weight: 500;
+  line-height: 1.35;
 }
 
 .fitting-resource-bar {
