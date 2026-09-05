@@ -89,7 +89,13 @@ const effects: DogmaEffectDefinition[] = [
   effect(447, "shieldManagementLevel", 0, [modifier(447, 337, 280, 0, "itemID")]),
   effect(532, "gallenteIndustrialLevel", 0, [modifier(532, 496, 280, 0)]),
   effect(726, "shipBonusCargo2GI", 0, [modifier(726, 38, 496, 6)]),
-  effect(2000, "unsupportedShield", 4, [modifier(2000, 263, 2001, 2)], "requires-special-handler")
+  effect(
+    2000,
+    "unsupportedShieldAndRange",
+    4,
+    [modifier(2000, 263, 2001, 2), modifier(2000, 76, 2001, 2)],
+    "requires-special-handler"
+  )
 ];
 
 const hull = projection(626, 26, 6, [
@@ -187,15 +193,17 @@ test("All V, lower active levels, unavailable, and stale profiles remain distinc
   assert.equal(unavailable.navigation.alignTime.effective, null);
 });
 
-test("an unsupported passive effect invalidates only its statistic section", () => {
+test("an unsupported passive effect invalidates every affected statistic but not unrelated sections", () => {
   const special = projection(13_000, 38, 7, [[2001, 500]], [2000]);
   const result = analyze({ modules: [module("special", "mid", 0, special)], skills: [] });
 
   assert.equal(result.status, "available");
   assert.equal(result.defense.shield.hitpoints.status, "unavailable");
   assert.equal(result.defense.status, "partial");
+  assert.equal(result.targeting.maxTargetRange.status, "unavailable");
+  assert.equal(result.targeting.status, "partial");
   assert.equal(result.capacities.status, "available");
-  assert.equal(result.targeting.status, "available");
+  assert.equal(result.navigation.status, "available");
 });
 
 test("missing explicit mass isolates mass and align while other navigation remains available", () => {

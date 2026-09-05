@@ -306,14 +306,22 @@ function collectRelevantModifiers(input: {
 
       if (effect.capability !== "generic-modifier") {
         if (isSupersededSkillLevelEffect(object, relevantDefinitions)) continue;
-        input.diagnostics.push({
-          attributeId: relevantDefinitions[0]?.modifiedAttributeId ?? undefined,
-          code: "resource-effect-requires-special-handler",
-          effectId: effect.effectId,
-          instanceId: object.instanceId,
-          message: `Effect ${effect.effectId} (${effect.name}) affects the CPU/Powergrid dependency graph but is ${effect.capability}.`,
-          severity: "unsupported"
-        });
+        for (const attributeId of new Set(
+          relevantDefinitions.flatMap((modifier) =>
+            modifier.modifiedAttributeId === null
+              ? []
+              : [modifier.modifiedAttributeId]
+          )
+        )) {
+          input.diagnostics.push({
+            attributeId,
+            code: "resource-effect-requires-special-handler",
+            effectId: effect.effectId,
+            instanceId: object.instanceId,
+            message: `Effect ${effect.effectId} (${effect.name}) affects the requested Dogma dependency graph but is ${effect.capability}.`,
+            severity: "unsupported"
+          });
+        }
         continue;
       }
 
