@@ -46,7 +46,7 @@ const draft: ResolvedEftDraft = {
   fitName: "Preview",
   hullTypeId: 626,
   slots: {
-    high: [{ index: 0, module: { charge: { quantity: 80, typeId: 23025 }, typeId: 12346 }, rack: "high" }],
+    high: [{ index: 0, module: { charge: { quantity: 80, typeId: 23025 }, online: true, typeId: 12346 }, rack: "high" }],
     low: [],
     mid: [],
     rig: [],

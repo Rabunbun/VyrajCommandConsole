@@ -4630,6 +4630,7 @@ button.fitting-slot[data-occupied="true"]:not(:disabled):active {
   border: 1px solid rgb(var(--rack-rgb) / 0.34);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.42);
   display: flex;
+  flex-wrap: wrap;
   gap: 3px;
   opacity: 0;
   padding: 3px;
@@ -4640,6 +4641,25 @@ button.fitting-slot[data-occupied="true"]:not(:disabled):active {
     transform 120ms ease;
   visibility: hidden;
   z-index: 12;
+}
+
+.fitting-rack[data-layout="upper"] .fitting-slot-actions,
+.fitting-rack[data-layout="lower"] .fitting-slot-actions {
+  inline-size: max-content;
+  max-inline-size: 178px;
+}
+
+button.fitting-slot[data-module-online="false"] .fitting-slot-module-icon {
+  filter: grayscale(0.75);
+  opacity: 0.52;
+}
+
+button.fitting-slot[data-module-active="true"] {
+  box-shadow: 0 0 0 2px rgba(76, 218, 164, 0.72), 0 0 16px rgba(76, 218, 164, 0.28);
+}
+
+button.fitting-slot[data-module-overheated="true"] {
+  box-shadow: 0 0 0 2px rgba(239, 127, 72, 0.78), 0 0 18px rgba(239, 89, 56, 0.34);
 }
 
 .fitting-slot-actions::before {
@@ -4726,7 +4746,9 @@ button.fitting-slot[data-occupied="true"]:not(:disabled):active {
 
 .fitting-rack[data-layout="left"] .fitting-slot-actions,
 .fitting-rack[data-layout="right"] .fitting-slot-actions {
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  inline-size: max-content;
   top: 50%;
 }
 

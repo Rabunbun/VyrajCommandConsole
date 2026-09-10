@@ -149,6 +149,11 @@ export async function analyzeFittingEffectiveResources(
     return [{
       index: source.slotIndex,
       instanceId: source.instanceId,
+      lifecycle: {
+        active: source.active ?? false,
+        online: source.online ?? true,
+        overheated: source.overheated ?? false
+      },
       projection,
       rack: source.rack
     } satisfies EffectiveResourceModuleInput];

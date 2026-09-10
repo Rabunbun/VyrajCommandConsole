@@ -335,7 +335,7 @@ test("complete linked profiles analyze Merlin, Vexor, a Tech II weapon, and Hobg
       high: [
         {
           index: 0,
-          module: { charge: null, instanceId: "weapon", typeId: 3170 }
+          module: { active: false, charge: null, instanceId: "weapon", online: true, overheated: false, typeId: 3170 }
         }
       ],
       low: [],

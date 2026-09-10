@@ -101,6 +101,7 @@ export type EftParseResult = {
 export type EftExportSlot = {
   index: number;
   moduleName: string | null;
+  online?: boolean | null;
   chargeName: string | null;
 };
 
@@ -176,6 +177,7 @@ export type ResolvedEftCharge = {
 
 export type ResolvedEftSlotModule = {
   charge: ResolvedEftCharge | null;
+  online?: boolean;
   typeId: number;
 };
 
@@ -218,6 +220,7 @@ export type EftResolutionResult = {
 
 export type ResolvedEftApplicationModule = {
   charge: ResolvedEftCharge | null;
+  online?: boolean;
   typeId: number;
 };
 
@@ -268,6 +271,7 @@ export type EftPreviewResponse = {
 
 export type EftExportSnapshotModule = {
   chargeTypeId: number | null;
+  online?: boolean;
   typeId: number;
 };
 

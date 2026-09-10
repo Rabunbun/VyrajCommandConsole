@@ -28,11 +28,17 @@ const attributeDefinitions: DogmaAttributeDefinition[] = [
   attribute(50, "cpu", 0, true),
   attribute(145, "powerOutputMultiplier", 1, true),
   attribute(202, "cpuMultiplier", 1, true),
+  attribute(482, "capacitorCapacity", 0, true),
+  attribute(55, "rechargeRate", 0, true),
+  attribute(6, "capacitorNeed", 0, true),
+  attribute(73, "duration", 0, true),
   attribute(280, "skillLevel", 0, true),
   attribute(310, "cpuNeedBonus", 0, true),
   attribute(313, "powerEngineeringOutputBonus", 0, true),
   attribute(323, "powerNeedBonus", 0, true),
-  attribute(424, "cpuOutputBonus2", 0, true)
+  attribute(424, "cpuOutputBonus2", 0, true),
+  attribute(2100, "capacitorCapacityBonus", 0, true),
+  attribute(2101, "capacitorRechargeMultiplier", 1, true)
 ];
 
 const effects: DogmaEffectDefinition[] = [
@@ -64,10 +70,32 @@ const effects: DogmaEffectDefinition[] = [
   ]),
   effect(1638, "advancedWeaponUpgradesPowerNeed", 0, [
     modifier(1638, 30, 323, 6, "shipID", "LocationRequiredSkillModifier", 3300)
-  ])
+  ]),
+  effect(9003, "capacitorCapacityBonus", 0, [modifier(9003, 482, 2100, 6)]),
+  effect(9004, "capacitorRechargeOnline", 4, [modifier(9004, 55, 2101, 4)]),
+  effect(9005, "capacitorSkillLevel", 0, [modifier(9005, 2100, 280, 0, "itemID")]),
+  effect(9006, "capacitorRechargePassive", 0, [modifier(9006, 55, 2101, 4)]),
+  {
+    capability: "requires-special-handler",
+    categoryId: 1,
+    dischargeAttributeId: 6,
+    durationAttributeId: 73,
+    effectId: 9100,
+    modifiers: [],
+    name: "supportedActivationSchedule"
+  },
+  {
+    capability: "requires-special-handler",
+    categoryId: 1,
+    dischargeAttributeId: 6,
+    durationAttributeId: 73,
+    effectId: 48,
+    modifiers: [],
+    name: "powerBooster"
+  }
 ];
 
-const hull = projection(626, 26, 6, [[11, 700], [48, 300]]);
+const hull = projection(626, 26, 6, [[11, 700], [48, 300], [55, 100_000], [482, 1000]]);
 const cpuManagement = projection(ids.cpuManagement, 1216, 16, [
   [280, 0],
   [424, 5]
@@ -102,6 +130,17 @@ const railgun = projection(ids.railgun, 74, 7, [
   [50, 74]
 ], [], [3300, 3307, 12207]);
 const unrelatedModule = projection(9999, 999, 7, [[30, 10], [50, 10]]);
+const capacitorSkill = projection(3417, 1216, 16, [[280, 0], [2100, 5]], [9005, 9003]);
+const capacitorRecharger = projection(2032, 76, 7, [[30, 1], [50, 10], [2101, 0.8]], [9004]);
+const capacitorRig = projection(31372, 123, 7, [[2101, 0.85]], [9006]);
+const activeHardener = withDefaultEffect(
+  projection(2281, 77, 7, [[6, 40], [30, 1], [50, 44], [73, 10_000]]),
+  9100
+);
+const capacitorBooster = withDefaultEffect(
+  projection(2024, 76, 7, [[6, 20], [30, 1], [50, 25], [73, 12_000]]),
+  48
+);
 
 test("bare hull output preserves base values and applies CPU/PG Management", () => {
   const base = analyze({ skills: [] });
@@ -135,6 +174,119 @@ test("online Co-Processor and Reactor Control effects modify ship output generic
       ? []
       : result.modules.map((item) => item.instanceId),
     ["co-pro", "rcu"]
+  );
+});
+
+test("offline modules consume no CPU or powergrid and grant no online fitting bonus", () => {
+  const online = analyze({
+    modules: [module("co", "low", 0, coProcessor)],
+    skills: [skill(cpuManagement, 5)]
+  });
+  const offline = analyze({
+    modules: [
+      module("co", "low", 0, coProcessor, {
+        active: false,
+        online: false,
+        overheated: false
+      })
+    ],
+    skills: [skill(cpuManagement, 5)]
+  });
+
+  assert.equal(online.cpu.effectiveOutput, 412.5);
+  assert.equal(online.powergrid.effectiveUsed, 1);
+  assert.equal(offline.cpu.effectiveOutput, 375);
+  assert.equal(offline.cpu.effectiveUsed, 0);
+  assert.equal(offline.powergrid.effectiveUsed, 0);
+});
+
+test("capacitor capacity and recharge use profile levels and passive Dogma modifiers", () => {
+  const allV = analyze({
+    modules: [
+      module("recharger", "mid", 0, capacitorRecharger),
+      module("rig", "rig", 0, capacitorRig)
+    ],
+    skills: [skill(capacitorSkill, 5)]
+  });
+  const linkedLower = analyze({
+    modules: [
+      module("recharger", "mid", 0, capacitorRecharger),
+      module("rig", "rig", 0, capacitorRig)
+    ],
+    profileKind: "explicit",
+    skills: [skill(capacitorSkill, 2)]
+  });
+
+  assert.equal(allV.capacitor.capacity.base, 1000);
+  assert.equal(allV.capacitor.capacity.effective, 1250);
+  assert.equal(linkedLower.capacitor.capacity.effective, 1100);
+  assert.equal(allV.capacitor.rechargeTime.base, 100_000);
+  assert.equal(allV.capacitor.rechargeTime.effective, 68_000);
+  closeTo(allV.capacitor.peakNaturalRecharge, 45.955882352941174);
+  assert.notEqual(
+    allV.capacitor.peakNaturalRecharge,
+    linkedLower.capacitor.peakNaturalRecharge
+  );
+});
+
+test("only online active modules contribute authoritative recurring capacitor drain", () => {
+  const inactive = analyze({
+    modules: [module("hardener", "mid", 0, activeHardener)],
+    skills: []
+  });
+  const active = analyze({
+    modules: [
+      module("hardener", "mid", 0, activeHardener, {
+        active: true,
+        online: true,
+        overheated: false
+      })
+    ],
+    skills: []
+  });
+  const offline = analyze({
+    modules: [
+      module("hardener", "mid", 0, activeHardener, {
+        active: true,
+        online: false,
+        overheated: false
+      })
+    ],
+    skills: []
+  });
+
+  assert.equal(inactive.capacitor.totalNominalDrain, 0);
+  assert.equal(active.capacitor.totalNominalDrain, 4);
+  assert.deepEqual(active.capacitor.moduleDrains, [
+    { instanceId: "hardener", nominalDrain: 4 }
+  ]);
+  assert.equal(active.modules[0].activationCost.effective, 40);
+  assert.equal(active.modules[0].cycleDuration.effective, 10_000);
+  assert.equal(offline.capacitor.totalNominalDrain, 0);
+  assert.equal(offline.cpu.effectiveUsed, 0);
+});
+
+test("an active capacitor booster scopes unsupported semantics to capacitor", () => {
+  const result = analyze({
+    modules: [
+      module("booster", "mid", 0, capacitorBooster, {
+        active: true,
+        online: true,
+        overheated: false
+      })
+    ],
+    skills: []
+  });
+
+  assert.equal(result.status, "available");
+  assert.equal(result.cpu.effectiveUsed, 25);
+  assert.equal(result.capacitor.status, "unsupported");
+  assert.equal(result.capacitor.totalNominalDrain, null);
+  assert.equal(
+    result.capacitor.diagnostics.some(
+      (diagnostic) => diagnostic.code === "capacitor-active-module-unsupported"
+    ),
+    true
   );
 });
 
@@ -360,9 +512,16 @@ function module(
   instanceId: string,
   rack: EffectiveResourceModuleInput["rack"],
   index: number,
-  projectionValue: DogmaTypeProjection
+  projectionValue: DogmaTypeProjection,
+  lifecycle = { active: false, online: true, overheated: false }
 ): EffectiveResourceModuleInput {
-  return { index, instanceId, projection: projectionValue, rack };
+  return {
+    index,
+    instanceId,
+    lifecycle,
+    projection: projectionValue,
+    rack
+  };
 }
 
 function projection(
@@ -380,6 +539,16 @@ function projection(
     groupId,
     requiredSkillTypeIds,
     typeId
+  };
+}
+
+function withDefaultEffect(
+  projectionValue: DogmaTypeProjection,
+  effectId: number
+): DogmaTypeProjection {
+  return {
+    ...projectionValue,
+    effects: [{ effectId, isDefault: true }]
   };
 }
 

@@ -58,6 +58,7 @@ export function fitStateToSavedFittingSnapshotV1(
           module: slot.module
             ? {
                 charge: slot.module.charge ? { ...slot.module.charge } : null,
+                online: slot.module.online,
                 typeId: slot.module.typeId
               }
             : null
@@ -85,6 +86,7 @@ export function savedFittingSnapshotToApplicationCandidate(
         module: slot.module
           ? {
               charge: slot.module.charge ? { ...slot.module.charge } : null,
+              online: slot.module.online,
               typeId: slot.module.typeId
             }
           : null

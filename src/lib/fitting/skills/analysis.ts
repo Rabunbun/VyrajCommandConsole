@@ -163,8 +163,11 @@ export function collectFitSkillSources(state: FitState): FittingSkillSource[] {
       }
 
       const moduleSource: FittingSkillSource = {
+        active: slot.module.active,
         instanceId: slot.module.instanceId,
         kind: rack === "rig" ? "rig" : "module",
+        online: slot.module.online,
+        overheated: slot.module.overheated,
         rack,
         slotIndex: slot.index,
         typeId: slot.module.typeId

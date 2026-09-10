@@ -82,7 +82,7 @@ test("sanitized client snapshot omits instance IDs and loaded magazine quantitie
     drones: [{ quantity: 5, typeId: 2456 }],
     hullTypeId: 626,
     slots: {
-      high: [{ index: 0, module: { charge: { quantity: 80, typeId: 23025 }, instanceId: "secret-instance", typeId: 12346 } }],
+      high: [{ index: 0, module: { active: false, charge: { quantity: 80, typeId: 23025 }, instanceId: "secret-instance", online: true, overheated: false, typeId: 12346 } }],
       low: [],
       mid: [],
       rig: [],
@@ -91,7 +91,7 @@ test("sanitized client snapshot omits instance IDs and loaded magazine quantitie
   };
   const sanitized = fitStateToEftExportSnapshot(state, "Snapshot");
   assert.ok(sanitized);
-  assert.deepEqual(sanitized.slots.high[0].module, { chargeTypeId: 23025, typeId: 12346 });
+  assert.deepEqual(sanitized.slots.high[0].module, { chargeTypeId: 23025, online: true, typeId: 12346 });
   assert.equal(JSON.stringify(sanitized).includes("secret-instance"), false);
   assert.equal(JSON.stringify(sanitized).includes('"quantity":80'), false);
 });

@@ -13,14 +13,14 @@ function createFitWithTwoModules() {
 
   state = fittingReducer(state, {
     index: 0,
-    module: { charge: null, instanceId: "high-0", typeId: 101 },
+    module: { active: false, charge: null, instanceId: "high-0", online: true, overheated: false, typeId: 101 },
     moduleRack: "high",
     rack: "high",
     type: "fit-module"
   });
   return fittingReducer(state, {
     index: 0,
-    module: { charge: null, instanceId: "mid-0", typeId: 202 },
+    module: { active: false, charge: null, instanceId: "mid-0", online: true, overheated: false, typeId: 202 },
     moduleRack: "mid",
     rack: "mid",
     type: "fit-module"
@@ -174,7 +174,7 @@ test("replace-fit swaps the complete fitting atomically and defensively clones i
     drones: [{ quantity: 5, typeId: 2456 }],
     hullTypeId: 626,
     slots: {
-      high: [{ index: 0, module: { charge: { quantity: 80, typeId: 23025 }, instanceId: "import-1", typeId: 12346 } }],
+      high: [{ index: 0, module: { active: false, charge: { quantity: 80, typeId: 23025 }, instanceId: "import-1", online: true, overheated: false, typeId: 12346 } }],
       low: [],
       mid: [],
       rig: [],
@@ -217,4 +217,73 @@ test("meaningful fit content excludes a hull alone and includes modules, drones,
     hasMeaningfulFitContent({ ...hullOnly, cargo: [{ quantity: 1, typeId: 28668 }] }),
     true
   );
+});
+
+test("module lifecycle transitions are pure and impossible states are rejected", () => {
+  const initial = createFitWithTwoModules();
+  const active = fittingReducer(initial, {
+    active: true,
+    canActivate: true,
+    index: 0,
+    rack: "high",
+    type: "set-module-active"
+  });
+  assert.equal(active.slots.high[0].module?.active, true);
+  assert.equal(initial.slots.high[0].module?.active, false);
+
+  const offline = fittingReducer(active, {
+    index: 0,
+    online: false,
+    rack: "high",
+    type: "set-module-online"
+  });
+  assert.deepEqual(
+    {
+      active: offline.slots.high[0].module?.active,
+      online: offline.slots.high[0].module?.online,
+      overheated: offline.slots.high[0].module?.overheated
+    },
+    { active: false, online: false, overheated: false }
+  );
+  assert.strictEqual(
+    fittingReducer(offline, {
+      active: true,
+      canActivate: true,
+      index: 0,
+      rack: "high",
+      type: "set-module-active"
+    }),
+    offline
+  );
+  assert.strictEqual(
+    fittingReducer(initial, {
+      active: true,
+      canActivate: false,
+      index: 0,
+      rack: "high",
+      type: "set-module-active"
+    }),
+    initial
+  );
+});
+
+test("overheat requires authoritative capability and online state", () => {
+  const initial = createFitWithTwoModules();
+  const rejected = fittingReducer(initial, {
+    canOverheat: false,
+    index: 0,
+    overheated: true,
+    rack: "high",
+    type: "set-module-overheated"
+  });
+  assert.strictEqual(rejected, initial);
+
+  const heated = fittingReducer(initial, {
+    canOverheat: true,
+    index: 0,
+    overheated: true,
+    rack: "high",
+    type: "set-module-overheated"
+  });
+  assert.equal(heated.slots.high[0].module?.overheated, true);
 });

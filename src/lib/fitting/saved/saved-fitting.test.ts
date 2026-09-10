@@ -41,8 +41,11 @@ function createFitState(): FitState {
         {
           index: 0,
           module: {
+            active: false,
             charge: { quantity: 80, typeId: 23025 },
             instanceId: "runtime-high-0",
+            online: true,
+            overheated: false,
             typeId: 12346
           }
         },
@@ -53,8 +56,11 @@ function createFitState(): FitState {
         {
           index: 1,
           module: {
+            active: false,
             charge: null,
             instanceId: "runtime-low-1",
+            online: false,
+            overheated: false,
             typeId: 2048
           }
         }
@@ -64,8 +70,11 @@ function createFitState(): FitState {
         {
           index: 0,
           module: {
+            active: false,
             charge: null,
             instanceId: "runtime-rig-0",
+            online: true,
+            overheated: false,
             typeId: 31055
           }
         }
@@ -99,6 +108,7 @@ test("FitState conversion strips instance IDs while retaining charges and exact 
       index: 0,
       module: {
         charge: { quantity: 80, typeId: 23025 },
+        online: true,
         typeId: 12346
       }
     },
@@ -313,6 +323,19 @@ test("persistent changes affect fingerprints while runtime instance IDs do not",
   assert.equal(runtimeSnapshot.ok, true);
   assert.equal(fingerprint("Vexor", runtimeSnapshot.value), baseline);
 
+  const activeChange = structuredClone(state);
+  activeChange.slots.high[0].module!.active = true;
+  activeChange.slots.high[0].module!.overheated = true;
+  const activeSnapshot = fitStateToSavedFittingSnapshotV1(activeChange);
+  assert.equal(activeSnapshot.ok, true);
+  assert.equal(fingerprint("Vexor", activeSnapshot.value), baseline);
+
+  const onlineChange = structuredClone(state);
+  onlineChange.slots.high[0].module!.online = false;
+  const onlineSnapshot = fitStateToSavedFittingSnapshotV1(onlineChange);
+  assert.equal(onlineSnapshot.ok, true);
+  assert.notEqual(fingerprint("Vexor", onlineSnapshot.value), baseline);
+
   const moved = structuredClone(baselineSnapshot.value);
   [moved.slots.low[0].module, moved.slots.low[1].module] = [
     moved.slots.low[1].module,
@@ -331,6 +354,20 @@ test("persistent changes affect fingerprints while runtime instance IDs do not",
   const dronesChanged = structuredClone(baselineSnapshot.value);
   dronesChanged.drones[0].quantity += 1;
   assert.notEqual(fingerprint("Vexor", dronesChanged), baseline);
+});
+
+test("older V1 modules without lifecycle state load online by default", () => {
+  const legacy = structuredClone(createSnapshot()) as unknown as {
+    slots: Record<string, Array<{ index: number; module: Record<string, unknown> | null }>>;
+  };
+  delete legacy.slots.high[0].module!.online;
+  delete legacy.slots.low[1].module!.online;
+
+  const result = decodeSavedFittingSnapshotV1(legacy);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.slots.high[0].module?.online, true);
+  assert.equal(result.value.slots.low[1].module?.online, true);
 });
 
 test("V1 decoding canonicalizes a copy and rejects unknown future versions", () => {

@@ -307,7 +307,8 @@ function createStatisticSections(
       { title: "Defense", rows: placeholderRows(["Shield", "Armor", "Hull"], value) },
       { title: "Targeting", rows: placeholderRows(["Lock Range", "Scan Resolution", "Sensors", "Signature"], value) },
       { title: "Navigation", rows: placeholderRows(["Maximum Velocity", "Mass", "Inertia", "Align Time", "Warp Speed"], value) },
-      { title: "Deferred", rows: placeholderRows(["DPS", "Capacitor"], "Deferred") }
+      { title: "Capacitor", rows: placeholderRows(["Capacity", "Recharge", "Stability"], value) },
+      { title: "Deferred", rows: placeholderRows(["DPS"], "Deferred") }
     ];
   }
 
@@ -349,8 +350,59 @@ function createStatisticSections(
         statisticRow("Bandwidth", analysis.capacities.droneBandwidth, (value) => `${formatNumber(value)} Mbit/s`)
       ]
     },
-    { title: "Deferred", rows: placeholderRows(["DPS", "Capacitor"], "Deferred") }
+    {
+      title: `Capacitor · ${formatCapacitorStatus(analysis.capacitor.status)}`,
+      rows: [
+        statisticRow("Capacity", analysis.capacitor.capacity, (value) => `${formatNumber(value)} GJ`),
+        statisticRow("Recharge Time", analysis.capacitor.rechargeTime, (value) => `${formatNumber(value / 1000)} s`),
+        {
+          label: "Peak Recharge",
+          value: analysis.capacitor.peakNaturalRecharge === null
+            ? "Unavailable"
+            : `${formatNumber(analysis.capacitor.peakNaturalRecharge)} GJ/s`
+        },
+        {
+          label: "Active Drain",
+          value: analysis.capacitor.totalNominalDrain === null
+            ? "Unavailable"
+            : `${formatNumber(analysis.capacitor.totalNominalDrain)} GJ/s`
+        },
+        capacitorStabilityRow(analysis)
+      ]
+    },
+    { title: "Deferred", rows: placeholderRows(["DPS"], "Deferred") }
   ];
+}
+
+function capacitorStabilityRow(analysis: EffectiveFitAnalysis): StatisticRow {
+  const capacitor = analysis.capacitor;
+  if (capacitor.status === "stable") {
+    return {
+      label: "Stability",
+      value: `${formatNumber(capacitor.equilibriumPercentage ?? 100)}% stable`
+    };
+  }
+  if (capacitor.status === "unstable") {
+    return {
+      label: "Stability",
+      value: capacitor.timeToEmptySeconds === null
+        ? "Unstable"
+        : `Empty in ${formatNumber(capacitor.timeToEmptySeconds)} s`
+    };
+  }
+  return {
+    detail: capacitor.diagnostics[0]?.message,
+    label: "Stability",
+    value: capacitor.status === "unsupported" ? "Unsupported" : "Unavailable"
+  };
+}
+
+function formatCapacitorStatus(
+  status: EffectiveFitAnalysis["capacitor"]["status"]
+) {
+  if (status === "stable") return "Stable";
+  if (status === "unstable") return "Unstable";
+  return status === "unsupported" ? "Unsupported" : "Unavailable";
 }
 
 function placeholderRows(labels: string[], value: string): StatisticRow[] {

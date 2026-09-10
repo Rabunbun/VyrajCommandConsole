@@ -1,4 +1,5 @@
 export * from "./attributes";
+export * from "./capacitor";
 export * from "./dependency";
 export * from "./evaluation";
 export * from "./effective-resources";

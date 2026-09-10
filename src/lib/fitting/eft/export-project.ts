@@ -92,7 +92,7 @@ export function hydrateAndFormatEftExport(
         rack,
         validated.slots[rack].map((slot) => {
           if (!slot.module) {
-            return { chargeName: null, index: slot.index, moduleName: null };
+            return { chargeName: null, index: slot.index, moduleName: null, online: null };
           }
           const moduleRecord = requireRecord(moduleByTypeId, slot.module.typeId, "module");
           if (moduleRecord.rack !== rack) {
@@ -103,7 +103,7 @@ export function hydrateAndFormatEftExport(
           const chargeName = slot.module.chargeTypeId === null
             ? null
             : requireRecord(chargeByTypeId, slot.module.chargeTypeId, "charge").typeName;
-          return { chargeName, index: slot.index, moduleName: moduleRecord.typeName };
+          return { chargeName, index: slot.index, moduleName: moduleRecord.typeName, online: slot.module.online ?? true };
         }),
       ];
     }),
@@ -143,7 +143,10 @@ function validateRack(value: unknown, rack: EftSupportedRack) {
     if (chargeTypeId !== null && !isPositiveInteger(chargeTypeId)) {
       throw new EftExportHydrationError(`${rack} slot ${index + 1} has an invalid charge typeId.`);
     }
-    return { index, module: { chargeTypeId, typeId: slot.module.typeId } };
+    if (slot.module.online !== undefined && typeof slot.module.online !== "boolean") {
+      throw new EftExportHydrationError(`${rack} slot ${index + 1} has an invalid online state.`);
+    }
+    return { index, module: { chargeTypeId, online: slot.module.online ?? true, typeId: slot.module.typeId } };
   });
 }
 

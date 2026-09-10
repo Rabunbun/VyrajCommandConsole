@@ -59,10 +59,10 @@ function createDraft(status: ResolvedEftDraft["status"] = "ready") {
         { index: 1, module: null, rack: "high" },
       ],
       low: [
-        { index: 0, module: { charge: null, typeId: 2048 }, rack: "low" },
+        { index: 0, module: { charge: null, online: true, typeId: 2048 }, rack: "low" },
       ],
       mid: [{ index: 0, module: null, rack: "mid" }],
-      rig: [{ index: 0, module: { charge: null, typeId: 31055 }, rack: "rig" }],
+      rig: [{ index: 0, module: { charge: null, online: true, typeId: 31055 }, rack: "rig" }],
     },
     status,
   };
@@ -80,8 +80,11 @@ test("converts a resolved draft into a complete FitState with fresh unique IDs",
   assert.deepEqual(state.cargo, [{ quantity: 100, typeId: 28668 }]);
   assert.deepEqual(state.drones, [{ quantity: 5, typeId: 2456 }]);
   assert.deepEqual(state.slots.high[0].module, {
+    active: false,
     charge: { quantity: 80, typeId: 23025 },
     instanceId: "import-2",
+    online: true,
+    overheated: false,
     typeId: 12346,
   });
   assert.equal(state.slots.low[0].module?.instanceId, "import-1");

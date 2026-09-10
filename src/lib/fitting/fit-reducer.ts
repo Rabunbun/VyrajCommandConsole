@@ -38,6 +38,20 @@ export type MoveModuleInput = {
   to: FittingSlotAddress;
 };
 
+export type SetModuleOnlineInput = FittingSlotAddress & {
+  online: boolean;
+};
+
+export type SetModuleActiveInput = FittingSlotAddress & {
+  active: boolean;
+  canActivate: boolean;
+};
+
+export type SetModuleOverheatedInput = FittingSlotAddress & {
+  canOverheat: boolean;
+  overheated: boolean;
+};
+
 export type LoadChargeInput = FittingSlotAddress & {
   charge: LoadedCharge;
 };
@@ -99,6 +113,15 @@ export type FitAction =
     })
   | (MoveModuleInput & {
       type: "move-module";
+    })
+  | (SetModuleOnlineInput & {
+      type: "set-module-online";
+    })
+  | (SetModuleActiveInput & {
+      type: "set-module-active";
+    })
+  | (SetModuleOverheatedInput & {
+      type: "set-module-overheated";
     })
   | (LoadChargeInput & {
       type: "load-charge";
@@ -516,6 +539,75 @@ export function moveModule(state: FitState, input: MoveModuleInput): FitState {
   });
 }
 
+export function setModuleOnline(
+  state: FitState,
+  input: SetModuleOnlineInput
+): FitState {
+  const target = resolveSlot(state, input);
+  if (typeof target === "string" || !target.module || input.rack === "rig") {
+    return state;
+  }
+  if (target.module.online === input.online) return state;
+
+  return updateRack(state, input.rack, (slot) =>
+    slot.index === input.index && slot.module
+      ? {
+          ...slot,
+          module: {
+            ...slot.module,
+            active: input.online ? slot.module.active : false,
+            online: input.online,
+            overheated: input.online ? slot.module.overheated : false
+          }
+        }
+      : slot
+  );
+}
+
+export function setModuleActive(
+  state: FitState,
+  input: SetModuleActiveInput
+): FitState {
+  const target = resolveSlot(state, input);
+  if (
+    typeof target === "string" ||
+    !target.module ||
+    input.rack === "rig" ||
+    (input.active && (!input.canActivate || !target.module.online)) ||
+    target.module.active === input.active
+  ) {
+    return state;
+  }
+
+  return updateRack(state, input.rack, (slot) =>
+    slot.index === input.index && slot.module
+      ? { ...slot, module: { ...slot.module, active: input.active } }
+      : slot
+  );
+}
+
+export function setModuleOverheated(
+  state: FitState,
+  input: SetModuleOverheatedInput
+): FitState {
+  const target = resolveSlot(state, input);
+  if (
+    typeof target === "string" ||
+    !target.module ||
+    input.rack === "rig" ||
+    (input.overheated && (!input.canOverheat || !target.module.online)) ||
+    target.module.overheated === input.overheated
+  ) {
+    return state;
+  }
+
+  return updateRack(state, input.rack, (slot) =>
+    slot.index === input.index && slot.module
+      ? { ...slot, module: { ...slot.module, overheated: input.overheated } }
+      : slot
+  );
+}
+
 export function validateLoadCharge(
   state: FitState,
   input: LoadChargeInput
@@ -661,6 +753,12 @@ export function fittingReducer(state: FitState, action: FitAction): FitState {
       return replaceModule(state, action);
     case "move-module":
       return moveModule(state, action);
+    case "set-module-online":
+      return setModuleOnline(state, action);
+    case "set-module-active":
+      return setModuleActive(state, action);
+    case "set-module-overheated":
+      return setModuleOverheated(state, action);
     case "load-charge":
       return loadCharge(state, action);
     case "load-charges":
@@ -774,6 +872,11 @@ function updateRack(
 
 function isValidFittedModule(module: FittedModule) {
   return (
+    typeof module.active === "boolean" &&
+    typeof module.online === "boolean" &&
+    typeof module.overheated === "boolean" &&
+    (!module.active || module.online) &&
+    (!module.overheated || module.online) &&
     typeof module.instanceId === "string" &&
     Boolean(module.instanceId.trim()) &&
     Number.isInteger(module.typeId) &&
@@ -866,8 +969,11 @@ function cloneRack(slots: FitState["slots"][RackType]) {
     index: slot.index,
     module: slot.module
       ? {
+          active: slot.module.active,
           charge: slot.module.charge ? { ...slot.module.charge } : null,
           instanceId: slot.module.instanceId,
+          online: slot.module.online,
+          overheated: slot.module.overheated,
           typeId: slot.module.typeId
         }
       : null

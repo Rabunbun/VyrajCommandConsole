@@ -251,7 +251,7 @@ function skill(projectionValue: DogmaTypeProjection, activeLevel: number): Effec
 }
 
 function module(instanceId: string, rack: EffectiveResourceModuleInput["rack"], index: number, projectionValue: DogmaTypeProjection): EffectiveResourceModuleInput {
-  return { index, instanceId, projection: projectionValue, rack };
+  return { index, instanceId, lifecycle: { active: false, online: true, overheated: false }, projection: projectionValue, rack };
 }
 
 function projection(typeId: number, groupId: number, categoryId: number, attributes: Array<[number, number]>, effectIds: number[] = []): DogmaTypeProjection {

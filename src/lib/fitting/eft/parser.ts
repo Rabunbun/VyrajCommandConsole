@@ -134,16 +134,6 @@ function parseSlotLine(
   }
 
   const { unresolvedText, offlineRequested } = stripOfflineMarker(source.text);
-  if (offlineRequested) {
-    diagnostics.push(
-      diagnostic(
-        "warning",
-        "OFFLINE_STATE_UNSUPPORTED",
-        "The requested offline state was retained for later handling but is not otherwise interpreted.",
-        source,
-      ),
-    );
-  }
   if (!unresolvedText) {
     diagnostics.push(
       diagnostic("error", "EMPTY_FITTED_LINE", "The fitted line contains no unresolved item text.", source),

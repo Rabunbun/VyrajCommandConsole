@@ -8,11 +8,13 @@ import type {
 } from "@/components/fitting/fitting-ui-types";
 import type { FittingSlot as FittingSlotState } from "@/lib/fitting/fit-state";
 import type { FitOperationAttemptResult } from "@/components/fitting/use-fitting-state";
+import type { EffectiveFitAnalysis } from "@/lib/fitting/dogma";
 
 type FittingRackProps = {
   chargeNamesByTypeId: Readonly<Record<number, string>>;
   dragOverSlot: SelectedFittingSlot | null;
   dragSource: FittingDragSource | null;
+  effectiveAnalysis: EffectiveFitAnalysis | null;
   enabled: boolean;
   label: string;
   layout: "left" | "lower" | "right" | "upper";
@@ -28,6 +30,9 @@ type FittingRackProps = {
   onRemoveModule: (
     slot: SelectedFittingSlot
   ) => Promise<FitOperationAttemptResult>;
+  onSetModuleActive: (slot: SelectedFittingSlot, active: boolean, canActivate: boolean) => void;
+  onSetModuleOnline: (slot: SelectedFittingSlot, online: boolean) => void;
+  onSetModuleOverheated: (slot: SelectedFittingSlot, overheated: boolean, canOverheat: boolean) => void;
   onSelectSlot: (slot: SelectedFittingSlot) => void;
   onStartMove: (slot: SelectedFittingSlot) => void;
   onStartReplace: (slot: SelectedFittingSlot) => void;
@@ -40,6 +45,7 @@ export function FittingRack({
   chargeNamesByTypeId,
   dragOverSlot,
   dragSource,
+  effectiveAnalysis,
   enabled,
   label,
   layout,
@@ -51,6 +57,9 @@ export function FittingRack({
   onFittedModuleDragStart,
   onMoveTarget,
   onRemoveModule,
+  onSetModuleActive,
+  onSetModuleOnline,
+  onSetModuleOverheated,
   onSelectSlot,
   onStartMove,
   onStartReplace,
@@ -80,6 +89,11 @@ export function FittingRack({
                 `Charge type ${slot.module.charge.typeId}`
               : null;
             const occupied = Boolean(slot.module);
+            const effectiveModule = slot.module
+              ? effectiveAnalysis?.modules.find(
+                  (module) => module.instanceId === slot.module?.instanceId
+                ) ?? null
+              : null;
             const selected =
               selectedSlot?.rack === rack &&
               selectedSlot.index === slot.index;
@@ -128,6 +142,9 @@ export function FittingRack({
                   data-drop-active={Boolean(dragSource) && isActiveDropTarget}
                   data-module-instance-id={slot.module?.instanceId}
                   data-module-type-id={slot.module?.typeId}
+                  data-module-active={slot.module?.active}
+                  data-module-online={slot.module?.online}
+                  data-module-overheated={slot.module?.overheated}
                   data-move-source={isMoveSource}
                   data-move-target={isMoveTarget}
                   data-occupied={occupied}
@@ -282,6 +299,41 @@ export function FittingRack({
                     >
                       Move
                     </button>
+                    {rack !== "rig" && slot.module ? (
+                      <button
+                        aria-label={`${slot.module.online ? "Take" : "Put"} ${moduleName ?? "fitted module"} ${slot.module.online ? "offline" : "online"}`}
+                        aria-pressed={slot.module.online}
+                        onClick={() => onSetModuleOnline(address, !slot.module!.online)}
+                        title={slot.module.online ? "Take module offline" : "Put module online"}
+                        type="button"
+                      >
+                        {slot.module.online ? "Offline" : "Online"}
+                      </button>
+                    ) : null}
+                    {rack !== "rig" && slot.module && effectiveModule?.canActivate ? (
+                      <button
+                        aria-label={`${slot.module.active ? "Deactivate" : "Activate"} ${moduleName ?? "fitted module"}`}
+                        aria-pressed={slot.module.active}
+                        disabled={!slot.module.online}
+                        onClick={() => onSetModuleActive(address, !slot.module!.active, effectiveModule.canActivate)}
+                        title={slot.module.active ? "Deactivate module" : "Activate module"}
+                        type="button"
+                      >
+                        {slot.module.active ? "Stop" : "Activate"}
+                      </button>
+                    ) : null}
+                    {rack !== "rig" && slot.module && effectiveModule?.canOverheat ? (
+                      <button
+                        aria-label={`${slot.module.overheated ? "Stop overheating" : "Overheat"} ${moduleName ?? "fitted module"}`}
+                        aria-pressed={slot.module.overheated}
+                        disabled={!slot.module.online}
+                        onClick={() => onSetModuleOverheated(address, !slot.module!.overheated, effectiveModule.canOverheat)}
+                        title="Overheat state is tracked; overload statistics remain unsupported"
+                        type="button"
+                      >
+                        {slot.module.overheated ? "Cool" : "Heat"}
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </li>

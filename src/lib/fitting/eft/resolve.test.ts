@@ -456,7 +456,7 @@ test("does not reinterpret an unresolved fighter name as an ordinary drone", asy
   );
 });
 
-test("offline content produces review while cargo resolves into the draft", async () => {
+test("offline content is preserved while cargo resolves into the draft", async () => {
   const parsed = fixture([
     "[Vexor, Review]",
     "Damage Control II /offline",
@@ -480,9 +480,10 @@ test("offline content produces review while cargo resolves into the draft", asyn
     parseDiagnostics: parsed.diagnostics,
   });
 
-  assert.equal(result.status, "review");
+  assert.equal(result.status, "ready");
   assert.ok(result.draft);
-  assert.ok(result.diagnostics.some((entry) => entry.code === "OFFLINE_UNSUPPORTED"));
+  assert.equal(result.diagnostics.some((entry) => entry.code === "OFFLINE_UNSUPPORTED"), false);
+  assert.equal(result.draft.slots.low[0].module?.online, false);
   assert.deepEqual(result.draft.cargo, [{ quantity: 100, typeId: 28668 }]);
   assert.equal(result.draft.analysis.cargoHold.usedVolume, 1);
 });

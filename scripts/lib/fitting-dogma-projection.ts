@@ -34,6 +34,7 @@ export type SdeDogmaGroup = Readonly<{
 export type SdeDogmaType = Readonly<{
   _key: number;
   groupID: number;
+  mass?: number | null;
   name?: { en?: string };
   published?: boolean;
 }>;
@@ -121,6 +122,9 @@ export type BuiltDogmaProjection = Readonly<{
   sdeBuild: string;
 }>;
 
+const SHIP_CATEGORY_ID = 6;
+const MASS_ATTRIBUTE_ID = 4;
+
 export function buildFittingDogmaProjection(
   input: DogmaProjectionInput
 ): BuiltDogmaProjection {
@@ -142,7 +146,14 @@ export function buildFittingDogmaProjection(
     const group = requireRecord(input.groups, type.groupID, "group");
     requireRecord(input.categories, group.categoryID, "category");
     const dogma = requireRecord(input.typeDogma, typeId, "typeDogma");
-    const attributes = normalizeTypeAttributes(typeId, dogma.dogmaAttributes);
+    const dogmaAttributes = normalizeTypeAttributes(
+      typeId,
+      dogma.dogmaAttributes
+    );
+    const attributes =
+      group.categoryID === SHIP_CATEGORY_ID
+        ? withAuthoritativeTypeMass(typeId, dogmaAttributes, type.mass)
+        : dogmaAttributes;
     const effects = normalizeTypeEffects(typeId, dogma.dogmaEffects);
     attributes.forEach((attribute) => selectedAttributes.add(attribute.attributeId));
     effects.forEach((effect) => selectedEffects.add(effect.effectId));
@@ -316,6 +327,31 @@ function normalizeTypeAttributes(
       return { attributeId: attribute.attributeID, value: attribute.value };
     })
     .sort((left, right) => left.attributeId - right.attributeId);
+}
+
+function withAuthoritativeTypeMass(
+  typeId: number,
+  attributes: readonly Readonly<{ attributeId: number; value: number }>[],
+  mass: number | null | undefined
+) {
+  if (mass === null || mass === undefined) return attributes;
+  if (!Number.isFinite(mass) || mass < 0) {
+    throw new Error(`Ship type ${typeId} has invalid type mass ${mass}.`);
+  }
+
+  const existing = attributes.find(
+    (attribute) => attribute.attributeId === MASS_ATTRIBUTE_ID
+  );
+  if (existing && existing.value !== mass) {
+    throw new Error(
+      `Ship type ${typeId} has conflicting mass values ${mass} and ${existing.value}.`
+    );
+  }
+  if (existing) return attributes;
+
+  return [...attributes, { attributeId: MASS_ATTRIBUTE_ID, value: mass }].sort(
+    (left, right) => left.attributeId - right.attributeId
+  );
 }
 
 function normalizeTypeEffects(

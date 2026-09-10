@@ -74,6 +74,11 @@ export type DogmaRuntimeObject = Readonly<{
   instanceId: string;
   kind: DogmaRuntimeObjectKind;
   locationInstanceId: string | null;
+  lifecycle: Readonly<{
+    active: boolean;
+    online: boolean;
+    overheated: boolean;
+  }> | null;
   otherInstanceId: string | null;
   ownerInstanceId: string | null;
   projection: DogmaTypeProjection | null;

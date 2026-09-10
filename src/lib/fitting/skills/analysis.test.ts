@@ -204,8 +204,11 @@ test("FitState collection includes loaded items and drones but excludes cargo", 
         {
           index: 0,
           module: {
+            active: false,
             charge: { quantity: 80, typeId: 300 },
             instanceId: "module-1",
+            online: true,
+            overheated: false,
             typeId: 100
           }
         }
@@ -215,7 +218,7 @@ test("FitState collection includes loaded items and drones but excludes cargo", 
       rig: [
         {
           index: 0,
-          module: { charge: null, instanceId: "rig-1", typeId: 400 }
+          module: { active: false, charge: null, instanceId: "rig-1", online: true, overheated: false, typeId: 400 }
         }
       ],
       subsystem: []

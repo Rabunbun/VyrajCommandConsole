@@ -7,6 +7,7 @@ import { ShipCore } from "@/components/fitting/ship-core";
 import type { FittingSlot, FittingSlots } from "@/lib/fitting/fit-state";
 import type { BaseFitAnalysis, FittingHullSummary } from "@/lib/fitting/types";
 import type { FitOperationAttemptResult } from "@/components/fitting/use-fitting-state";
+import type { EffectiveFitAnalysis } from "@/lib/fitting/dogma";
 
 type FittingStageProps = {
   analysis: BaseFitAnalysis;
@@ -14,6 +15,7 @@ type FittingStageProps = {
   dragError: string | null;
   dragOverSlot: SelectedFittingSlot | null;
   dragSource: FittingDragSource | null;
+  effectiveAnalysis: EffectiveFitAnalysis | null;
   isRemoveDragOver: boolean;
   isStageDragOver: boolean;
   moduleNamesByTypeId: Readonly<Record<number, string>>;
@@ -34,6 +36,9 @@ type FittingStageProps = {
   onRemoveDragOverChange: (isOver: boolean) => void;
   onStageDragOverChange: (isOver: boolean) => void;
   onSelectSlot: (slot: SelectedFittingSlot) => void;
+  onSetModuleActive: (slot: SelectedFittingSlot, active: boolean, canActivate: boolean) => void;
+  onSetModuleOnline: (slot: SelectedFittingSlot, online: boolean) => void;
+  onSetModuleOverheated: (slot: SelectedFittingSlot, overheated: boolean, canOverheat: boolean) => void;
   onStartMove: (slot: SelectedFittingSlot) => void;
   onStartReplace: (slot: SelectedFittingSlot) => void;
   selectedHull: FittingHullSummary | null;
@@ -47,6 +52,7 @@ export function FittingStage({
   dragError,
   dragOverSlot,
   dragSource,
+  effectiveAnalysis,
   isRemoveDragOver,
   isStageDragOver,
   moduleNamesByTypeId,
@@ -63,6 +69,9 @@ export function FittingStage({
   onRemoveDragOverChange,
   onStageDragOverChange,
   onSelectSlot,
+  onSetModuleActive,
+  onSetModuleOnline,
+  onSetModuleOverheated,
   onStartMove,
   onStartReplace,
   selectedHull,
@@ -79,6 +88,9 @@ export function FittingStage({
     onDropOnSlot,
     onFittedModuleDragStart,
     onRemoveModule,
+    onSetModuleActive,
+    onSetModuleOnline,
+    onSetModuleOverheated,
     onStartMove,
     onStartReplace
   };
@@ -193,6 +205,7 @@ export function FittingStage({
           <FittingRack
             {...dragProps}
             enabled={Boolean(selectedHull)}
+            effectiveAnalysis={effectiveAnalysis}
             label="High Slots"
             moduleNamesByTypeId={moduleNamesByTypeId}
             moveSource={moveSource}
@@ -208,6 +221,7 @@ export function FittingStage({
           <FittingRack
             {...dragProps}
             enabled={Boolean(selectedHull)}
+            effectiveAnalysis={effectiveAnalysis}
             label="Mid Slots"
             moduleNamesByTypeId={moduleNamesByTypeId}
             moveSource={moveSource}
@@ -224,6 +238,7 @@ export function FittingStage({
           <FittingRack
             {...dragProps}
             enabled={Boolean(selectedHull)}
+            effectiveAnalysis={effectiveAnalysis}
             label="Low Slots"
             moduleNamesByTypeId={moduleNamesByTypeId}
             moveSource={moveSource}
@@ -239,6 +254,7 @@ export function FittingStage({
           <FittingRack
             {...dragProps}
             enabled={Boolean(selectedHull)}
+            effectiveAnalysis={effectiveAnalysis}
             label="Rig Slots"
             moduleNamesByTypeId={moduleNamesByTypeId}
             moveSource={moveSource}

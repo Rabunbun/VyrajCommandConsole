@@ -87,6 +87,7 @@ type PendingSlot = {
   chargeTypeId: number | null;
   index: number;
   moduleTypeId: number | null;
+  online: boolean;
   rack: EftSupportedRack;
   source: EftSourceLine | null;
 };
@@ -148,6 +149,7 @@ export async function resolveAndValidateEftDraft(input: {
         chargeTypeId: null,
         index,
         moduleTypeId: null,
+        online: true,
         rack,
         source: null,
       })),
@@ -175,17 +177,6 @@ export async function resolveAndValidateEftDraft(input: {
         continue;
       }
 
-      if (parsedLine.offlineRequested) {
-        diagnostics.push(
-          makeDiagnostic(
-            "warning",
-            "OFFLINE_UNSUPPORTED",
-            `${quote(parsedLine.unresolvedText)} requested /offline, but current fitting state cannot preserve module online state.`,
-            parsedLine.source,
-          ),
-        );
-      }
-
       const resolved = resolveModuleLine(
         parsedLine,
         input.catalog.modules,
@@ -201,6 +192,7 @@ export async function resolveAndValidateEftDraft(input: {
         chargeTypeId: resolved.chargeTypeId,
         index: parsedLine.index,
         moduleTypeId: resolved.moduleTypeId,
+        online: !parsedLine.offlineRequested,
         rack,
         source: parsedLine.source,
       };
@@ -247,6 +239,7 @@ export async function resolveAndValidateEftDraft(input: {
                         )!,
                         typeId: slot.chargeTypeId,
                       },
+                online: slot.online,
                 typeId: slot.moduleTypeId,
               },
         rack,

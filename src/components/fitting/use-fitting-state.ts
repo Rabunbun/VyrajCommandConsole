@@ -14,6 +14,7 @@ import {
 } from "@/lib/fitting/fit-reducer";
 import {
   createEmptyFitState,
+  DEFAULT_MODULE_LIFECYCLE,
   type CargoEntry,
   type DroneBayEntry,
   type FittingSlotAddress,
@@ -274,6 +275,7 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
       const input: FitModuleInput = {
         index,
         module: {
+          ...DEFAULT_MODULE_LIFECYCLE,
           charge: null,
           instanceId: crypto.randomUUID(),
           typeId: validation.response.module.typeId
@@ -360,6 +362,7 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
       const input: FitModuleInput = {
         index,
         module: {
+          ...DEFAULT_MODULE_LIFECYCLE,
           charge: null,
           instanceId: crypto.randomUUID(),
           typeId: validation.response.module.typeId
@@ -398,6 +401,25 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
       return { ok: true };
     },
     [fitState]
+  );
+  const setModuleOnline = useCallback(
+    (address: FittingSlotAddress, online: boolean) => {
+      validationEpochRef.current += 1;
+      dispatch({ ...address, online, type: "set-module-online" });
+    },
+    []
+  );
+  const setModuleActive = useCallback(
+    (address: FittingSlotAddress, active: boolean, canActivate: boolean) => {
+      dispatch({ ...address, active, canActivate, type: "set-module-active" });
+    },
+    []
+  );
+  const setModuleOverheated = useCallback(
+    (address: FittingSlotAddress, overheated: boolean, canOverheat: boolean) => {
+      dispatch({ ...address, canOverheat, overheated, type: "set-module-overheated" });
+    },
+    []
   );
   const loadCharge = useCallback(
     async (
@@ -731,6 +753,9 @@ export function useFittingState({ hulls }: UseFittingStateOptions) {
     replaceModule,
     selectHull,
     selectedHull,
+    setModuleActive,
+    setModuleOnline,
+    setModuleOverheated,
     unloadCharge
   };
 }

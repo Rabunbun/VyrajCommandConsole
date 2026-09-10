@@ -9,6 +9,11 @@ export type DogmaGraphModuleInput = Readonly<{
   charge?: Readonly<{ instanceId: string; projection: DogmaTypeProjection }> | null;
   instanceId: string;
   kind: "module" | "rig";
+  lifecycle?: Readonly<{
+    active: boolean;
+    online: boolean;
+    overheated: boolean;
+  }>;
   projection: DogmaTypeProjection;
 }>;
 
@@ -42,6 +47,7 @@ export function buildDogmaObjectGraph(
     attributeOverrides: [],
     instanceId: input.character.instanceId,
     kind: "character",
+    lifecycle: null,
     locationInstanceId: null,
     otherInstanceId: null,
     ownerInstanceId: input.character.instanceId,
@@ -51,6 +57,7 @@ export function buildDogmaObjectGraph(
     attributeOverrides: [],
     instanceId: input.ship.instanceId,
     kind: "ship",
+    lifecycle: null,
     locationInstanceId: null,
     otherInstanceId: null,
     ownerInstanceId: input.character.instanceId,
@@ -62,6 +69,7 @@ export function buildDogmaObjectGraph(
       attributeOverrides: [{ attributeId: 280, value: skill.activeLevel }],
       instanceId: skill.instanceId,
       kind: "skill",
+      lifecycle: null,
       locationInstanceId: input.character.instanceId,
       otherInstanceId: null,
       ownerInstanceId: input.character.instanceId,
@@ -74,6 +82,9 @@ export function buildDogmaObjectGraph(
       attributeOverrides: [],
       instanceId: fittedItem.instanceId,
       kind: fittedItem.kind,
+      lifecycle: fittedItem.kind === "rig"
+        ? { active: false, online: true, overheated: false }
+        : fittedItem.lifecycle ?? { active: false, online: true, overheated: false },
       locationInstanceId: input.ship.instanceId,
       otherInstanceId: fittedItem.charge?.instanceId ?? null,
       ownerInstanceId: input.character.instanceId,
@@ -84,6 +95,7 @@ export function buildDogmaObjectGraph(
         attributeOverrides: [],
         instanceId: fittedItem.charge.instanceId,
         kind: "charge",
+        lifecycle: null,
         locationInstanceId: fittedItem.instanceId,
         otherInstanceId: fittedItem.instanceId,
         ownerInstanceId: input.character.instanceId,
@@ -115,6 +127,7 @@ function childObject(
     attributeOverrides: [],
     instanceId: inputObject.instanceId,
     kind,
+    lifecycle: null,
     locationInstanceId: graphInput.ship.instanceId,
     otherInstanceId: null,
     ownerInstanceId: graphInput.character.instanceId,

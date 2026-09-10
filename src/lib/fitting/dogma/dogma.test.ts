@@ -8,6 +8,7 @@ import {
   classifyDogmaEffect,
   collectEffectModifiers,
   describeAttributeBounds,
+  evaluateDogmaAttributes,
   evaluateAttributeOperations,
   orderAttributeDependencies,
   resolveBaseAttribute,
@@ -188,6 +189,79 @@ test("activation effects are deferred even when their modifiers are generic", ()
       modifiers: [modifier()]
     }),
     "generic-modifier"
+  );
+});
+
+test("runtime lifecycle selects online and supported active modifiers without fabricating overload", () => {
+  const onlineEffect = {
+    ...genericEffect(modifier({ domain: "shipID", effectId: 501 })),
+    categoryId: 4,
+    effectId: 501,
+    name: "onlineEffect"
+  };
+  const activeEffect = {
+    ...genericEffect(modifier({ domain: "shipID", effectId: 500 })),
+    capability: "requires-special-handler" as const,
+    categoryId: 1,
+    effectId: 500,
+    name: "activeEffect"
+  };
+  const overloadEffect = {
+    ...genericEffect(modifier({ domain: "shipID", effectId: 502 })),
+    capability: "requires-special-handler" as const,
+    categoryId: 5,
+    effectId: 502,
+    name: "overloadEffect"
+  };
+  const runtimeModule = {
+    ...moduleProjection,
+    effects: [
+      { effectId: 501, isDefault: false },
+      { effectId: 500, isDefault: true },
+      { effectId: 502, isDefault: false }
+    ]
+  };
+  const evaluate = (lifecycle: { active: boolean; online: boolean; overheated: boolean }) =>
+    evaluateDogmaAttributes({
+      attributeDefinitions: new Map([[48, { ...attributeDefinition, stackable: true }], [202, {
+        ...attributeDefinition,
+        attributeId: 202,
+        defaultValue: 1,
+        name: "multiplier",
+        stackable: true
+      }]]),
+      effectDefinitions: new Map([
+        [501, onlineEffect],
+        [500, activeEffect],
+        [502, overloadEffect]
+      ]),
+      graph: buildDogmaObjectGraph({
+        character: { instanceId: "character", projection: null },
+        modules: [{
+          instanceId: "module-a",
+          kind: "module",
+          lifecycle,
+          projection: runtimeModule
+        }],
+        ship: {
+          instanceId: "ship",
+          projection: projection(1, 25, 6, [{ attributeId: 48, value: 100 }])
+        }
+      }),
+      targets: [{ attributeId: 48, instanceId: "ship" }]
+    });
+
+  assert.equal(evaluate({ active: false, online: false, overheated: false }).results.get("ship:48")?.effective, 100);
+  assert.ok(Math.abs((evaluate({ active: false, online: true, overheated: false }).results.get("ship:48")?.effective ?? 0) - 110) < 1e-9);
+  const activeValue = evaluate({ active: true, online: true, overheated: false }).results.get("ship:48")?.effective ?? 0;
+  assert.ok(Math.abs(activeValue - 121) < 1e-9, `active value ${activeValue}`);
+  const heated = evaluate({ active: true, online: true, overheated: true });
+  assert.ok(Math.abs((heated.results.get("ship:48")?.effective ?? 0) - 121) < 1e-9);
+  assert.equal(
+    heated.diagnostics.some(
+      (diagnostic) => diagnostic.code === "resource-effect-requires-special-handler"
+    ),
+    true
   );
 });
 

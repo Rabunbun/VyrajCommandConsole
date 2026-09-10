@@ -51,10 +51,11 @@ function formatSlot(rack: EftSupportedRack, slot: EftExportSlot): string {
   }
 
   const moduleName = canonicalName(slot.moduleName, `${rack} module name`);
+  const fittedName = slot.online === false ? `${moduleName} /offline` : moduleName;
   if (slot.chargeName === null) {
-    return moduleName;
+    return fittedName;
   }
-  return `${moduleName}, ${canonicalName(slot.chargeName, `${rack} charge name`)}`;
+  return `${fittedName}, ${canonicalName(slot.chargeName, `${rack} charge name`)}`;
 }
 
 function compareDrones(left: EftExportDrone, right: EftExportDrone): number {

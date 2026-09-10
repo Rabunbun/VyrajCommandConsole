@@ -1,5 +1,6 @@
 import {
   createFittingSlots,
+  DEFAULT_MODULE_LIFECYCLE,
   type FitState,
   type FittingTopology,
 } from "@/lib/fitting/fit-state";
@@ -28,6 +29,7 @@ export function resolvedEftDraftToApplication(
         module: slot.module
           ? {
               charge: slot.module.charge ? { ...slot.module.charge } : null,
+              online: slot.module.online ?? true,
               typeId: slot.module.typeId,
             }
           : null,
@@ -73,10 +75,12 @@ export function resolvedEftApplicationToFitState(
       slots[rack][sourceSlot.index] = {
         index: sourceSlot.index,
         module: {
+          ...DEFAULT_MODULE_LIFECYCLE,
           charge: sourceSlot.module.charge
             ? { ...sourceSlot.module.charge }
             : null,
           instanceId,
+          online: sourceSlot.module.online ?? true,
           typeId: sourceSlot.module.typeId,
         },
       };
@@ -153,6 +157,7 @@ function isValidRack(
         slot.index === index &&
         (slot.module === null ||
           (isPositiveInteger(slot.module.typeId) &&
+            (slot.module.online === undefined || typeof slot.module.online === "boolean") &&
             (slot.module.charge === null ||
               (isPositiveInteger(slot.module.charge.typeId) &&
                 isPositiveInteger(slot.module.charge.quantity))))),

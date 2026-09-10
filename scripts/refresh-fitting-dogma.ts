@@ -251,6 +251,7 @@ async function readTypeMap(filePath: string) {
     records.set(raw._key, {
       _key: raw._key,
       groupID: raw.groupID,
+      mass: raw.mass,
       name: raw.name,
       published: raw.published
     });
@@ -464,18 +465,18 @@ function verifyRepresentativeProjection(
     built.effects.map((effect) => [effect.effectId, effect])
   );
   const representatives = [
-    { kind: "hull", name: "Vexor", requiresSkillFilter: true },
-    { kind: "hull", name: "Apocalypse", requiresSkillFilter: true },
-    { kind: "hull", name: "Vedmak", requiresSkillFilter: true },
-    { kind: "hull", name: "Orthrus", requiresSkillFilter: true },
-    { kind: "hull", name: "Iteron Mark V", requiresSkillFilter: true },
-    { kind: "CPU", name: "CPU Management", requiresSkillFilter: false },
-    { kind: "CPU", name: "Co-Processor II", requiresSkillFilter: false },
-    { kind: "CPU", name: "Weapon Upgrades", requiresSkillFilter: false },
-    { kind: "PG", name: "Power Grid Management", requiresSkillFilter: false },
-    { kind: "PG", name: "Reactor Control Unit II", requiresSkillFilter: false },
-    { kind: "PG", name: "Advanced Weapon Upgrades", requiresSkillFilter: false },
-    { kind: "PG rig", name: "Small Ancillary Current Router I", requiresSkillFilter: false }
+    { kind: "hull", name: "Vexor", requiresMass: true, requiresSkillFilter: true },
+    { kind: "hull", name: "Apocalypse", requiresMass: true, requiresSkillFilter: true },
+    { kind: "hull", name: "Vedmak", requiresMass: true, requiresSkillFilter: true },
+    { kind: "hull", name: "Orthrus", requiresMass: true, requiresSkillFilter: true },
+    { kind: "hull", name: "Iteron Mark V", requiresMass: true, requiresSkillFilter: true },
+    { kind: "CPU", name: "CPU Management", requiresMass: false, requiresSkillFilter: false },
+    { kind: "CPU", name: "Co-Processor II", requiresMass: false, requiresSkillFilter: false },
+    { kind: "CPU", name: "Weapon Upgrades", requiresMass: false, requiresSkillFilter: false },
+    { kind: "PG", name: "Power Grid Management", requiresMass: false, requiresSkillFilter: false },
+    { kind: "PG", name: "Reactor Control Unit II", requiresMass: false, requiresSkillFilter: false },
+    { kind: "PG", name: "Advanced Weapon Upgrades", requiresMass: false, requiresSkillFilter: false },
+    { kind: "PG rig", name: "Small Ancillary Current Router I", requiresMass: false, requiresSkillFilter: false }
   ] as const;
 
   console.log("Representative projection verification:");
@@ -512,8 +513,21 @@ function verifyRepresentativeProjection(
         );
       }
     }
+    const projectedMass = projection.attributes.find(
+      (attribute) => attribute.attributeId === 4
+    )?.value;
+    if (
+      representative.requiresMass &&
+      (!Number.isFinite(type.mass) ||
+        (type.mass ?? -1) < 0 ||
+        projectedMass !== type.mass)
+    ) {
+      throw new Error(
+        `Representative hull ${representative.name} did not retain authoritative type mass.`
+      );
+    }
     console.log(
-      `- ${representative.kind}: ${representative.name} (${type._key}) — ${projection.attributes.length} attributes, ${projection.effects.length} effects`
+      `- ${representative.kind}: ${representative.name} (${type._key}) — ${projection.attributes.length} attributes, ${projection.effects.length} effects${representative.requiresMass ? `, mass ${projectedMass} kg` : ""}`
     );
   }
 }

@@ -13,6 +13,7 @@ export type SavedFittingChargeV1 = SavedFittingQuantityEntry;
 
 export type SavedFittingModuleV1 = {
   charge: SavedFittingChargeV1 | null;
+  online?: boolean;
   typeId: number;
 };
 

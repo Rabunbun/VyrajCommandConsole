@@ -20,6 +20,55 @@ test("projection builds a fitting root plus modifier skill closure", () => {
   assert.deepEqual(built.encountered.operationIds, [4, 9]);
   assert.deepEqual(built.encountered.domains, ["itemID", "shipID"]);
   assert.deepEqual(built.projections.find((item) => item.typeId === 2)?.requiredSkillTypeIds, [3]);
+  assert.deepEqual(
+    built.projections.find((item) => item.typeId === 1)?.attributes,
+    [
+      { attributeId: 1, value: 100 },
+      { attributeId: 4, value: 10_000 }
+    ]
+  );
+});
+
+test("projection preserves explicit zero ship mass and omits missing mass", () => {
+  const zero = fixture();
+  zero.types.set(1, { ...zero.types.get(1)!, mass: 0 });
+  assert.deepEqual(
+    buildFittingDogmaProjection(zero)
+      .projections.find((item) => item.typeId === 1)
+      ?.attributes.find((attribute) => attribute.attributeId === 4),
+    { attributeId: 4, value: 0 }
+  );
+
+  const missing = fixture();
+  missing.types.set(1, { ...missing.types.get(1)!, mass: undefined });
+  assert.equal(
+    buildFittingDogmaProjection(missing)
+      .projections.find((item) => item.typeId === 1)
+      ?.attributes.some((attribute) => attribute.attributeId === 4),
+    false
+  );
+});
+
+test("projection rejects invalid or conflicting ship mass", () => {
+  const invalid = fixture();
+  invalid.types.set(1, { ...invalid.types.get(1)!, mass: -1 });
+  assert.throws(
+    () => buildFittingDogmaProjection(invalid),
+    /invalid type mass/
+  );
+
+  const conflicting = fixture();
+  conflicting.typeDogma.set(1, {
+    ...conflicting.typeDogma.get(1)!,
+    dogmaAttributes: [
+      ...(conflicting.typeDogma.get(1)?.dogmaAttributes ?? []),
+      { attributeID: 4, value: 9_999 }
+    ]
+  });
+  assert.throws(
+    () => buildFittingDogmaProjection(conflicting),
+    /conflicting mass values/
+  );
 });
 
 test("projection checksum is deterministic across map insertion order", () => {
@@ -126,6 +175,7 @@ function fixture(): MutableProjectionInput {
     attributes: new Map([
       [1, { _key: 1, defaultValue: 0, name: "target", stackable: false }],
       [2, { _key: 2, defaultValue: 1, name: "source", stackable: true }],
+      [4, { _key: 4, defaultValue: 0, name: "mass", stackable: true }],
       [182, { _key: 182, defaultValue: 0, name: "requiredSkill1" }],
       [277, { _key: 277, defaultValue: 0, name: "requiredSkill1Level" }],
       [280, { _key: 280, defaultValue: 0, name: "skillLevel" }],
@@ -180,7 +230,7 @@ function fixture(): MutableProjectionInput {
       }]
     ]),
     types: new Map([
-      [1, { _key: 1, groupID: 10, name: { en: "Test Ship" }, published: true }],
+      [1, { _key: 1, groupID: 10, mass: 10_000, name: { en: "Test Ship" }, published: true }],
       [2, { _key: 2, groupID: 11, name: { en: "Test Module" }, published: true }],
       [3, { _key: 3, groupID: 12, name: { en: "Test Skill" }, published: true }]
     ]),

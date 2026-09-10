@@ -12,7 +12,7 @@ import {
 const rootFields = ["cargo", "drones", "hullTypeId", "slots"] as const;
 const quantityFields = ["quantity", "typeId"] as const;
 const slotFields = ["index", "module"] as const;
-const moduleFields = ["charge", "typeId"] as const;
+const moduleFields = ["charge", "online", "typeId"] as const;
 
 /**
  * Strictly validates and canonicalizes a V1 snapshot without consulting static
@@ -168,7 +168,7 @@ function readModule(
     return undefined;
   }
 
-  inspectFields(fittedModule, moduleFields, path, diagnostics);
+  inspectFields(fittedModule, moduleFields, path, diagnostics, ["online"]);
 
   const typeId = readPositiveTypeId(
     fittedModule.typeId,
@@ -180,12 +180,15 @@ function readModule(
     `${path}.charge`,
     diagnostics
   );
+  const online = fittedModule.online === undefined
+    ? true
+    : readBoolean(fittedModule.online, `${path}.online`, diagnostics);
 
-  if (typeId === null || charge === undefined) {
+  if (typeId === null || charge === undefined || online === null) {
     return undefined;
   }
 
-  return { charge, typeId };
+  return { charge, online, typeId };
 }
 
 function readCharge(
@@ -307,12 +310,13 @@ function inspectFields(
   value: Record<string, unknown>,
   expectedFields: readonly string[],
   path: string,
-  diagnostics: SavedFittingSnapshotDiagnostic[]
+  diagnostics: SavedFittingSnapshotDiagnostic[],
+  optionalFields: readonly string[] = []
 ) {
   const expected = new Set(expectedFields);
 
   for (const field of expectedFields) {
-    if (!Object.prototype.hasOwnProperty.call(value, field)) {
+    if (!optionalFields.includes(field) && !Object.prototype.hasOwnProperty.call(value, field)) {
       addDiagnostic(
         diagnostics,
         "MALFORMED_SNAPSHOT",
@@ -334,6 +338,18 @@ function inspectFields(
       );
     }
   }
+}
+
+function readBoolean(
+  value: unknown,
+  path: string,
+  diagnostics: SavedFittingSnapshotDiagnostic[]
+) {
+  if (typeof value !== "boolean") {
+    addDiagnostic(diagnostics, "MALFORMED_SNAPSHOT", path, `${path} must be a boolean.`);
+    return null;
+  }
+  return value;
 }
 
 function readPositiveTypeId(

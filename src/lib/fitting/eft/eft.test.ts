@@ -58,7 +58,7 @@ test("retains offline requests and every plausible comma split without choosing 
     line.chargeSplitCandidates.map((candidate) => candidate.commaIndex),
     [12, 30, 38],
   );
-  assert.ok(result.diagnostics.some((entry) => entry.code === "OFFLINE_STATE_UNSUPPORTED"));
+  assert.equal(result.diagnostics.some((entry) => entry.code === "OFFLINE_STATE_UNSUPPORTED"), false);
 });
 
 test("keeps unsupported blocks, source locations, drone repetitions, and cargo separate", () => {
@@ -165,6 +165,24 @@ test("Vyraj export parses back to the same supported slot structure", () => {
       { itemName: "Nanite Repair Paste", quantity: 100 },
     ],
   );
+});
+
+test("formatter round-trips offline loadout state without encoding simulation state", () => {
+  const formatted = formatEft({
+    ...VYRAJ_EXPORT_FIXTURE,
+    slots: {
+      ...VYRAJ_EXPORT_FIXTURE.slots,
+      high: VYRAJ_EXPORT_FIXTURE.slots.high.map((slot, index) =>
+        index === 0 ? { ...slot, online: false } : slot
+      )
+    }
+  });
+  const parsed = parseEft(formatted);
+
+  assert.match(formatted, /\/offline/);
+  assert.doesNotMatch(formatted, /active|overheated/i);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsedModule(parsed.document!.slots.high[0]).offlineRequested, true);
 });
 
 test("formatter rejects structurally invalid indices and quantities", () => {

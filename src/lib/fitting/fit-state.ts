@@ -16,10 +16,19 @@ export type CargoEntry = {
 };
 
 export type FittedModule = {
+  active: boolean;
   charge: LoadedCharge | null;
   instanceId: string;
+  online: boolean;
+  overheated: boolean;
   typeId: number;
 };
+
+export const DEFAULT_MODULE_LIFECYCLE = {
+  active: false,
+  online: true,
+  overheated: false
+} as const;
 
 export type FittingSlot = {
   index: number;

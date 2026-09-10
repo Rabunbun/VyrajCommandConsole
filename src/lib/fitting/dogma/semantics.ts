@@ -146,6 +146,28 @@ export function classifyDogmaEffect(input: {
   return "unsupported-unknown";
 }
 
+export function hasGenericModifierSemantics(
+  modifiers: readonly DogmaModifierDefinition[]
+) {
+  return (
+    modifiers.length > 0 &&
+    modifiers.every(
+      (modifier) =>
+        modifier.functionName !== "EffectStopper" &&
+        modifier.domain !== null &&
+        modifier.domain !== "structureID" &&
+        modifier.domain !== "target" &&
+        modifier.domain !== "targetID" &&
+        RECOGNIZED_DOGMA_DOMAINS.has(modifier.domain) &&
+        RECOGNIZED_DOGMA_FUNCTIONS.has(modifier.functionName) &&
+        modifier.operation !== null &&
+        GENERIC_DOGMA_OPERATIONS.has(modifier.operation) &&
+        modifier.modifiedAttributeId !== null &&
+        modifier.modifyingAttributeId !== null
+    )
+  );
+}
+
 export function validateModifierSemantics(
   modifier: DogmaModifierDefinition
 ): EngineDiagnostic[] {

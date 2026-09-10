@@ -25,6 +25,7 @@ export function fitStateToEftExportSnapshot(
           module: slot.module
             ? {
                 chargeTypeId: slot.module.charge?.typeId ?? null,
+                online: slot.module.online,
                 typeId: slot.module.typeId,
               }
             : null,

@@ -4,7 +4,8 @@ import { collectEffectModifiers } from "./modifiers";
 import { evaluateAttributeOperations } from "./operations";
 import {
   DOGMA_EFFECT_CATEGORIES,
-  DOGMA_OPERATIONS
+  DOGMA_OPERATIONS,
+  hasGenericModifierSemantics
 } from "./semantics";
 import { applyStackingPenalty } from "./stacking";
 import type {
@@ -19,7 +20,11 @@ import type {
 
 const evaluatedEffectCategories = new Set<number>([
   DOGMA_EFFECT_CATEGORIES.PASSIVE,
-  DOGMA_EFFECT_CATEGORIES.ONLINE
+  DOGMA_EFFECT_CATEGORIES.ONLINE,
+  DOGMA_EFFECT_CATEGORIES.ACTIVATION,
+  DOGMA_EFFECT_CATEGORIES.TARGET,
+  DOGMA_EFFECT_CATEGORIES.AREA,
+  DOGMA_EFFECT_CATEGORIES.OVERLOAD
 ]);
 
 const multiplicativeOperations = new Set<number>([
@@ -43,7 +48,8 @@ export type DogmaEvaluationResult = Readonly<{
 /**
  * Evaluates the requested attributes and their modifier dependencies. The
  * caller supplies authoritative static definitions; this pure boundary has no
- * database knowledge and assumes fitted modules/rigs are online.
+ * database knowledge. Runtime lifecycle on module objects determines whether
+ * online, active, and overload effects are selected.
  */
 export function evaluateDogmaAttributes(input: {
   attributeDefinitions: ReadonlyMap<number, DogmaAttributeDefinition>;
@@ -295,7 +301,7 @@ function collectRelevantModifiers(input: {
         });
         continue;
       }
-      if (!evaluatedEffectCategories.has(effect.categoryId)) continue;
+      if (!isEffectSelected(object, reference.isDefault, effect.categoryId)) continue;
 
       const relevantDefinitions = effect.modifiers.filter(
         (modifier) =>
@@ -304,7 +310,10 @@ function collectRelevantModifiers(input: {
       );
       if (!relevantDefinitions.length) continue;
 
-      if (effect.capability !== "generic-modifier") {
+      const lifecycleGeneric =
+        effect.categoryId === DOGMA_EFFECT_CATEGORIES.ACTIVATION &&
+        hasGenericModifierSemantics(relevantDefinitions);
+      if (effect.capability !== "generic-modifier" && !lifecycleGeneric) {
         if (isSupersededSkillLevelEffect(object, relevantDefinitions)) continue;
         for (const attributeId of new Set(
           relevantDefinitions.flatMap((modifier) =>
@@ -326,7 +335,11 @@ function collectRelevantModifiers(input: {
       }
 
       const collected = collectEffectModifiers({
-        effect: { ...effect, modifiers: relevantDefinitions },
+        effect: {
+          ...effect,
+          capability: lifecycleGeneric ? "generic-modifier" : effect.capability,
+          modifiers: relevantDefinitions
+        },
         graph: input.graph,
         sourceInstanceId: object.instanceId
       });
@@ -340,6 +353,41 @@ function collectRelevantModifiers(input: {
   }
 
   return modifiers;
+}
+
+function isEffectSelected(
+  object: DogmaRuntimeObject,
+  isDefault: boolean,
+  categoryId: number
+) {
+  if (categoryId === DOGMA_EFFECT_CATEGORIES.PASSIVE) return true;
+
+  if (categoryId === DOGMA_EFFECT_CATEGORIES.ONLINE) {
+    return object.lifecycle?.online ?? true;
+  }
+
+  if (
+    categoryId === DOGMA_EFFECT_CATEGORIES.ACTIVATION ||
+    categoryId === DOGMA_EFFECT_CATEGORIES.TARGET ||
+    categoryId === DOGMA_EFFECT_CATEGORIES.AREA
+  ) {
+    return Boolean(
+      object.kind === "module" &&
+      object.lifecycle?.online &&
+      object.lifecycle.active &&
+      isDefault
+    );
+  }
+
+  if (categoryId === DOGMA_EFFECT_CATEGORIES.OVERLOAD) {
+    return Boolean(
+      object.kind === "module" &&
+      object.lifecycle?.online &&
+      object.lifecycle.overheated
+    );
+  }
+
+  return false;
 }
 
 function isSupersededSkillLevelEffect(

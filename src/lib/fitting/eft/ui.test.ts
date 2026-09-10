@@ -41,7 +41,7 @@ test("review always requires confirmation and meaningful content adds destructiv
   assert.equal(getEftImportConfirmation("review", hullOnly), "review");
 
   const meaningful = structuredClone(hullOnly);
-  meaningful.slots.high[0].module = { charge: null, instanceId: "existing", typeId: 12346 };
+  meaningful.slots.high[0].module = { active: false, charge: null, instanceId: "existing", online: true, overheated: false, typeId: 12346 };
   assert.equal(getEftImportConfirmation("ready", meaningful), "replace-current");
   assert.equal(getEftImportConfirmation("review", meaningful), "review-and-replace-current");
 });

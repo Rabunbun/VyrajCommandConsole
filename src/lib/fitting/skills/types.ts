@@ -48,9 +48,12 @@ export type CharacterProfile = {
 };
 
 export type FittingSkillSource = {
+  active?: boolean;
   instanceId?: string;
   kind: "charge" | "drone" | "hull" | "module" | "rig";
   moduleTypeId?: number;
+  online?: boolean;
+  overheated?: boolean;
   quantity?: number;
   rack?: RackType;
   slotIndex?: number;

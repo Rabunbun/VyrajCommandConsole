@@ -55,16 +55,22 @@ function createFitState(): FitState {
         {
           index: 0,
           module: {
+            active: false,
             charge: { quantity: 80, typeId: 23025 },
             instanceId: "high-0",
+            online: true,
+            overheated: false,
             typeId: 12346
           }
         },
         {
           index: 1,
           module: {
+            active: false,
             charge: null,
             instanceId: "high-1",
+            online: true,
+            overheated: false,
             typeId: 12346
           }
         }

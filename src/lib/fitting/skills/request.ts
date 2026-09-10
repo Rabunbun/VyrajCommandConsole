@@ -49,6 +49,20 @@ export function parseFittingSkillSources(value: unknown): FittingSkillSource[] |
       source.moduleTypeId = item.moduleTypeId;
     }
 
+    for (const field of ["active", "online", "overheated"] as const) {
+      if (item[field] !== undefined) {
+        if (typeof item[field] !== "boolean") return null;
+        source[field] = item[field];
+      }
+    }
+
+    if (
+      (source.active === true || source.overheated === true) &&
+      source.online === false
+    ) {
+      return null;
+    }
+
     if (item.quantity !== undefined) {
       if (!isPositiveSafeInteger(item.quantity)) {
         return null;
@@ -87,4 +101,3 @@ function isObject(value: unknown): value is Record<string, unknown> {
 function isPositiveSafeInteger(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) > 0;
 }
-

@@ -93,6 +93,9 @@ export function FittingWorkspace({
     replaceModule,
     selectHull,
     selectedHull,
+    setModuleActive,
+    setModuleOnline,
+    setModuleOverheated,
     unloadCharge
   } = useFittingState({ hulls });
   const {
@@ -1003,6 +1006,7 @@ export function FittingWorkspace({
         />
         <FittingStage
           analysis={analysis}
+          effectiveAnalysis={simulationState.effectiveAnalysis}
           dragError={dragError}
           dragOverSlot={dragOverSlot}
           dragSource={dragSource}
@@ -1023,6 +1027,9 @@ export function FittingWorkspace({
           onRemoveDragOverChange={setIsRemoveDragOver}
           onStageDragOverChange={setIsStageDragOver}
           onSelectSlot={handleSelectSlot}
+          onSetModuleActive={setModuleActive}
+          onSetModuleOnline={setModuleOnline}
+          onSetModuleOverheated={setModuleOverheated}
           onStartMove={handleStartMoveAt}
           onStartReplace={handleStartReplaceAt}
           selectedHull={selectedHull}

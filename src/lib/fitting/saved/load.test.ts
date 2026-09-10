@@ -34,12 +34,13 @@ function createSnapshot(): SavedFittingSnapshotV1 {
           index: 0,
           module: {
             charge: { quantity: 40, typeId: 23025 },
+            online: true,
             typeId: 12346
           }
         },
         { index: 1, module: null }
       ],
-      low: [{ index: 0, module: { charge: null, typeId: 2048 } }],
+      low: [{ index: 0, module: { charge: null, online: true, typeId: 2048 } }],
       mid: [{ index: 0, module: null }],
       rig: [{ index: 0, module: null }]
     }
