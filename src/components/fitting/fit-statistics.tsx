@@ -11,7 +11,9 @@ import type {
 import type {
   DamageTypeStatistics,
   EffectiveFitAnalysis,
-  EffectiveStatistic
+  EffectiveStatistic,
+  EffectiveWeaponAnalysis,
+  WeaponDamageBreakdown
 } from "@/lib/fitting/dogma";
 
 type StatisticRow = {
@@ -308,7 +310,7 @@ function createStatisticSections(
       { title: "Targeting", rows: placeholderRows(["Lock Range", "Scan Resolution", "Sensors", "Signature"], value) },
       { title: "Navigation", rows: placeholderRows(["Maximum Velocity", "Mass", "Inertia", "Align Time", "Warp Speed"], value) },
       { title: "Capacitor", rows: placeholderRows(["Capacity", "Recharge", "Stability"], value) },
-      { title: "Deferred", rows: placeholderRows(["DPS"], "Deferred") }
+      { title: "Offense", rows: placeholderRows(["Paper DPS", "Volley", "Turrets", "Missiles"], value) }
     ];
   }
 
@@ -370,8 +372,100 @@ function createStatisticSections(
         capacitorStabilityRow(analysis)
       ]
     },
-    { title: "Deferred", rows: placeholderRows(["DPS"], "Deferred") }
+    {
+      title: `Offense · ${formatSectionStatus(analysis.offense.status)}`,
+      rows: offenseRows(analysis)
+    }
   ];
+}
+
+function offenseRows(analysis: EffectiveFitAnalysis): StatisticRow[] {
+  const offense = analysis.offense;
+  const turretWeapons = offense.weapons.filter(
+    (weapon) => weapon.kind === "turret" && weapon.online
+  );
+  const missileWeapons = offense.weapons.filter(
+    (weapon) => weapon.kind === "missile" && weapon.online
+  );
+  const unsupported = offense.weapons.filter(
+    (weapon) => weapon.status !== "available"
+  );
+  const detail = unsupported.length
+    ? `${unsupported.length} weapon${unsupported.length === 1 ? "" : "s"} unloaded or unsupported`
+    : damageMix(offense.combinedDps);
+
+  return [
+    {
+      detail,
+      label: "Paper DPS",
+      value: offense.status === "unavailable"
+        ? "Unavailable"
+        : `${formatNumber(offense.combinedDps.total)} DPS`
+    },
+    {
+      detail: damageMix(offense.combinedVolley),
+      label: "Volley",
+      value: offense.status === "unavailable"
+        ? "Unavailable"
+        : `${formatNumber(offense.combinedVolley.total)} HP`
+    },
+    weaponFamilyRow("Turrets", turretWeapons, offense.turretDps, "turret"),
+    weaponFamilyRow("Missiles", missileWeapons, offense.missileDps, "missile")
+  ];
+}
+
+function weaponFamilyRow(
+  label: string,
+  weapons: EffectiveWeaponAnalysis[],
+  damage: WeaponDamageBreakdown,
+  kind: "missile" | "turret"
+): StatisticRow {
+  if (!weapons.length) {
+    return { label, value: "None online" };
+  }
+
+  const ranges = weapons.flatMap((weapon) => {
+    if (!weapon.range) return [];
+    if (kind === "turret" && "optimal" in weapon.range) {
+      const optimal = weapon.range.optimal.effective;
+      const falloff = weapon.range.falloff.effective;
+      return optimal === null || falloff === null
+        ? []
+        : [`${formatNumber(optimal / 1000)} + ${formatNumber(falloff / 1000)} km`];
+    }
+    if (kind === "missile" && "theoreticalRange" in weapon.range) {
+      return weapon.range.theoreticalRange === null
+        ? []
+        : [`${formatNumber(weapon.range.theoreticalRange / 1000)} km theoretical`];
+    }
+    return [];
+  });
+  const uniqueRanges = [...new Set(ranges)];
+
+  return {
+    detail:
+      uniqueRanges.length === 1
+        ? uniqueRanges[0]
+        : uniqueRanges.length > 1
+          ? "Mixed ranges"
+          : undefined,
+    label,
+    value: `${formatNumber(damage.total)} DPS · ${weapons.length} online`
+  };
+}
+
+function damageMix(damage: WeaponDamageBreakdown) {
+  const values: Array<[string, number]> = [
+    ["EM", damage.em],
+    ["TH", damage.thermal],
+    ["KI", damage.kinetic],
+    ["EX", damage.explosive]
+  ];
+
+  return values
+    .filter(([, value]) => value > 0)
+    .map(([label, value]) => `${label} ${formatNumber(value)}`)
+    .join(" · ") || "No damage";
 }
 
 function capacitorStabilityRow(analysis: EffectiveFitAnalysis): StatisticRow {

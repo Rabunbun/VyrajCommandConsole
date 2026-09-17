@@ -18,6 +18,11 @@ import {
   type EffectiveStatistic
 } from "./passive-stats";
 import { DOGMA_EFFECT_CATEGORIES } from "./semantics";
+import {
+  analyzeWeaponOffense,
+  unavailableOffense,
+  type EffectiveOffenseAnalysis
+} from "./offense";
 import type {
   AttributeResult,
   DogmaAttributeDefinition,
@@ -95,6 +100,7 @@ export type EffectiveFitAnalysis = Readonly<{
   hullTypeId: number | null;
   modules: readonly EffectiveFittedModuleAnalysis[];
   navigation: PassiveNavigationAnalysis;
+  offense: EffectiveOffenseAnalysis;
   powergrid: EffectiveResourceSummary;
   profileKind: "all-v" | "explicit" | "unavailable";
   profileStale: boolean;
@@ -103,6 +109,7 @@ export type EffectiveFitAnalysis = Readonly<{
 }>;
 
 export type EffectiveResourceModuleInput = Readonly<{
+  charge?: Readonly<{ projection: DogmaTypeProjection }> | null;
   index: number;
   instanceId: string;
   lifecycle: ModuleLifecycleState;
@@ -136,7 +143,9 @@ const assumptions = [
   "Active module schedules begin together at time zero from a full capacitor; simultaneous events are aggregated.",
   "Capacitor booster injection, magazine, and reload events remain unsupported; cargo charges never inject capacitor.",
   "Displayed resistances are derived as one minus effective resonance.",
-  "Peak passive shield recharge uses 2.5 times shield capacity divided by recharge time."
+  "Peak passive shield recharge uses 2.5 times shield capacity divided by recharge time.",
+  "Weapon paper DPS uses evaluated volley divided by firing cycle and excludes reload time.",
+  "Weapon activation and overheat state do not change paper DPS; offline weapons contribute zero."
 ] as const;
 
 export function analyzeEffectiveFitResources(
@@ -155,6 +164,12 @@ export function analyzeEffectiveFitResources(
   const graph = buildDogmaObjectGraph({
     character: { instanceId: "character", projection: null },
     modules: input.modules.map((module) => ({
+      charge: module.charge
+        ? {
+            instanceId: chargeInstanceId(module.instanceId),
+            projection: module.charge.projection
+          }
+        : null,
       instanceId: module.instanceId,
       kind: module.rack === "rig" ? "rig" : "module",
       lifecycle: module.lifecycle,
@@ -213,6 +228,59 @@ export function analyzeEffectiveFitResources(
     effectDefinitions,
     graph,
     targets
+  });
+  const offenseGraph = buildDogmaObjectGraph({
+    character: {
+      instanceId: "character",
+      projection: {
+        attributes: [],
+        categoryId: 1,
+        effects: [],
+        groupId: 0,
+        requiredSkillTypeIds: [],
+        typeId: 0
+      }
+    },
+    modules: input.modules.map((module) => ({
+      charge: module.charge
+        ? {
+            instanceId: chargeInstanceId(module.instanceId),
+            projection: module.charge.projection
+          }
+        : null,
+      instanceId: module.instanceId,
+      kind: module.rack === "rig" ? "rig" : "module",
+      lifecycle: {
+        active: false,
+        online: module.lifecycle.online,
+        overheated: false
+      },
+      projection: module.projection
+    })),
+    ship: { instanceId: "ship", projection: input.hull },
+    skills: input.profile.skills.map((skill) => ({
+      activeLevel: skill.activeLevel,
+      instanceId: `skill:${skill.projection.typeId}`,
+      projection: skill.projection
+    }))
+  });
+  const offense = analyzeWeaponOffense({
+    attributeDefinitions,
+    effectDefinitions,
+    graph: offenseGraph,
+    modules: input.modules.map((module) => ({
+      charge: module.charge
+        ? {
+            instanceId: chargeInstanceId(module.instanceId),
+            projection: module.charge.projection
+          }
+        : null,
+      index: module.index,
+      instanceId: module.instanceId,
+      online: module.lifecycle.online,
+      projection: module.projection,
+      rack: module.rack
+    }))
   });
   const cpuOutput = getResult(
     evaluated.results,
@@ -280,7 +348,8 @@ export function analyzeEffectiveFitResources(
   });
   const diagnostics = deduplicateDiagnostics([
     ...(input.profileDiagnostics ?? []),
-    ...evaluated.diagnostics
+    ...evaluated.diagnostics,
+    ...offense.diagnostics
   ]);
   const unavailable =
     cpuOutput.effective === null ||
@@ -319,6 +388,7 @@ export function analyzeEffectiveFitResources(
     hullTypeId: input.hull.typeId,
     modules,
     navigation: passive.navigation,
+    offense,
     powergrid: summarizeResource(
       powergridOutput,
       modules.filter((module) => module.lifecycle.online).map((module) => module.powergrid)
@@ -431,12 +501,17 @@ function unavailableAnalysis(
     hullTypeId,
     modules: [],
     navigation: passive.navigation,
+    offense: unavailableOffense(reason),
     powergrid: empty,
     profileKind: "unavailable",
     profileStale: false,
     status: "unavailable",
     targeting: passive.targeting
   };
+}
+
+function chargeInstanceId(moduleInstanceId: string) {
+  return `charge:${moduleInstanceId}`;
 }
 
 type ModuleActivationMetadata = Readonly<{

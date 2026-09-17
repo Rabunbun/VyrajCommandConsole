@@ -265,6 +265,63 @@ test("runtime lifecycle selects online and supported active modifiers without fa
   );
 });
 
+test("special-handler diagnostics are scoped to authoritative modifier targets", () => {
+  const damageAttribute = {
+    ...attributeDefinition,
+    attributeId: 114,
+    defaultValue: 0,
+    name: "emDamage",
+    stackable: true
+  };
+  const bonusAttribute = {
+    ...attributeDefinition,
+    attributeId: 200,
+    defaultValue: 0,
+    name: "specialDamageBonus",
+    stackable: true
+  };
+  const specialEffect: DogmaEffectDefinition = {
+    ...genericEffect(modifier({
+      domain: "charID",
+      effectId: 6396,
+      functionName: "OwnerRequiredSkillModifier",
+      modifiedAttributeId: 114,
+      modifyingAttributeId: 200,
+      skillTypeId: 999
+    })),
+    capability: "requires-special-handler",
+    effectId: 6396,
+    name: "skillStructureMissileDamageBonus"
+  };
+  const specialSkill = {
+    ...projection(37796, 1, 16, [{ attributeId: 200, value: 5 }]),
+    effects: [{ effectId: 6396, isDefault: false }]
+  };
+  const graph = buildDogmaObjectGraph({
+    character: { instanceId: "character", projection: null },
+    modules: [{
+      charge: {
+        instanceId: "ordinary-charge",
+        projection: projection(10, 85, 8, [{ attributeId: 114, value: 10 }])
+      },
+      instanceId: "weapon",
+      kind: "module",
+      projection: moduleProjection
+    }],
+    ship: { instanceId: "ship", projection: shipProjection },
+    skills: [{ activeLevel: 5, instanceId: "skill:37796", projection: specialSkill }]
+  });
+  const result = evaluateDogmaAttributes({
+    attributeDefinitions: new Map([[114, damageAttribute], [200, bonusAttribute]]),
+    effectDefinitions: new Map([[6396, specialEffect]]),
+    graph,
+    targets: [{ attributeId: 114, instanceId: "ordinary-charge" }]
+  });
+
+  assert.equal(result.results.get("ordinary-charge:114")?.effective, 10);
+  assert.equal(result.diagnostics.length, 0);
+});
+
 test("dependency ordering is deterministic", () => {
   const dependencies = [
     { sourceAttributeId: 2, sourceInstanceId: "a", targetAttributeId: 3, targetInstanceId: "a" },

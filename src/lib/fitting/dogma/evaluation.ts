@@ -109,7 +109,9 @@ export function evaluateDogmaAttributes(input: {
     const localDiagnostics: EngineDiagnostic[] = [
       ...base.diagnostics,
       ...diagnostics.filter(
-        (diagnostic) => diagnostic.attributeId === attributeId
+        (diagnostic) =>
+          diagnostic.attributeId === attributeId &&
+          (!diagnostic.instanceId || diagnostic.instanceId === instanceId)
       )
     ];
 
@@ -315,19 +317,27 @@ function collectRelevantModifiers(input: {
         hasGenericModifierSemantics(relevantDefinitions);
       if (effect.capability !== "generic-modifier" && !lifecycleGeneric) {
         if (isSupersededSkillLevelEffect(object, relevantDefinitions)) continue;
-        for (const attributeId of new Set(
-          relevantDefinitions.flatMap((modifier) =>
-            modifier.modifiedAttributeId === null
-              ? []
-              : [modifier.modifiedAttributeId]
-          )
-        )) {
+        const applicable = collectEffectModifiers({
+          effect: {
+            ...effect,
+            capability: "generic-modifier",
+            modifiers: relevantDefinitions
+          },
+          graph: input.graph,
+          sourceInstanceId: object.instanceId
+        }).modifiers;
+        for (const target of new Map(
+          applicable.map((modifier) => [
+            `${modifier.target.instanceId}:${modifier.target.attributeId}`,
+            modifier.target
+          ])
+        ).values()) {
           input.diagnostics.push({
-            attributeId,
+            attributeId: target.attributeId,
             code: "resource-effect-requires-special-handler",
             effectId: effect.effectId,
-            instanceId: object.instanceId,
-            message: `Effect ${effect.effectId} (${effect.name}) affects the requested Dogma dependency graph but is ${effect.capability}.`,
+            instanceId: target.instanceId,
+            message: `Effect ${effect.effectId} (${effect.name}) from ${object.instanceId} affects the requested Dogma dependency graph but is ${effect.capability}.`,
             severity: "unsupported"
           });
         }

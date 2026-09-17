@@ -24,6 +24,7 @@ export async function analyzeFittingEffectiveResources(
   const moduleSources = itemSources.filter(
     (source) => source.kind === "module" || source.kind === "rig"
   );
+  const chargeSources = itemSources.filter((source) => source.kind === "charge");
   const resolvedProfile = resolveProfile(profile);
 
   if (resolvedProfile.kind === "unavailable") {
@@ -49,9 +50,11 @@ export async function analyzeFittingEffectiveResources(
     });
   }
 
-  const fitTypeIds = Array.from(
-    new Set([hullSource.typeId, ...moduleSources.map((source) => source.typeId)])
-  );
+  const fitTypeIds = Array.from(new Set([
+    hullSource.typeId,
+    ...moduleSources.map((source) => source.typeId),
+    ...chargeSources.map((source) => source.typeId)
+  ]));
   const db = getDb();
   const [build, projectionRows, attributeRows, hullCache] = await Promise.all([
     db.fittingDogmaProjectionBuild.findUnique({ where: { id: "current" } }),
@@ -137,6 +140,14 @@ export async function analyzeFittingEffectiveResources(
   const hull = projectionByTypeId.get(hullSource.typeId) ?? null;
   const modules = moduleSources.flatMap((source) => {
     const projection = projectionByTypeId.get(source.typeId);
+    const chargeSource = chargeSources.find(
+      (charge) =>
+        charge.instanceId === source.instanceId &&
+        charge.moduleTypeId === source.typeId
+    );
+    const chargeProjection = chargeSource
+      ? projectionByTypeId.get(chargeSource.typeId)
+      : null;
     if (
       !projection ||
       !source.instanceId ||
@@ -147,6 +158,7 @@ export async function analyzeFittingEffectiveResources(
     }
 
     return [{
+      charge: chargeProjection ? { projection: chargeProjection } : null,
       index: source.slotIndex,
       instanceId: source.instanceId,
       lifecycle: {
@@ -182,6 +194,7 @@ export async function analyzeFittingEffectiveResources(
     projections.length === projectionRows.length &&
     Boolean(hull) &&
     modules.length === moduleSources.length &&
+    chargeSources.every((source) => projectionByTypeId.has(source.typeId)) &&
     effectDefinitions.length === effectIds.length;
 
   return analyzeEffectiveFitResources({

@@ -397,6 +397,7 @@ function isSimulationAnalysisResponse(
     "diagnostics" in effectiveAnalysis &&
     "modules" in effectiveAnalysis &&
     "navigation" in effectiveAnalysis &&
+    "offense" in effectiveAnalysis &&
     "profileStale" in effectiveAnalysis &&
     "status" in effectiveAnalysis &&
     "targeting" in effectiveAnalysis &&
